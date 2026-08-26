@@ -1,0 +1,120 @@
+# ─────────────────────────────────────────────────────────────────────
+# docker-compose.yml
+#
+# Usage:
+#   docker compose up -d          # start all services
+#   docker compose down           # stop and remove containers
+#   docker compose down -v        # also remove the Postgres volume
+#   docker compose logs -f        # follow all service logs
+#
+# Services:
+#   postgres   – PostgreSQL 16 database with persistent volume
+#   backend    – Spring Boot 3 REST API (waits for postgres to be healthy)
+#   frontend   – React SPA served by Nginx (proxies /api to backend)
+#
+# After startup:
+#   Frontend  → http://localhost
+#   API docs  → http://localhost:8080/api  (no Swagger in this version)
+#   Postgres  → localhost:5432 / kanban_db / kanban_user
+# ─────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: kanban-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB:       kanban_db
+      POSTGRES_USER:     kanban_user
+      POSTGRES_PASSWORD: kanban_pass
+
+    volumes:
+      # Named volume → data survives container restarts/rebuilds
+      - postgres_data:/var/lib/postgresql/data
+
+    ports:
+      # Expose only on localhost so the DB is not reachable from outside
+      - "127.0.0.1:5432:5432"
+
+    networks:
+      - kanban-net
+
+    healthcheck:
+      # pg_isready returns 0 only when the server accepts connections
+      test: ["CMD-SHELL", "pg_isready -U kanban_user -d kanban_db"]
+      interval:     10s
+      timeout:      5s
+      retries:      5
+      start_period: 20s
+
+
+  # ── Spring Boot Backend ────────────────────────────────────────────
+  backend:
+    build:
+      context:    ./backend
+      dockerfile: Dockerfile
+    container_name: kanban-backend
+    restart: unless-stopped
+
+    environment:
+      # Database connection (resolves via Docker DNS to the postgres service)
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: kanban_db
+      DB_USER: kanban_user
+      DB_PASS: kanban_pass
+
+      # ⚠ IMPORTANT: Replace this secret before deploying to production!
+      # Generate with: openssl rand -base64 64
+      JWT_SECRET: "Y2hhbmdlLW1lLXJlcGxhY2UtdGhpcy13aXRoLWEtc2VjdXJlLTI1Ni1iaXQtYmFzZTY0LWVuY29kZWQta2V5LWZvci1wcm9kdWN0aW9u"
+      JWT_EXPIRATION_MS: 86400000
+
+      # CORS – not needed in Docker (nginx proxies /api; same origin)
+      CORS_ORIGINS: "http://localhost,http://localhost:80"
+
+      SERVER_PORT: 8080
+
+    ports:
+      - "8080:8080"
+
+    networks:
+      - kanban-net
+
+    depends_on:
+      postgres:
+        # Backend only starts AFTER Postgres passes its health check
+        condition: service_healthy
+
+
+  # ── React Frontend (Nginx) ─────────────────────────────────────────
+  frontend:
+    build:
+      context:    ./frontend
+      dockerfile: Dockerfile
+    container_name: kanban-frontend
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+
+    networks:
+      - kanban-net
+
+    depends_on:
+      - backend
+
+
+# ── Named volumes ──────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: kanban_postgres_data
+
+
+# ── Custom bridge network ──────────────────────────────────────────
+networks:
+  kanban-net:
+    driver: bridge
+    name:   kanban-network
