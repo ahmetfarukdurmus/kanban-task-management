@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-dark-950 text-white font-sans;
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbars */
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-white/20; }
+}
+
+/* ── Components ───────────────────────────────────────────────────── */
+@layer components {
+  /* Glass card */
+  .glass {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    @apply border border-white/[0.06] rounded-xl;
+  }
+
+  /* Input fields */
+  .field {
+    @apply w-full bg-dark-700 border border-white/[0.08] rounded-lg px-3 py-2.5
+           text-white placeholder-white/30 text-sm
+           focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/50
+           transition-all duration-200;
+  }
+
+  .field-label {
+    @apply block text-xs font-medium text-white/60 mb-1.5;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-medium rounded-lg
+           transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn px-4 py-2.5 text-sm
+           bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400
+           text-white shadow-glow-sm;
+  }
+  .btn-ghost {
+    @apply btn px-3 py-2 text-sm text-white/60 hover:text-white hover:bg-white/5 rounded-lg;
+  }
+  .btn-danger {
+    @apply btn px-3 py-2 text-sm bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg;
+  }
+
+  /* Priority badge */
+  .badge-high   { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/15 text-red-400; }
+  .badge-medium { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-400; }
+  .badge-low    { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.15s ease-out;
+  }
+  .modal-box {
+    @apply w-full max-w-md bg-dark-800 border border-white/[0.08] rounded-2xl shadow-card
+           animate-scale-in;
+  }
+}
+
+/* ── Kanban drag-and-drop ─────────────────────────────────────────── */
+/* Task card while being dragged */
+[data-rfd-draggable-id].dragging {
+  opacity: 0.95;
+  transform: rotate(1.5deg) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(139, 92, 246, 0.5) !important;
+}
+
+/* Droppable column when a card hovers over it */
+.col-drop-active {
+  @apply bg-violet-600/5 border-violet-500/30 transition-colors duration-150;
+}
