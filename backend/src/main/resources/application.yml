@@ -23,3 +23,5 @@ app:
   jwt:
     secret: ${JWT_SECRET:changeme-replace-this-with-a-secure-256-bit-base64-encoded-key}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # 24 hours
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
