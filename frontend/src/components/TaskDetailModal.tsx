@@ -51,17 +51,10 @@ export default function TaskDetailModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /* ── Load Users for Assignee Selection ──────────────────────────── */
-  useEffect(() => {
-    userService
-      .getAll()
-      .then((data) => setUsers(data))
-      .catch(() => { /* ignore or fallback */ });
-  }, []);
-
-  /* ── Synchronize with selected task & load comments / attachments ── */
+  /* ── Synchronize with selected task & load fresh data from backend ── */
   useEffect(() => {
     if (task) {
+      // 1. Set initial values from props
       setTitle(task.title);
       setDescription(task.description ?? '');
       setPriority(task.priority);
@@ -70,7 +63,26 @@ export default function TaskDetailModal({
       setColumnId(task.columnId);
       setNewComment('');
 
-      // Load comments
+      // 2. Fetch fresh users list every time modal opens
+      userService
+        .getAll()
+        .then((data) => setUsers(data))
+        .catch(() => { /* fallback */ });
+
+      // 3. Fetch latest task details from backend
+      taskApi
+        .getTask(boardId, task.columnId, task.id)
+        .then((freshTask) => {
+          setTitle(freshTask.title);
+          setDescription(freshTask.description ?? '');
+          setPriority(freshTask.priority);
+          setDueDate(freshTask.dueDate ?? '');
+          setAssignee(freshTask.assignee ?? '');
+          setColumnId(freshTask.columnId);
+        })
+        .catch(() => { /* use prop task as fallback */ });
+
+      // 4. Load comments fresh
       setLoadingComments(true);
       commentService
         .getComments(task.id)
@@ -78,7 +90,7 @@ export default function TaskDetailModal({
         .catch(() => toast.error('Yorumlar yüklenemedi.'))
         .finally(() => setLoadingComments(false));
 
-      // Load attachments
+      // 5. Load attachments fresh
       setLoadingAttachments(true);
       attachmentService
         .getAttachments(task.id)
@@ -86,7 +98,7 @@ export default function TaskDetailModal({
         .catch(() => toast.error('Ekler yüklenemedi.'))
         .finally(() => setLoadingAttachments(false));
     }
-  }, [task]);
+  }, [task, boardId]);
 
   if (!task) return null;
 
@@ -158,6 +170,8 @@ export default function TaskDetailModal({
       setComments((prev) => [...prev, created]);
       setNewComment('');
       toast.success('Yorum eklendi.');
+      // Notify parent to maintain freshness
+      onUpdated({ ...task, columnId });
     } catch {
       toast.error('Yorum eklenirken hata oluştu.');
     } finally {
@@ -175,6 +189,8 @@ export default function TaskDetailModal({
       const uploaded = await attachmentService.uploadAttachment(task.id, file);
       setAttachments((prev) => [uploaded, ...prev]);
       toast.success('Dosya başarıyla yüklendi.');
+      // Notify parent to maintain freshness
+      onUpdated({ ...task, columnId });
     } catch {
       toast.error('Dosya yüklenemedi.');
     } finally {
@@ -348,7 +364,6 @@ export default function TaskDetailModal({
                               alt={att.fileName}
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                // fallback if thumbnail error
                                 (e.target as HTMLImageElement).style.display = 'none';
                               }}
                             />

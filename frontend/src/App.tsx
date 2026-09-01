@@ -1,22 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
+import { queryClient } from '@/queryClient';
 import { AuthProvider } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoginPage       from '@/pages/LoginPage';
 import RegisterPage    from '@/pages/RegisterPage';
 import BoardsPage      from '@/pages/BoardsPage';
 import BoardDetailPage from '@/pages/BoardDetailPage';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry:            1,
-      staleTime:        30_000,   // 30 s
-      refetchOnWindowFocus: false,
-    },
-  },
-});
 
 export default function App() {
   return (
@@ -47,14 +38,16 @@ export default function App() {
           toastOptions={{
             duration: 3500,
             style: {
-              background: '#1e1e35',
-              color:       '#ffffff',
-              border:      '1px solid rgba(255,255,255,0.08)',
+              background: '#ffffff',
+              color:       '#1e293b',
+              border:      '1px solid #e2e8f0',
+              boxShadow:   '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
               borderRadius: '12px',
               fontSize:    '14px',
+              fontWeight:  '500',
             },
             success: { iconTheme: { primary: '#10b981', secondary: '#ffffff' } },
-            error:   { iconTheme: { primary: '#f43f5e', secondary: '#ffffff' } },
+            error:   { iconTheme: { primary: '#ef4444', secondary: '#ffffff' } },
           }}
         />
       </AuthProvider>

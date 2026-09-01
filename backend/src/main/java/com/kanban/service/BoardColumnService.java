@@ -6,28 +6,18 @@ import com.kanban.dto.task.TaskResponse;
 import com.kanban.entity.Board;
 import com.kanban.entity.BoardColumn;
 import com.kanban.entity.Task;
-import com.kanban.entity.User;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.BoardColumnRepository;
 import com.kanban.repository.BoardRepository;
-import com.kanban.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Business logic for BoardColumn CRUD and column reordering.
- *
- * <h3>Position Algorithm (Reorder)</h3>
- * <p>Positions are zero-based integers stored per-board.  When a column
- * moves from index {@code src} to {@code dst}:</p>
- * <ul>
- *   <li>{@code dst > src} → columns in {@code (src, dst]} shift <em>left</em> (−1)</li>
- *   <li>{@code dst < src} → columns in {@code [dst, src)} shift <em>right</em> (+1)</li>
- * </ul>
- * <p>Only O(|dst−src|) rows are updated — no full-table rewrite.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -36,7 +26,6 @@ public class BoardColumnService {
 
     private final BoardColumnRepository columnRepository;
     private final BoardRepository       boardRepository;
-    private final SecurityUtils         securityUtils;
 
     // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -45,8 +34,7 @@ public class BoardColumnService {
      */
     @Transactional(readOnly = true)
     public List<ColumnResponse> getColumns(Long boardId) {
-        User user = securityUtils.getCurrentUser();
-        requireBoardOwned(boardId, user.getId());
+        requireBoard(boardId);
 
         return columnRepository.findAllByBoardIdOrderByPositionAsc(boardId)
                 .stream()
@@ -59,8 +47,7 @@ public class BoardColumnService {
      */
     @Transactional(readOnly = true)
     public ColumnResponse getColumn(Long boardId, Long columnId) {
-        User user = securityUtils.getCurrentUser();
-        requireBoardOwned(boardId, user.getId());
+        requireBoard(boardId);
         return toResponse(requireColumn(boardId, columnId));
     }
 
@@ -70,8 +57,7 @@ public class BoardColumnService {
      * Adds a new column at the end of the board (next available position).
      */
     public ColumnResponse createColumn(Long boardId, ColumnRequest request) {
-        User  user  = securityUtils.getCurrentUser();
-        Board board = requireBoardOwned(boardId, user.getId());
+        Board board = requireBoard(boardId);
 
         int nextPosition = columnRepository.countByBoardId(boardId);
 
@@ -79,22 +65,26 @@ public class BoardColumnService {
                 .title(request.title())
                 .position(nextPosition)
                 .board(board)
+                .tasks(new ArrayList<>())
                 .build();
 
-        return toResponse(columnRepository.save(column));
+        BoardColumn saved = columnRepository.save(column);
+        columnRepository.flush();
+        return toResponse(saved);
     }
 
     /**
      * Renames an existing column.
      */
     public ColumnResponse updateColumn(Long boardId, Long columnId, ColumnRequest request) {
-        User user = securityUtils.getCurrentUser();
-        requireBoardOwned(boardId, user.getId());
+        requireBoard(boardId);
 
         BoardColumn column = requireColumn(boardId, columnId);
         column.setTitle(request.title());
 
-        return toResponse(columnRepository.save(column));
+        BoardColumn saved = columnRepository.save(column);
+        columnRepository.flush();
+        return toResponse(saved);
     }
 
     /**
@@ -102,8 +92,7 @@ public class BoardColumnService {
      * closes the positional gap left by the deletion.
      */
     public void deleteColumn(Long boardId, Long columnId) {
-        User user = securityUtils.getCurrentUser();
-        requireBoardOwned(boardId, user.getId());
+        requireBoard(boardId);
 
         BoardColumn column = requireColumn(boardId, columnId);
         int deletedPos = column.getPosition();
@@ -113,25 +102,18 @@ public class BoardColumnService {
 
         // Close the gap: shift all columns after deletedPos left by 1
         columnRepository.shiftPositionsLeft(boardId, deletedPos, Integer.MAX_VALUE);
+        columnRepository.flush();
     }
 
     /**
      * Moves a column to {@code newPosition} within its board.
-     *
-     * <p>The target position is clamped to {@code [0, columnCount − 1]}.</p>
-     *
-     * @param boardId    owning board
-     * @param columnId   column to move
-     * @param newPosition zero-based target index
      */
     public ColumnResponse reorderColumn(Long boardId, Long columnId, int newPosition) {
-        User user = securityUtils.getCurrentUser();
-        requireBoardOwned(boardId, user.getId());
+        requireBoard(boardId);
 
         BoardColumn column  = requireColumn(boardId, columnId);
         int         srcPos  = column.getPosition();
 
-        // Clamp: max valid index is (total − 1)
         int total    = columnRepository.countByBoardId(boardId);
         int clampedDst = Math.min(newPosition, total - 1);
 
@@ -148,13 +130,15 @@ public class BoardColumnService {
         }
 
         column.setPosition(clampedDst);
-        return toResponse(columnRepository.save(column));
+        BoardColumn saved = columnRepository.save(column);
+        columnRepository.flush();
+        return toResponse(saved);
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    private Board requireBoardOwned(Long boardId, Long ownerId) {
-        return boardRepository.findByIdAndOwnerId(boardId, ownerId)
+    private Board requireBoard(Long boardId) {
+        return boardRepository.findById(boardId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Board", boardId));
     }
 
@@ -164,9 +148,12 @@ public class BoardColumnService {
     }
 
     private ColumnResponse toResponse(BoardColumn col) {
-        List<TaskResponse> tasks = col.getTasks().stream()
-                .map(this::toTaskResponse)
-                .toList();
+        List<TaskResponse> tasks = col.getTasks() != null
+                ? col.getTasks().stream()
+                        .sorted(java.util.Comparator.comparingInt(Task::getPosition))
+                        .map(this::toTaskResponse)
+                        .toList()
+                : List.of();
 
         return new ColumnResponse(
                 col.getId(),

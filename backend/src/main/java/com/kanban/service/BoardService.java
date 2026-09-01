@@ -22,22 +22,10 @@ import java.util.List;
 /**
  * Business logic for Board CRUD.
  *
- * <h3>Multi-tenancy</h3>
- * <p>Every read/write operation verifies that the target board belongs to the
- * currently authenticated user by filtering on {@code owner_id}.  A board from
- * another user returns a {@link ResourceNotFoundException} (404) rather than
- * a 403, which prevents information leakage about other users' board IDs.</p>
- *
- * <h3>Default columns</h3>
- * <p>When a board is created, four standard columns are automatically persisted
- * in the following order:
- * <ol>
- *   <li>To Do (position 0)</li>
- *   <li>In Progress (position 1)</li>
- *   <li>In Review (position 2)</li>
- *   <li>Done (position 3)</li>
- * </ol>
- * </p>
+ * <h3>Access & Synchronization</h3>
+ * <p>All authenticated users (ROLE_ADMIN and ROLE_USER) have access to view boards
+ * and their respective columns and tasks. Transactions ensure fresh data is mapped
+ * to DTOs without lazy loading issues.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -55,29 +43,26 @@ public class BoardService {
     // ── Queries ──────────────────────────────────────────────────────────────
 
     /**
-     * Returns all boards owned by the current user (without columns).
-     * Suitable for the board-list / dashboard view.
+     * Returns all boards with columns for all authenticated users.
      */
     @Transactional(readOnly = true)
     public List<BoardResponse> getAllBoards() {
-        User user = securityUtils.getCurrentUser();
-        return boardRepository.findAllByOwnerId(user.getId())
+        return boardRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
-                .map(b -> toResponse(b, false))
+                .map(b -> toResponse(b, true))
                 .toList();
     }
 
     /**
      * Returns a single board with all its columns and tasks.
-     * Suitable for the main Kanban view.
      *
      * @param id board identifier
-     * @throws ResourceNotFoundException if not found or not owned by current user
+     * @throws ResourceNotFoundException if board not found
      */
     @Transactional(readOnly = true)
     public BoardResponse getBoard(Long id) {
-        User  user  = securityUtils.getCurrentUser();
-        Board board = requireOwned(id, user.getId());
+        Board board = boardRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("Board", id));
         return toResponse(board, true);
     }
 
@@ -100,61 +85,53 @@ public class BoardService {
                 .columns(new ArrayList<>())
                 .build();
 
-        boardRepository.save(board);   // persist so columns can reference board.id
+        Board savedBoard = boardRepository.save(board);
 
         // Auto-create default columns
         for (int i = 0; i < DEFAULT_COLUMN_TITLES.size(); i++) {
             BoardColumn col = BoardColumn.builder()
                     .title(DEFAULT_COLUMN_TITLES.get(i))
                     .position(i)
-                    .board(board)
+                    .board(savedBoard)
                     .tasks(new ArrayList<>())
                     .build();
             columnRepository.save(col);
-            board.getColumns().add(col);
+            savedBoard.getColumns().add(col);
         }
 
-        return toResponse(board, true);
+        boardRepository.flush();
+        return toResponse(savedBoard, true);
     }
 
     /**
      * Updates name and/or description of an existing board.
-     *
-     * @param id      board identifier
-     * @param request updated payload
-     * @return the updated board (without columns)
      */
     public BoardResponse updateBoard(Long id, BoardRequest request) {
-        User  user  = securityUtils.getCurrentUser();
-        Board board = requireOwned(id, user.getId());
+        Board board = boardRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("Board", id));
 
         board.setName(request.name());
         board.setDescription(request.description());
 
-        return toResponse(boardRepository.save(board), false);
+        Board saved = boardRepository.save(board);
+        boardRepository.flush();
+        return toResponse(saved, true);
     }
 
     /**
      * Permanently deletes a board and all its columns / tasks (cascaded).
-     *
-     * @param id board identifier
      */
     public void deleteBoard(Long id) {
-        User  user  = securityUtils.getCurrentUser();
-        Board board = requireOwned(id, user.getId());
+        Board board = boardRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("Board", id));
         boardRepository.delete(board);
+        boardRepository.flush();
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    /** Loads board and asserts ownership; throws 404 on failure. */
-    private Board requireOwned(Long boardId, Long ownerId) {
-        return boardRepository.findByIdAndOwnerId(boardId, ownerId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Board", boardId));
-    }
-
     private BoardResponse toResponse(Board board, boolean withColumns) {
-        List<ColumnResponse> cols = withColumns
+        List<ColumnResponse> cols = withColumns && board.getColumns() != null
                 ? board.getColumns().stream()
                         .sorted(java.util.Comparator.comparingInt(BoardColumn::getPosition))
                         .map(this::toColumnResponse)
@@ -170,9 +147,12 @@ public class BoardService {
     }
 
     private ColumnResponse toColumnResponse(BoardColumn col) {
-        List<TaskResponse> tasks = col.getTasks().stream()
-                .map(this::toTaskResponse)
-                .toList();
+        List<TaskResponse> tasks = col.getTasks() != null
+                ? col.getTasks().stream()
+                        .sorted(java.util.Comparator.comparingInt(Task::getPosition))
+                        .map(this::toTaskResponse)
+                        .toList()
+                : List.of();
 
         return new ColumnResponse(
                 col.getId(),

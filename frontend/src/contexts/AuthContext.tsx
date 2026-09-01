@@ -9,6 +9,7 @@ import {
 import type { AuthUser, LoginRequest, RegisterRequest } from '@/types';
 import { authApi } from '@/api/authApi';
 import { TOKEN_KEY } from '@/api/axiosClient';
+import { queryClient } from '@/queryClient';
 
 /* ── Context shape ────────────────────────────────────────────────── */
 interface AuthContextType {
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const persist = useCallback((token: string, authUser: AuthUser) => {
+    queryClient.clear();
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(authUser));
     setUser(authUser);
@@ -67,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [persist]);
 
   const logout = useCallback(() => {
+    queryClient.clear();
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setUser(null);
