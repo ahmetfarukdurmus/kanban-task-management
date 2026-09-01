@@ -1,6 +1,7 @@
 import { Draggable } from '@hello-pangea/dnd';
 import { format, parseISO, isPast } from 'date-fns';
 import type { TaskResponse } from '@/types';
+import { CalendarIcon, UserIcon } from './icons';
 
 interface Props {
   task:    TaskResponse;
@@ -8,20 +9,41 @@ interface Props {
   onEdit:  (task: TaskResponse) => void;
 }
 
-const priorityClass: Record<string, string> = {
-  HIGH:   'badge-high',
-  MEDIUM: 'badge-medium',
-  LOW:    'badge-low',
+const priorityAccent: Record<string, string> = {
+  HIGH:   'bg-rose-500',
+  MEDIUM: 'bg-amber-400',
+  LOW:    'bg-slate-400',
 };
 
-const priorityDot: Record<string, string> = {
-  HIGH:   'bg-red-500',
-  MEDIUM: 'bg-amber-400',
-  LOW:    'bg-emerald-500',
+const priorityBadge: Record<string, { label: string; className: string }> = {
+  HIGH:   { label: 'Yüksek', className: 'badge-high' },
+  MEDIUM: { label: 'Orta',   className: 'badge-medium' },
+  LOW:    { label: 'Düşük',  className: 'badge-low' },
 };
+
+// Generates consistent soft pastel background colors for user avatars
+function getAvatarColor(name: string): { bg: string; text: string } {
+  const colors = [
+    { bg: 'bg-blue-100', text: 'text-blue-700' },
+    { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+    { bg: 'bg-violet-100', text: 'text-violet-700' },
+    { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    { bg: 'bg-amber-100', text: 'text-amber-700' },
+    { bg: 'bg-rose-100', text: 'text-rose-700' },
+    { bg: 'bg-teal-100', text: 'text-teal-700' },
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+}
 
 export default function TaskCard({ task, index, onEdit }: Props) {
   const isOverdue = task.dueDate && isPast(parseISO(task.dueDate));
+  const priority = priorityBadge[task.priority] || priorityBadge.LOW;
+  const avatarStyle = task.assignee ? getAvatarColor(task.assignee) : null;
 
   return (
     <Draggable draggableId={String(task.id)} index={index}>
@@ -32,71 +54,80 @@ export default function TaskCard({ task, index, onEdit }: Props) {
           {...provided.dragHandleProps}
           onClick={() => onEdit(task)}
           className={`
-            group relative rounded-lg border p-3 cursor-pointer
+            group relative bg-white border rounded-xl p-3.5 cursor-pointer
             transition-all duration-150 select-none
             ${snapshot.isDragging
-              ? 'bg-white border-blue-400 shadow-lg rotate-1 scale-[1.02]'
-              : 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'}
+              ? 'border-blue-400 shadow-xl ring-2 ring-blue-500/20 rotate-1'
+              : 'border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300'}
           `}
           style={provided.draggableProps.style}
         >
-          {/* Priority stripe */}
-          <div className={`absolute left-0 top-3 bottom-3 w-0.5 rounded-full ${priorityDot[task.priority]}`} />
+          {/* Priority accent stripe */}
+          <div
+            className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full transition-all ${priorityAccent[task.priority] || 'bg-slate-300'}`}
+          />
 
-          <div className="pl-3">
+          <div className="pl-2">
             {/* Title */}
-            <p className="text-sm font-medium text-slate-800 leading-snug line-clamp-2">
+            <p className="text-sm font-semibold text-slate-800 leading-snug tracking-tight group-hover:text-blue-600 transition-colors line-clamp-2">
               {task.title}
             </p>
 
             {/* Description preview */}
             {task.description && (
-              <p className="mt-1 text-xs text-slate-400 line-clamp-1">{task.description}</p>
+              <p className="mt-1 text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                {task.description}
+              </p>
             )}
 
             {/* Meta row */}
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              {/* Priority badge */}
-              <span className={priorityClass[task.priority]}>
-                {task.priority}
-              </span>
-
-              {/* Due date */}
-              {task.dueDate && (
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
-                  ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                       className="w-3 h-3">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8"  y1="2" x2="8"  y2="6" />
-                    <line x1="3"  y1="10" x2="21" y2="10" />
-                  </svg>
-                  {format(parseISO(task.dueDate), 'MMM d')}
+            <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-100/80">
+              <div className="flex items-center gap-2">
+                {/* Priority Badge */}
+                <span className={priority.className}>
+                  {priority.label}
                 </span>
-              )}
 
-              {/* Assignee */}
-              {task.assignee && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs
-                                 bg-slate-100 text-slate-600">
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full
-                                   bg-blue-500 text-[8px] font-bold text-white">
+                {/* Due Date */}
+                {task.dueDate && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                      isOverdue
+                        ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                        : 'bg-slate-50 text-slate-500 border border-slate-200/60'
+                    }`}
+                    title={isOverdue ? 'Süresi geçmiş' : 'Bitiş Tarihi'}
+                  >
+                    <CalendarIcon className="w-3 h-3" />
+                    {format(parseISO(task.dueDate), 'd MMM')}
+                  </span>
+                )}
+              </div>
+
+              {/* Assignee Avatar */}
+              {task.assignee ? (
+                <div
+                  className="flex items-center gap-1.5"
+                  title={`Sorumlu: ${task.assignee}`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold border border-white shadow-xs ${avatarStyle?.bg} ${avatarStyle?.text}`}
+                  >
                     {task.assignee.charAt(0).toUpperCase()}
                   </span>
-                  {task.assignee}
+                  <span className="text-[11px] font-medium text-slate-600 hidden sm:inline max-w-[80px] truncate">
+                    {task.assignee}
+                  </span>
+                </div>
+              ) : (
+                <span
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-400 border border-dashed border-slate-300"
+                  title="Atanmamış"
+                >
+                  <UserIcon className="w-3 h-3" />
                 </span>
               )}
             </div>
-          </div>
-
-          {/* Drag indicator */}
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-30 transition-opacity">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-slate-400">
-              <circle cx="9"  cy="5"  r="1.5" /><circle cx="15" cy="5"  r="1.5" />
-              <circle cx="9"  cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-              <circle cx="9"  cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
-            </svg>
           </div>
         </div>
       )}

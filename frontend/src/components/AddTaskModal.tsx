@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import type { ColumnResponse, Priority, TaskRequest, TaskResponse, UserSummary } from '@/types';
 import { taskApi } from '@/api/taskApi';
 import { userService } from '@/services/userService';
+import { PlusIcon } from './icons';
 
 interface Props {
   isOpen:      boolean;
@@ -13,7 +14,11 @@ interface Props {
   onTaskAdded: (task: TaskResponse) => void;
 }
 
-const PRIORITIES: Priority[] = ['LOW', 'MEDIUM', 'HIGH'];
+const PRIORITIES: { value: Priority; label: string }[] = [
+  { value: 'LOW', label: 'Düşük' },
+  { value: 'MEDIUM', label: 'Orta' },
+  { value: 'HIGH', label: 'Yüksek' },
+];
 
 export default function AddTaskModal({ isOpen, onClose, boardId, columnId, columns, onTaskAdded }: Props) {
   const [selectedColumnId, setSelectedColumnId] = useState(columnId);
@@ -28,13 +33,13 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
   const [loading, setLoading] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  // Fetch users when modal opens or on mount
+  // Fetch users when modal opens
   useEffect(() => {
     if (isOpen) {
       userService
         .getAll()
         .then((data) => setUsers(data))
-        .catch(() => { /* fallback gracefully */ });
+        .catch(() => { /* fallback */ });
     }
   }, [isOpen]);
 
@@ -84,19 +89,16 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
+      <div className="modal-box p-6">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5"  y1="12" x2="19" y2="12" />
-              </svg>
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-200 shadow-xs">
+              <PlusIcon className="w-4 h-4" />
             </span>
-            <h2 className="text-base font-bold text-slate-800">Yeni Görev Oluştur</h2>
+            <h2 className="text-base font-bold text-slate-800 tracking-tight">Yeni Görev Oluştur</h2>
           </div>
-          <button onClick={onClose} className="btn-ghost p-1 text-slate-400 hover:text-slate-700">
+          <button onClick={onClose} className="btn-ghost p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -104,18 +106,18 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
 
           {/* Column selector */}
           <div>
-            <label htmlFor="task-column" className="field-label font-semibold text-slate-600">
-              Hedef Kolon <span className="text-red-500">*</span>
+            <label htmlFor="task-column" className="field-label">
+              Hedef Kolon <span className="text-rose-500">*</span>
             </label>
             <select
               id="task-column"
               value={selectedColumnId}
               onChange={(e) => setSelectedColumnId(Number(e.target.value))}
-              className="field font-medium text-slate-700"
+              className="field font-semibold text-slate-800"
               required
             >
               {columns.map((col) => (
@@ -126,56 +128,56 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
           {/* Title */}
           <div>
-            <label htmlFor="task-title" className="field-label font-semibold text-slate-600">
-              Başlık <span className="text-red-500">*</span>
+            <label htmlFor="task-title" className="field-label">
+              Başlık <span className="text-rose-500">*</span>
             </label>
             <input
               id="task-title"
               ref={titleRef}
               required
               maxLength={200}
-              placeholder="Ne yapılacak?"
+              placeholder="Örn: Kullanıcı kimlik doğrulama modülünü tamamla"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="field"
+              className="field font-medium"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="task-desc" className="field-label font-semibold text-slate-600">
+            <label htmlFor="task-desc" className="field-label">
               Açıklama
             </label>
             <textarea
               id="task-desc"
               rows={3}
-              placeholder="Daha fazla detay ekleyin…"
+              placeholder="Göreve dair hedefler veya notlar..."
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="field resize-none"
+              className="field resize-none leading-relaxed"
             />
           </div>
 
           {/* Priority + Due Date (row) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="task-priority" className="field-label font-semibold text-slate-600">
+              <label htmlFor="task-priority" className="field-label">
                 Öncelik
               </label>
               <select
                 id="task-priority"
                 value={form.priority}
                 onChange={(e) => setForm({ ...form, priority: e.target.value as Priority })}
-                className="field"
+                className="field font-medium"
               >
                 {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                  <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label htmlFor="task-due" className="field-label font-semibold text-slate-600">
+              <label htmlFor="task-due" className="field-label">
                 Bitiş Tarihi
               </label>
               <input
@@ -190,14 +192,14 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
           {/* Assignee Dropdown */}
           <div>
-            <label htmlFor="task-assignee" className="field-label font-semibold text-slate-600">
+            <label htmlFor="task-assignee" className="field-label">
               Sorumlu / Atanan Kişi
             </label>
             <select
               id="task-assignee"
               value={form.assignee}
               onChange={(e) => setForm({ ...form, assignee: e.target.value })}
-              className="field text-sm font-medium"
+              className="field font-medium text-slate-700"
             >
               <option value="">Seçiniz / Atanmamış</option>
               {users.map((u) => (
@@ -209,7 +211,7 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
+          <div className="flex gap-2.5 pt-3 border-t border-slate-100">
             <button
               type="submit"
               disabled={loading || !form.title.trim()}
@@ -222,7 +224,7 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                 </span>
               ) : 'Görevi Oluştur'}
             </button>
-            <button type="button" onClick={onClose} className="btn-secondary px-4">
+            <button type="button" onClick={onClose} className="btn-secondary px-4 font-medium">
               İptal
             </button>
           </div>

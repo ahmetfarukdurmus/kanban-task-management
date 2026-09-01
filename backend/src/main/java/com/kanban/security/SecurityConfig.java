@@ -141,7 +141,8 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
 
                     // Static file serving for uploaded attachments
-                    .requestMatchers(HttpMethod.GET, "/uploads/**").authenticated()
+                    .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/tasks/*/attachments/*/download").permitAll()
 
                     // ── ADMIN-only write operations ───────────────────────
                     // Add a new column to a board

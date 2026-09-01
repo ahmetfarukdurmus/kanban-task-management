@@ -11,11 +11,14 @@ import com.kanban.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,16 +28,6 @@ import java.util.UUID;
 
 /**
  * Business logic for the Attachment resource.
- *
- * <h3>Storage strategy</h3>
- * <p>Files are written to the local directory specified by
- * {@code app.upload.dir} (defaults to {@code uploads/} relative to the
- * working directory).  A UUID prefix is prepended to the original file name
- * to avoid collisions.</p>
- *
- * <p>The server exposes the directory as a static resource under
- * {@code /uploads/**} via Spring's {@code ResourceHttpRequestHandler},
- * configured in {@code WebMvcConfig}.</p>
  */
 @Slf4j
 @Service
@@ -51,10 +44,6 @@ public class AttachmentService {
 
     /**
      * Returns all attachments for the given task, most recently uploaded first.
-     *
-     * @param taskId task identifier
-     * @return list of attachment DTOs
-     * @throws ResourceNotFoundException if the task does not exist
      */
     @Transactional(readOnly = true)
     public List<AttachmentDto> getAttachments(Long taskId) {
@@ -66,23 +55,49 @@ public class AttachmentService {
     }
 
     /**
+     * Returns the attachment entity for downloading.
+     */
+    @Transactional(readOnly = true)
+    public Attachment getAttachmentEntity(Long taskId, Long attachmentId) {
+        requireTask(taskId);
+        return attachmentRepository.findById(attachmentId)
+                .filter(a -> a.getTask().getId().equals(taskId))
+                .orElseThrow(() -> ResourceNotFoundException.of("Attachment", attachmentId));
+    }
+
+    /**
+     * Loads the attachment file from disk as a Spring Resource.
+     */
+    public Resource loadFileAsResource(Attachment attachment) {
+        try {
+            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+            String fileName = attachment.getFileUrl()
+                    .replace("/api/uploads/", "")
+                    .replace("/uploads/", "")
+                    .replace("uploads/", "");
+            Path filePath = uploadPath.resolve(fileName).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                throw new ResourceNotFoundException("File not found on server disk: " + attachment.getFileName());
+            }
+        } catch (MalformedURLException ex) {
+            throw new ResourceNotFoundException("Invalid file path: " + attachment.getFileName());
+        }
+    }
+
+    /**
      * Persists an uploaded file and records the attachment in the database.
-     *
-     * @param taskId task identifier
-     * @param file   the multipart file from the HTTP request
-     * @return the created attachment as a DTO
-     * @throws ResourceNotFoundException if the task does not exist
-     * @throws RuntimeException          if the file cannot be written to disk
      */
     public AttachmentDto uploadAttachment(Long taskId, MultipartFile file) {
         Task task   = requireTask(taskId);
         User uploader = securityUtils.getCurrentUser();
 
         // Build a unique, safe filename
-        String originalName = file.getOriginalFilename() != null
-                ? file.getOriginalFilename() : "unknown";
-        String safeName    = UUID.randomUUID() + "_" + originalName.replaceAll("[^a-zA-Z0-9._-]", "_");
-        String relativePath = "uploads/" + safeName;
+        String originalName = file.getOriginalFilename() != null && !file.getOriginalFilename().isBlank()
+                ? file.getOriginalFilename() : "file_" + System.currentTimeMillis();
+        String safeName     = UUID.randomUUID() + "_" + originalName.replaceAll("[^a-zA-Z0-9._-]", "_");
 
         // Write the file to disk
         try {
@@ -90,22 +105,24 @@ public class AttachmentService {
             Files.createDirectories(uploadPath);
             Path targetPath = uploadPath.resolve(safeName);
             Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-            log.info("File saved: {}", targetPath);
+            log.info("Attachment file saved at: {}", targetPath);
         } catch (IOException ex) {
             log.error("Failed to store file '{}': {}", originalName, ex.getMessage());
             throw new RuntimeException("Could not store file. Please try again.", ex);
         }
 
-        // Record the attachment in the database
+        // Record the attachment in the database with /api/uploads/ prefix
         Attachment attachment = Attachment.builder()
                 .fileName(originalName)
                 .fileType(file.getContentType() != null ? file.getContentType() : "application/octet-stream")
-                .fileUrl("/" + relativePath)  // server-relative URL; /uploads/** is served as static resource
+                .fileUrl("/api/uploads/" + safeName)
                 .task(task)
                 .uploadedBy(uploader)
                 .build();
 
-        return toDto(attachmentRepository.save(attachment));
+        Attachment saved = attachmentRepository.save(attachment);
+        attachmentRepository.flush();
+        return toDto(saved);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -9,12 +9,6 @@ import java.nio.file.Paths;
 
 /**
  * Serves uploaded files as static resources under {@code /uploads/**}.
- *
- * <p>Files stored in the upload directory (configured via {@code app.upload.dir},
- * defaulting to the {@code uploads/} folder relative to the working directory)
- * are accessible at {@code /api/uploads/<filename>} without authentication.
- * The SecurityConfig controls whether the {@code /uploads/**} path requires
- * a valid token.</p>
  */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
@@ -24,9 +18,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String absolutePath = Paths.get(uploadDir).toAbsolutePath().normalize().toUri().toString();
+        String location = Paths.get(uploadDir).toAbsolutePath().normalize().toUri().toString();
+        if (!location.endsWith("/")) {
+            location += "/";
+        }
         registry
                 .addResourceHandler("/uploads/**")
-                .addResourceLocations(absolutePath);
+                .addResourceLocations(location);
     }
 }

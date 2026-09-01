@@ -1,8 +1,11 @@
 package com.kanban.controller;
 
 import com.kanban.dto.attachment.AttachmentDto;
+import com.kanban.entity.Attachment;
 import com.kanban.service.AttachmentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,12 +18,10 @@ import java.util.List;
  * REST controller for Attachment resources, nested under a Task.
  *
  * <pre>
- * GET  /api/tasks/{taskId}/attachments                  – list attachments
- * POST /api/tasks/{taskId}/attachments  (multipart)     – upload a file
+ * GET  /api/tasks/{taskId}/attachments                             – list attachments
+ * POST /api/tasks/{taskId}/attachments  (multipart)                – upload a file
+ * GET  /api/tasks/{taskId}/attachments/{attachmentId}/download     – download/stream file
  * </pre>
- *
- * <p>Access policy: any authenticated user (ROLE_USER or ROLE_ADMIN) may
- * upload and view attachments.  This is enforced in {@code SecurityConfig}.</p>
  */
 @RestController
 @RequestMapping("/tasks/{taskId}/attachments")
@@ -36,10 +37,6 @@ public class AttachmentController {
 
     /**
      * Uploads a file and attaches it to the specified task.
-     *
-     * <p>Use {@code Content-Type: multipart/form-data} with a {@code file} field.
-     * Maximum upload size is configured in {@code application.yml}
-     * ({@code spring.servlet.multipart.max-file-size}).</p>
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<AttachmentDto> uploadAttachment(
@@ -51,5 +48,27 @@ public class AttachmentController {
         }
         return ResponseEntity.status(HttpStatus.CREATED)
                              .body(attachmentService.uploadAttachment(taskId, file));
+    }
+
+    /**
+     * Downloads or displays an attachment file directly.
+     */
+    @GetMapping("/{attachmentId}/download")
+    public ResponseEntity<Resource> downloadAttachment(
+            @PathVariable Long taskId,
+            @PathVariable Long attachmentId) {
+
+        Attachment attachment = attachmentService.getAttachmentEntity(taskId, attachmentId);
+        Resource resource = attachmentService.loadFileAsResource(attachment);
+
+        String contentType = attachment.getFileType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "application/octet-stream";
+        }
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + attachment.getFileName() + "\"")
+                .body(resource);
     }
 }

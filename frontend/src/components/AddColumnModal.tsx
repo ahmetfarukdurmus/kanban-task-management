@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { columnApi } from '@/api/columnApi';
 import type { ColumnResponse } from '@/types';
+import { PlusIcon } from './icons';
 
 interface Props {
   isOpen:         boolean;
@@ -44,19 +45,16 @@ export default function AddColumnModal({ isOpen, boardId, onClose, onColumnAdded
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
+      <div className="modal-box p-6">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
-                <rect x="3" y="3" width="7" height="18" rx="1.5" />
-                <rect x="14" y="3" width="7" height="11" rx="1.5" />
-              </svg>
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-200 shadow-xs">
+              <PlusIcon className="w-4 h-4" />
             </span>
-            <h2 className="text-base font-bold text-slate-800">Yeni Kolon Ekle</h2>
+            <h2 className="text-base font-bold text-slate-800 tracking-tight">Yeni Kolon Ekle</h2>
           </div>
-          <button onClick={onClose} className="btn-ghost p-1 text-slate-400 hover:text-slate-700">
+          <button onClick={onClose} className="btn-ghost p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -64,24 +62,24 @@ export default function AddColumnModal({ isOpen, boardId, onClose, onColumnAdded
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="new-col-title" className="field-label font-semibold text-slate-600">
-              Kolon Başlığı <span className="text-red-500">*</span>
+            <label htmlFor="new-col-title" className="field-label">
+              Kolon Başlığı <span className="text-rose-500">*</span>
             </label>
             <input
               id="new-col-title"
               ref={inputRef}
               required
               maxLength={100}
-              placeholder="Örn: Yapılacaklar, Test, Canlı..."
+              placeholder="Örn: Yapılacaklar, Test Ediliyor, Yayında..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="field"
+              className="field font-medium"
             />
           </div>
 
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
+          <div className="flex gap-2.5 pt-3 border-t border-slate-100">
             <button
               type="submit"
               disabled={loading || !title.trim()}
@@ -94,7 +92,7 @@ export default function AddColumnModal({ isOpen, boardId, onClose, onColumnAdded
                 </span>
               ) : 'Kolon Ekle'}
             </button>
-            <button type="button" onClick={onClose} className="btn-secondary px-4">
+            <button type="button" onClick={onClose} className="btn-secondary px-4 font-medium">
               İptal
             </button>
           </div>

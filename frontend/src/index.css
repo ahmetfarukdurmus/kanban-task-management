@@ -21,7 +21,7 @@
   }
 
   /* Light-mode scrollbars */
-  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
   ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
@@ -30,68 +30,74 @@
 /* ── Components ───────────────────────────────────────────────────── */
 @layer components {
 
-  /* Input fields – light theme */
+  /* Input fields – Linear / Jira SaaS style */
   .field {
-    @apply w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5
-           text-slate-800 placeholder-slate-400 text-sm
-           focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400
-           transition-all duration-200;
+    @apply w-full bg-white border border-slate-200/90 rounded-lg px-3 py-2
+           text-slate-800 placeholder-slate-400 text-sm font-normal
+           focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
+           transition-all duration-150 shadow-sm;
   }
 
   .field-label {
-    @apply block text-xs font-medium text-slate-500 mb-1.5;
+    @apply block text-xs font-semibold text-slate-600 mb-1.5;
   }
 
   /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center gap-2 font-medium rounded-lg
-           transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+           transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
   }
   .btn-primary {
-    @apply btn px-4 py-2.5 text-sm
-           bg-blue-600 hover:bg-blue-700
-           text-white shadow-sm;
+    @apply btn px-3.5 py-2 text-sm
+           bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+           text-white shadow-sm hover:shadow transition-all;
   }
   .btn-secondary {
-    @apply btn px-4 py-2.5 text-sm
-           bg-slate-100 hover:bg-slate-200 border border-slate-200
-           text-slate-700;
+    @apply btn px-3.5 py-2 text-sm
+           bg-white hover:bg-slate-50 border border-slate-200/90 hover:border-slate-300
+           text-slate-700 shadow-sm;
   }
   .btn-ghost {
-    @apply btn px-3 py-2 text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg;
+    @apply btn px-2.5 py-1.5 text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100/80 rounded-lg;
   }
   .btn-danger {
-    @apply btn px-3 py-2 text-sm bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200;
+    @apply btn px-3 py-2 text-sm bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200/80 transition-colors;
   }
 
-  /* Priority badge */
-  .badge-high   { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700; }
-  .badge-medium { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700; }
-  .badge-low    { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700; }
+  /* Priority badges (SaaS Linear/Jira style) */
+  .badge-low {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200/60;
+  }
+  .badge-medium {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200;
+  }
+  .badge-high {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200;
+  }
 
   /* Modal overlay */
   .modal-overlay {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4;
     background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
     animation: fadeIn 0.15s ease-out;
   }
   .modal-box {
-    @apply w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl
+    @apply w-full max-w-md bg-white border border-slate-200/90 rounded-2xl shadow-2xl
            animate-scale-in;
   }
 
   /* Kanban column container */
   .kanban-column {
     @apply flex flex-col w-72 flex-shrink-0
-           bg-slate-100 border border-slate-200 rounded-xl p-3;
+           bg-slate-100/90 border border-slate-200/90 rounded-xl p-3 shadow-xs;
   }
 
   /* Task card */
   .task-card {
-    @apply bg-white border border-slate-200 rounded-lg p-3
-           shadow-sm hover:shadow-md
-           transition-shadow duration-150 cursor-pointer select-none;
+    @apply bg-white border border-slate-200/90 rounded-lg p-3
+           shadow-xs hover:shadow-md hover:border-slate-300
+           transition-all duration-150 cursor-pointer select-none;
   }
 }
 
@@ -102,23 +108,21 @@
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.96); }
+  from { opacity: 0; transform: scale(0.97); }
   to   { opacity: 1; transform: scale(1); }
 }
 
 .animate-scale-in {
-  animation: scaleIn 0.15s ease-out;
+  animation: scaleIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ── Kanban drag-and-drop ─────────────────────────────────────────── */
-/* Task card while being dragged */
 [data-rfd-draggable-id].dragging {
   opacity: 0.95;
-  transform: rotate(1.5deg) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 2px rgba(37, 99, 235, 0.4) !important;
+  transform: rotate(1.5deg) scale(1.02) !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), 0 0 0 2px rgba(37, 99, 235, 0.4) !important;
 }
 
-/* Droppable column when a card hovers over it */
 .col-drop-active {
-  @apply bg-blue-50 border-blue-300 transition-colors duration-150;
+  @apply bg-blue-50/60 border-blue-300 ring-2 ring-blue-400/20 transition-all duration-150;
 }

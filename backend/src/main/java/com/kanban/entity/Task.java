@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A task card inside a {@link BoardColumn}.
@@ -54,6 +56,22 @@ public class Task {
     @JoinColumn(name = "column_id", nullable = false,
                 foreignKey = @ForeignKey(name = "fk_tasks_column"))
     private BoardColumn column;
+
+    /** Comments on this task – cascaded on delete */
+    @OneToMany(mappedBy = "task",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    @OrderBy("createdAt ASC")
+    @Builder.Default
+    private List<Comment> comments = new ArrayList<>();
+
+    /** Attachments on this task – cascaded on delete */
+    @OneToMany(mappedBy = "task",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    @OrderBy("uploadedAt DESC")
+    @Builder.Default
+    private List<Attachment> attachments = new ArrayList<>();
 
     // ─── Priority enum ───────────────────────────────────────────────────
 

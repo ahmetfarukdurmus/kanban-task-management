@@ -36,8 +36,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 # Copy only the fat-JAR from the builder stage
 COPY --from=builder /app/target/*.jar app.jar
 
-# Transfer ownership to the non-root user
-RUN chown appuser:appgroup app.jar
+# Create uploads directory and set permissions for non-root user
+RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app/uploads /app
 
 USER appuser
 
