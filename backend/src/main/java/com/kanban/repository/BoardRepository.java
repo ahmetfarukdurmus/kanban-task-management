@@ -13,6 +13,12 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
     /** Returns all boards ordered by creation time descending. */
     List<Board> findAllByOrderByCreatedAtDesc();
 
+    /** Returns only boards belonging to the specified organization. */
+    List<Board> findAllByOrganizationIdOrderByCreatedAtDesc(Long organizationId);
+
+    /** Finds board by id and organization id. */
+    Optional<Board> findByIdAndOrganizationId(Long id, Long organizationId);
+
     /** Returns only boards owned by the given user. */
     List<Board> findAllByOwnerId(Long ownerId);
 

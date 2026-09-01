@@ -21,4 +21,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** All users ordered alphabetically by username – used for assignee selection. */
     List<User> findAllByOrderByUsernameAsc();
+
+    /** All users in the given organization ordered alphabetically by username. */
+    List<User> findAllByOrganizationIdOrderByUsernameAsc(Long organizationId);
 }

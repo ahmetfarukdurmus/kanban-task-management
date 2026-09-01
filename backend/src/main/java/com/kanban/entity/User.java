@@ -13,15 +13,6 @@ import java.util.List;
 /**
  * Application user.
  * Implements {@link UserDetails} so Spring Security can consume it directly.
- *
- * <p>The {@link Role} field drives RBAC:
- * <ul>
- *   <li>{@link Role#ROLE_ADMIN} – can create/delete tasks and add columns</li>
- *   <li>{@link Role#ROLE_USER}  – can read, move tasks (DnD), add comments/attachments</li>
- * </ul>
- * New registrations receive {@link Role#ROLE_USER} by default.
- * The first registered user automatically becomes {@link Role#ROLE_ADMIN}.
- * </p>
  */
 @Entity
 @Table(name = "users", uniqueConstraints = {
@@ -55,6 +46,12 @@ public class User implements UserDetails {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private Role role = Role.ROLE_USER;
+
+    /** Organization / Team this user belongs to. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "organization_id",
+                foreignKey = @ForeignKey(name = "fk_users_organization"))
+    private Organization organization;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

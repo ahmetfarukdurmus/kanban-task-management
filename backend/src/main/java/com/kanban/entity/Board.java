@@ -8,8 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A Kanban board belonging to exactly one {@link User}.
- * Data isolation: queries always filter by owner.
+ * A Kanban board belonging to an {@link Organization} and owned by a {@link User}.
+ * Data isolation: queries filter by organization.
  */
 @Entity
 @Table(name = "boards")
@@ -35,11 +35,17 @@ public class Board {
         createdAt = Instant.now();
     }
 
-    /** Owner of this board – multi-tenancy key. */
+    /** Owner of this board. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "owner_id", nullable = false,
                 foreignKey = @ForeignKey(name = "fk_boards_owner"))
     private User owner;
+
+    /** Organization / Team this board belongs to – multi-tenancy key. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id",
+                foreignKey = @ForeignKey(name = "fk_boards_organization"))
+    private Organization organization;
 
     /** Ordered list of columns on this board. */
     @OneToMany(mappedBy = "board",
