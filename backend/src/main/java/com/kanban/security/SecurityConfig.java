@@ -139,6 +139,7 @@ public class SecurityConfig {
                     // Public endpoints
                     .requestMatchers("/auth/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/organizations", "/organizations/**").permitAll()
 
                     // Static file serving for uploaded attachments
                     .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
@@ -149,26 +150,26 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST,
                             "/boards/*/columns").hasRole("ADMIN")
 
-                    // Create a task within a column
-                    .requestMatchers(HttpMethod.POST,
-                            "/boards/*/columns/*/tasks").hasRole("ADMIN")
-
-                    // Delete a task
-                    .requestMatchers(HttpMethod.DELETE,
-                            "/boards/*/columns/*/tasks/*").hasRole("ADMIN")
-
                     // Delete a board
                     .requestMatchers(HttpMethod.DELETE,
                             "/boards/*").hasRole("ADMIN")
 
-                    // ── Any authenticated user ────────────────────────────
+                    // ── Authenticated users (Team Member & Admin) ─────────
+                    // Create, update, delete tasks within a column
+                    .requestMatchers(HttpMethod.POST,
+                            "/boards/*/columns/*/tasks").authenticated()
+                    .requestMatchers(HttpMethod.PUT,
+                            "/boards/*/columns/*/tasks/*").authenticated()
+                    .requestMatchers(HttpMethod.DELETE,
+                            "/boards/*/columns/*/tasks/*").authenticated()
+
                     // DnD move/reorder – open to both roles
                     .requestMatchers(HttpMethod.PATCH,
                             "/tasks/*/move").authenticated()
 
                     // Comments & attachments
-                    .requestMatchers("/tasks/*/comments").authenticated()
-                    .requestMatchers("/tasks/*/attachments").authenticated()
+                    .requestMatchers("/tasks/*/comments", "/tasks/*/comments/**").authenticated()
+                    .requestMatchers("/tasks/*/attachments", "/tasks/*/attachments/**").authenticated()
 
                     // User list for assignee selection
                     .requestMatchers(HttpMethod.GET, "/users").authenticated()
