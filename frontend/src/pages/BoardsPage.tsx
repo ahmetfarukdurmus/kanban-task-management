@@ -2,163 +2,205 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
+import { tr } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import CreateBoardModal from '@/components/CreateBoardModal';
 import { boardApi } from '@/api/boardApi';
+import { useAuth } from '@/contexts/AuthContext';
 import type { BoardResponse } from '@/types';
+import { FileIcon, PlusIcon, TrashIcon } from '@/components/icons';
 
 export default function BoardsPage() {
   const queryClient               = useQueryClient();
+  const { isAdmin }               = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting,  setDeleting]  = useState<number | null>(null);
 
-  const { data: boards = [], isLoading, isError } = useQuery({
+  const { data: boards = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['boards'],
     queryFn:  boardApi.getAll,
   });
 
   const handleDelete = async (e: React.MouseEvent, board: BoardResponse) => {
     e.preventDefault();
-    if (!confirm(`Delete "${board.name}" and all its data?`)) return;
+    e.stopPropagation();
+    if (!confirm(`"${board.name}" panosunu ve altındaki tüm görevleri kalıcı olarak silmek istediğinizden emin misiniz?`)) return;
+
     setDeleting(board.id);
     try {
       await boardApi.remove(board.id);
       await queryClient.invalidateQueries({ queryKey: ['boards'] });
-      toast.success('Board deleted.');
+      toast.success('Pano başarıyla silindi.');
     } catch {
-      toast.error('Failed to delete board.');
+      toast.error('Pano silinirken bir hata oluştu.');
     } finally {
       setDeleting(null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50/70">
       <Navbar />
 
-      <main className="mx-auto max-w-screen-xl px-4 sm:px-6 py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      <main className="mx-auto max-w-screen-xl px-4 sm:px-6 py-8 sm:py-10">
+
+        {/* ── Page Header ────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-5 border-b border-slate-200/80">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Panolarım</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              {boards.length} {boards.length === 1 ? 'pano' : 'pano'}
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Panolarım
+            </h1>
+            <p className="text-sm text-slate-500 mt-1 font-medium">
+              Tüm projelerinizi, süreçlerinizi ve takım işlerinizi tek bir yerden yönetin.
             </p>
           </div>
-          <button onClick={() => setModalOpen(true)} className="btn-primary gap-2">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
-                 className="w-4 h-4">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Yeni Pano
-          </button>
+
+          {isAdmin && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="btn-primary gap-2 self-start sm:self-auto py-2.5 px-4 shadow-sm hover:shadow"
+            >
+              <PlusIcon className="w-4 h-4" />
+              <span>Yeni Pano Oluştur</span>
+            </button>
+          )}
         </div>
 
-        {/* Loading */}
+        {/* ── Loading State ──────────────────────────────────────── */}
         {isLoading && (
-          <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="flex flex-col items-center justify-center py-28">
+            <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-xs font-semibold text-slate-400">Panolar yükleniyor…</p>
           </div>
         )}
 
-        {/* Error */}
+        {/* ── Error State ────────────────────────────────────────── */}
         {isError && (
-          <div className="text-center py-20 text-slate-400">
-            <p>Panolar yüklenemedi. Lütfen sayfayı yenileyin.</p>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && !isError && boards.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-200 border border-slate-300
-                            flex items-center justify-center mb-5">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
-                   className="w-8 h-8 text-slate-400">
-                <rect x="3" y="3" width="7" height="18" rx="1.5" />
-                <rect x="14" y="3" width="7" height="11" rx="1.5" />
-                <rect x="14" y="18" width="7" height="3"  rx="1.5" />
+          <div className="text-center py-20 bg-white rounded-2xl border border-rose-200/80 shadow-xs max-w-md mx-auto p-8">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-6 h-6">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <h2 className="text-lg font-semibold text-slate-600 mb-1">Henüz pano yok</h2>
-            <p className="text-sm text-slate-400 mb-6">İlk panonuzu oluşturarak başlayın</p>
-            <button onClick={() => setModalOpen(true)} className="btn-primary">
-              Pano Oluştur
+            <h3 className="text-base font-bold text-slate-800">Panolar yüklenemedi</h3>
+            <p className="text-xs text-slate-500 mt-1 mb-4">Sunucuya bağlanırken bir hata oluştu.</p>
+            <button onClick={() => refetch()} className="btn-secondary py-2 px-4 text-xs font-semibold">
+              Tekrar Dene
             </button>
           </div>
         )}
 
-        {/* Board grid */}
-        {!isLoading && boards.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {boards.map((board) => (
-              <Link
-                key={board.id}
-                to={`/boards/${board.id}`}
-                className="group relative flex flex-col bg-white border border-slate-200
-                           rounded-2xl p-5 hover:border-blue-300 hover:shadow-md
-                           transition-all duration-200 cursor-pointer"
+        {/* ── Empty State ────────────────────────────────────────── */}
+        {!isLoading && !isError && boards.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 px-4 max-w-md mx-auto text-center bg-white rounded-3xl border border-slate-200/80 shadow-sm p-8 my-6">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-4 shadow-xs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-8 h-8 text-blue-600">
+                <rect x="3" y="3" width="7" height="18" rx="1.5" />
+                <rect x="14" y="3" width="7" height="11" rx="1.5" />
+                <rect x="14" y="18" width="7" height="3" rx="1.5" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-bold text-slate-800">Henüz Bir Pano Bulunmuyor</h2>
+            <p className="text-xs text-slate-500 mt-1.5 mb-6 leading-relaxed">
+              Ekip çalışmalarınızı veya kişisel hedeflerinizi organize etmek için yeni bir Kanban panosu oluşturarak başlayın.
+            </p>
+            {isAdmin ? (
+              <button
+                onClick={() => setModalOpen(true)}
+                className="btn-primary gap-2 py-2 px-4 text-xs font-semibold"
               >
-                {/* Board icon + delete */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200
-                                  flex items-center justify-center
-                                  group-hover:bg-blue-100 transition-colors">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                         className="w-4 h-4 text-blue-600">
-                      <rect x="3" y="3" width="7" height="18" rx="1.5" />
-                      <rect x="14" y="3" width="7" height="11" rx="1.5" />
-                    </svg>
-                  </div>
-
-                  {/* Delete button */}
-                  <button
-                    onClick={(e) => handleDelete(e, board)}
-                    disabled={deleting === board.id}
-                    className="opacity-0 group-hover:opacity-100 btn-ghost p-1.5 text-slate-300
-                               hover:text-red-500 transition-all duration-150"
-                    aria-label={`Delete ${board.name}`}
-                  >
-                    {deleting === board.id
-                      ? <span className="w-3.5 h-3.5 border border-red-300 border-t-red-500 rounded-full animate-spin block" />
-                      : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          <path d="M10 11v6M14 11v6" />
-                        </svg>
-                    }
-                  </button>
-                </div>
-
-                {/* Board name */}
-                <h2 className="font-semibold text-slate-800 group-hover:text-blue-700 truncate transition-colors mb-1">
-                  {board.name}
-                </h2>
-
-                {/* Description */}
-                {board.description && (
-                  <p className="text-xs text-slate-400 line-clamp-2 mb-3">{board.description}</p>
-                )}
-
-                {/* Footer */}
-                <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">
-                    {format(parseISO(board.createdAt), 'MMM d, yyyy')}
-                  </span>
-                  <span className="text-xs text-slate-400 flex items-center gap-1">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                         className="w-3 h-3">
-                      <rect x="3" y="3" width="7" height="18" rx="1.5" />
-                      <rect x="14" y="3" width="7" height="11" rx="1.5" />
-                    </svg>
-                    {board.columns.length} kolon
-                  </span>
-                </div>
-              </Link>
-            ))}
+                <PlusIcon className="w-4 h-4" />
+                <span>İlk Panonuzu Oluşturun</span>
+              </button>
+            ) : (
+              <span className="text-xs font-medium text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">
+                Yöneticinizin pano eklemesi bekleniyor.
+              </span>
+            )}
           </div>
         )}
+
+        {/* ── Board Grid ─────────────────────────────────────────── */}
+        {!isLoading && boards.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {boards.map((board) => {
+              const totalTasks = board.columns?.reduce((sum, col) => sum + (col.tasks?.length || 0), 0) ?? 0;
+              const columnCount = board.columns?.length ?? 0;
+
+              return (
+                <Link
+                  key={board.id}
+                  to={`/boards/${board.id}`}
+                  className="group relative flex flex-col justify-between bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs hover:shadow-xl hover:border-blue-300 transition-all duration-200 cursor-pointer overflow-hidden"
+                >
+                  {/* Top Header inside Card */}
+                  <div>
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/80 group-hover:scale-105 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-xs">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5">
+                          <rect x="3" y="3" width="7" height="18" rx="1.5" />
+                          <rect x="14" y="3" width="7" height="11" rx="1.5" />
+                        </svg>
+                      </div>
+
+                      {/* Delete Button (Only for Admin) */}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDelete(e, board)}
+                          disabled={deleting === board.id}
+                          className="opacity-0 group-hover:opacity-100 btn-ghost p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                          title="Panoyu Sil"
+                          aria-label={`Sil ${board.name}`}
+                        >
+                          {deleting === board.id ? (
+                            <span className="w-4 h-4 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin block" />
+                          ) : (
+                            <TrashIcon className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Board Title */}
+                    <h2 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                      {board.name}
+                    </h2>
+
+                    {/* Description */}
+                    <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed min-h-[32px]">
+                      {board.description || 'Açıklama bulunmuyor.'}
+                    </p>
+                  </div>
+
+                  {/* Card Footer: Metadata & Counts */}
+                  <div className="mt-5 pt-4 border-t border-slate-100/90 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 font-medium text-[11px]">
+                      {board.createdAt ? format(parseISO(board.createdAt), 'd MMM yyyy', { locale: tr }) : ''}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      {/* Column Count */}
+                      <span className="inline-flex items-center gap-1 font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-[11px] border border-slate-200/60">
+                        {columnCount} Kolon
+                      </span>
+
+                      {/* Task Count */}
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md text-[11px] border border-blue-100">
+                        <FileIcon className="w-3 h-3 text-blue-500" />
+                        {totalTasks} Görev
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
       </main>
 
       <CreateBoardModal

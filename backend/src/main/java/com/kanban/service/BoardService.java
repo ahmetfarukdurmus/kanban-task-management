@@ -119,8 +119,9 @@ public class BoardService {
     }
 
     /**
-     * Permanently deletes a board and all its columns / tasks (cascaded).
+     * Permanently deletes a board and all its columns / tasks (cascaded, Admin only).
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public void deleteBoard(Long id) {
         Board board = boardRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Board", id));

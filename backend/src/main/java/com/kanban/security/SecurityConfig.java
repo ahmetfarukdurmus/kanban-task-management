@@ -157,6 +157,10 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.DELETE,
                             "/boards/*/columns/*/tasks/*").hasRole("ADMIN")
 
+                    // Delete a board
+                    .requestMatchers(HttpMethod.DELETE,
+                            "/boards/*").hasRole("ADMIN")
+
                     // ── Any authenticated user ────────────────────────────
                     // DnD move/reorder – open to both roles
                     .requestMatchers(HttpMethod.PATCH,

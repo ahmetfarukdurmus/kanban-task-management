@@ -50,6 +50,7 @@ public class BoardController {
         return ResponseEntity.ok(boardService.updateBoard(id, request));
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteBoard(@PathVariable Long id) {
         boardService.deleteBoard(id);
