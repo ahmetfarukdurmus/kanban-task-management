@@ -20,48 +20,40 @@ export default function LoginPage() {
       await login({ username, password });
       navigate(from, { replace: true });
     } catch {
-      toast.error('Invalid username or password.');
+      toast.error('Kullanıcı adı veya şifre hatalı.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-dark-950 bg-mesh-purple px-4">
-      {/* Glow blobs */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full
-                        bg-violet-600/10 blur-[120px]" />
-        <div className="absolute -bottom-40 -right-20 w-[500px] h-[500px] rounded-full
-                        bg-cyan-500/8 blur-[100px]" />
-      </div>
-
-      <div className="relative w-full max-w-sm animate-slide-up">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl
-                          bg-gradient-to-br from-violet-600 to-cyan-500 shadow-glow-purple mb-4">
+                          bg-blue-600 shadow-md mb-4">
             <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-white" stroke="currentColor" strokeWidth={2.5}>
               <rect x="3" y="3" width="7" height="18" rx="1.5" />
               <rect x="14" y="3" width="7" height="11" rx="1.5" />
               <rect x="14" y="18" width="7" height="3"  rx="1.5" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-          <p className="mt-1 text-sm text-white/40">Sign in to your Kanban workspace</p>
+          <h1 className="text-2xl font-bold text-slate-800">Tekrar Hoşgeldiniz</h1>
+          <p className="mt-1 text-sm text-slate-400">Kanban çalışma alanınıza giriş yapın</p>
         </div>
 
         {/* Card */}
-        <div className="glass p-6 rounded-2xl shadow-card">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="login-username" className="field-label">Username</label>
+              <label htmlFor="login-username" className="field-label">Kullanıcı Adı</label>
               <input
                 id="login-username"
                 autoFocus
                 required
                 autoComplete="username"
-                placeholder="your_username"
+                placeholder="kullanici_adi"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="field"
@@ -69,7 +61,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="login-password" className="field-label">Password</label>
+              <label htmlFor="login-password" className="field-label">Şifre</label>
               <input
                 id="login-password"
                 type="password"
@@ -90,17 +82,17 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in…
+                  Giriş yapılıyor…
                 </span>
-              ) : 'Sign in'}
+              ) : 'Giriş Yap'}
             </button>
           </form>
         </div>
 
-        <p className="text-center mt-5 text-sm text-white/30">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-violet-400 hover:text-violet-300 font-medium transition-colors">
-            Create one
+        <p className="text-center mt-5 text-sm text-slate-500">
+          Hesabınız yok mu?{' '}
+          <Link to="/register" className="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+            Kayıt Ol
           </Link>
         </p>
       </div>

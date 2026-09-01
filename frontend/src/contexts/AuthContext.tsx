@@ -14,6 +14,7 @@ import { TOKEN_KEY } from '@/api/axiosClient';
 interface AuthContextType {
   user:            AuthUser | null;
   isAuthenticated: boolean;
+  isAdmin:         boolean;   // true when user.role === 'ROLE_ADMIN'
   isLoading:       boolean;
   login:           (data: LoginRequest)    => Promise<void>;
   register:        (data: RegisterRequest) => Promise<void>;
@@ -47,12 +48,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (data: LoginRequest) => {
     const res = await authApi.login(data);
-    persist(res.token, { id: res.id, username: res.username, email: res.email });
+    persist(res.token, {
+      id:       res.id,
+      username: res.username,
+      email:    res.email,
+      role:     res.role,
+    });
   }, [persist]);
 
   const register = useCallback(async (data: RegisterRequest) => {
     const res = await authApi.register(data);
-    persist(res.token, { id: res.id, username: res.username, email: res.email });
+    persist(res.token, {
+      id:       res.id,
+      username: res.username,
+      email:    res.email,
+      role:     res.role,
+    });
   }, [persist]);
 
   const logout = useCallback(() => {
@@ -65,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       isAuthenticated: !!user,
+      isAdmin:         user?.role === 'ROLE_ADMIN',
       isLoading,
       login,
       register,

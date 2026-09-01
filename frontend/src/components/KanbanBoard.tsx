@@ -5,6 +5,7 @@ import KanbanColumn from './KanbanColumn';
 import type { ColumnResponse, TaskResponse } from '@/types';
 import { taskApi } from '@/api/taskApi';
 import { columnApi } from '@/api/columnApi';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   boardId:    number;
@@ -14,8 +15,9 @@ interface Props {
   onEditTask: (task: TaskResponse) => void;
 }
 
-export default function KanbanBoard({ boardId, columns, onColumns, onAddTask, onEditTask }: Props) {
-  const [addingCol, setAddingCol] = useState(false);
+export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _onAddTask, onEditTask }: Props) {
+  const { isAdmin } = useAuth();
+  const [addingCol,   setAddingCol]   = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
 
   /* ── Drag-and-drop ─────────────────────────────────────────────── */
@@ -71,7 +73,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask, on
     [columns, onColumns],
   );
 
-  /* ── Add column ────────────────────────────────────────────────── */
+  /* ── Add column (admin only) ───────────────────────────────────── */
   const handleAddColumn = async () => {
     const title = newColTitle.trim();
     if (!title) return;
@@ -111,57 +113,59 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask, on
   /* ── Render ────────────────────────────────────────────────────── */
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-5 items-start overflow-x-auto pb-6 pt-2 px-1 min-h-[calc(100vh-160px)]">
+      <div className="flex gap-4 items-start overflow-x-auto pb-6 pt-2 px-1 min-h-[calc(100vh-200px)]">
         {columns.map((col) => (
           <KanbanColumn
             key={col.id}
             column={col}
             boardId={boardId}
-            onAddTask={onAddTask}
             onEditTask={onEditTask}
             onDeleteCol={handleDeleteColumn}
             onRenameCol={handleRenameColumn}
+            isAdmin={isAdmin}
           />
         ))}
 
-        {/* ── Add column panel ─────────────────────────────────────── */}
-        {addingCol ? (
-          <div className="flex-shrink-0 w-72 bg-dark-800 border border-white/[0.06] rounded-xl p-3
-                          animate-scale-in">
-            <input
-              autoFocus
-              placeholder="Column title…"
-              value={newColTitle}
-              onChange={(e) => setNewColTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddColumn();
-                if (e.key === 'Escape') { setAddingCol(false); setNewColTitle(''); }
-              }}
-              className="field text-sm mb-2"
-            />
-            <div className="flex gap-2">
-              <button onClick={handleAddColumn} className="btn-primary flex-1 py-1.5 text-xs">
-                Add
-              </button>
-              <button onClick={() => { setAddingCol(false); setNewColTitle(''); }} className="btn-ghost py-1.5 text-xs">
-                Cancel
-              </button>
+        {/* ── Add column panel – ADMIN only ─────────────────────── */}
+        {isAdmin && (
+          addingCol ? (
+            <div className="flex-shrink-0 w-72 bg-white border border-slate-200 rounded-xl p-3 shadow-sm
+                            animate-scale-in">
+              <input
+                autoFocus
+                placeholder="Column title…"
+                value={newColTitle}
+                onChange={(e) => setNewColTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter')  handleAddColumn();
+                  if (e.key === 'Escape') { setAddingCol(false); setNewColTitle(''); }
+                }}
+                className="field text-sm mb-2"
+              />
+              <div className="flex gap-2">
+                <button onClick={handleAddColumn} className="btn-primary flex-1 py-1.5 text-xs">
+                  Add
+                </button>
+                <button onClick={() => { setAddingCol(false); setNewColTitle(''); }} className="btn-ghost py-1.5 text-xs">
+                  Cancel
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setAddingCol(true)}
-            className="flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 rounded-xl
-                       border-2 border-dashed border-white/[0.08] hover:border-violet-500/40
-                       text-white/30 hover:text-violet-400 transition-all duration-200 group"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                 className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span className="text-sm font-medium">Add column</span>
-          </button>
+          ) : (
+            <button
+              onClick={() => setAddingCol(true)}
+              className="flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 rounded-xl
+                         border-2 border-dashed border-slate-300 hover:border-blue-400
+                         text-slate-400 hover:text-blue-600 transition-all duration-200 group"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+                   className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span className="text-sm font-medium">Add column</span>
+            </button>
+          )
         )}
       </div>
     </DragDropContext>

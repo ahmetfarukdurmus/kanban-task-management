@@ -16,37 +16,30 @@
   }
 
   body {
-    @apply bg-dark-950 text-white font-sans;
+    @apply bg-slate-50 text-slate-800 font-sans;
     min-height: 100vh;
   }
 
-  /* Custom scrollbars */
+  /* Light-mode scrollbars */
   ::-webkit-scrollbar       { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-white/20; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
 }
 
 /* ── Components ───────────────────────────────────────────────────── */
 @layer components {
-  /* Glass card */
-  .glass {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    @apply border border-white/[0.06] rounded-xl;
-  }
 
-  /* Input fields */
+  /* Input fields – light theme */
   .field {
-    @apply w-full bg-dark-700 border border-white/[0.08] rounded-lg px-3 py-2.5
-           text-white placeholder-white/30 text-sm
-           focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/50
+    @apply w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5
+           text-slate-800 placeholder-slate-400 text-sm
+           focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400
            transition-all duration-200;
   }
 
   .field-label {
-    @apply block text-xs font-medium text-white/60 mb-1.5;
+    @apply block text-xs font-medium text-slate-500 mb-1.5;
   }
 
   /* Buttons */
@@ -56,32 +49,65 @@
   }
   .btn-primary {
     @apply btn px-4 py-2.5 text-sm
-           bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400
-           text-white shadow-glow-sm;
+           bg-blue-600 hover:bg-blue-700
+           text-white shadow-sm;
+  }
+  .btn-secondary {
+    @apply btn px-4 py-2.5 text-sm
+           bg-slate-100 hover:bg-slate-200 border border-slate-200
+           text-slate-700;
   }
   .btn-ghost {
-    @apply btn px-3 py-2 text-sm text-white/60 hover:text-white hover:bg-white/5 rounded-lg;
+    @apply btn px-3 py-2 text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg;
   }
   .btn-danger {
-    @apply btn px-3 py-2 text-sm bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg;
+    @apply btn px-3 py-2 text-sm bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200;
   }
 
   /* Priority badge */
-  .badge-high   { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/15 text-red-400; }
-  .badge-medium { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-400; }
-  .badge-low    { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400; }
+  .badge-high   { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700; }
+  .badge-medium { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700; }
+  .badge-low    { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700; }
 
   /* Modal overlay */
   .modal-overlay {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(15, 23, 42, 0.45);
     backdrop-filter: blur(4px);
     animation: fadeIn 0.15s ease-out;
   }
   .modal-box {
-    @apply w-full max-w-md bg-dark-800 border border-white/[0.08] rounded-2xl shadow-card
+    @apply w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl
            animate-scale-in;
   }
+
+  /* Kanban column container */
+  .kanban-column {
+    @apply flex flex-col w-72 flex-shrink-0
+           bg-slate-100 border border-slate-200 rounded-xl p-3;
+  }
+
+  /* Task card */
+  .task-card {
+    @apply bg-white border border-slate-200 rounded-lg p-3
+           shadow-sm hover:shadow-md
+           transition-shadow duration-150 cursor-pointer select-none;
+  }
+}
+
+/* ── Animations ───────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.15s ease-out;
 }
 
 /* ── Kanban drag-and-drop ─────────────────────────────────────────── */
@@ -89,10 +115,10 @@
 [data-rfd-draggable-id].dragging {
   opacity: 0.95;
   transform: rotate(1.5deg) !important;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(139, 92, 246, 0.5) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 2px rgba(37, 99, 235, 0.4) !important;
 }
 
 /* Droppable column when a card hovers over it */
 .col-drop-active {
-  @apply bg-violet-600/5 border-violet-500/30 transition-colors duration-150;
+  @apply bg-blue-50 border-blue-300 transition-colors duration-150;
 }

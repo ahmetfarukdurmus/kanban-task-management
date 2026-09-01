@@ -15,12 +15,15 @@ export interface AuthResponse {
   id: number;
   username: string;
   email: string;
+  /** e.g. "ROLE_ADMIN" or "ROLE_USER" */
+  role: string;
 }
 
 export interface AuthUser {
   id: number;
   username: string;
   email: string;
+  role: string;
 }
 
 /* ── Board ─────────────────────────────────────────────────────────── */
@@ -79,6 +82,35 @@ export interface TaskResponse {
   assignee: string | null;
   position: number;
   columnId: number;
+}
+
+/* ── User ──────────────────────────────────────────────────────────── */
+export interface UserSummary {
+  id: number;
+  username: string;
+  email: string;
+}
+
+/* ── Comment ───────────────────────────────────────────────────────── */
+export interface CommentDto {
+  id: number;
+  content: string;
+  authorId: number;
+  authorName: string;
+  taskId: number;
+  createdAt: string;
+}
+
+/* ── Attachment ────────────────────────────────────────────────────── */
+export interface AttachmentDto {
+  id: number;
+  fileName: string;
+  fileType: string;
+  fileUrl: string;
+  uploadedAt: string;
+  uploadedById: number;
+  uploadedByName: string;
+  taskId: number;
 }
 
 /* ── API Errors ────────────────────────────────────────────────────── */
