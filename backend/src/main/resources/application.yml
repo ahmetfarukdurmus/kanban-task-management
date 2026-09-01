@@ -14,6 +14,13 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
+  # Multipart file upload configuration
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB       # per-file limit
+      max-request-size: 25MB    # total request limit
+
 server:
   port: ${SERVER_PORT:8080}
   servlet:
@@ -25,3 +32,6 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # 24 hours
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  # Directory for uploaded attachments (relative to working dir, or absolute path)
+  upload:
+    dir: ${UPLOAD_DIR:uploads}

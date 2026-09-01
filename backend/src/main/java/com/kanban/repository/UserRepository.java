@@ -3,6 +3,7 @@ package com.kanban.repository;
 import com.kanban.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -14,4 +15,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
 
     boolean existsByEmail(String email);
+
+    /** Total number of registered users – used to auto-promote the first user to ADMIN. */
+    long count();
+
+    /** All users ordered alphabetically by username – used for assignee selection. */
+    List<User> findAllByOrderByUsernameAsc();
 }
