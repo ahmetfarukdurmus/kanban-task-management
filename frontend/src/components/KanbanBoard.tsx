@@ -11,11 +11,10 @@ interface Props {
   boardId:    number;
   columns:    ColumnResponse[];
   onColumns:  (cols: ColumnResponse[]) => void;
-  onAddTask:  (columnId: number) => void;
   onEditTask: (task: TaskResponse) => void;
 }
 
-export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _onAddTask, onEditTask }: Props) {
+export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }: Props) {
   const { isAdmin } = useAuth();
   const [addingCol,   setAddingCol]   = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
@@ -67,7 +66,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _o
         .move(taskId, { targetColumnId: dstColId, targetPosition: destination.index })
         .catch(() => {
           onColumns(previousColumns);
-          toast.error('Could not move the task. Please try again.');
+          toast.error('Görev taşınamadı. Lütfen tekrar deneyin.');
         });
     },
     [columns, onColumns],
@@ -83,20 +82,21 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _o
       onColumns([...columns, { ...col, tasks: [] }]);
       setNewColTitle('');
       setAddingCol(false);
+      toast.success('Yeni kolon eklendi.');
     } catch {
-      toast.error('Failed to create column.');
+      toast.error('Kolon oluşturulamadı.');
     }
   };
 
   /* ── Delete column ─────────────────────────────────────────────── */
   const handleDeleteColumn = async (columnId: number) => {
-    if (!confirm('Delete this column and all its tasks?')) return;
+    if (!confirm('Bu kolonu ve altındaki tüm görevleri silmek istediğinizden emin misiniz?')) return;
     try {
       await columnApi.remove(boardId, columnId);
       onColumns(columns.filter((c) => c.id !== columnId));
-      toast.success('Column deleted.');
+      toast.success('Kolon silindi.');
     } catch {
-      toast.error('Failed to delete column.');
+      toast.error('Kolon silinemedi.');
     }
   };
 
@@ -106,7 +106,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _o
       await columnApi.update(boardId, columnId, { title });
       onColumns(columns.map((c) => c.id === columnId ? { ...c, title } : c));
     } catch {
-      toast.error('Failed to rename column.');
+      toast.error('Kolon yeniden adlandırılamadı.');
     }
   };
 
@@ -133,7 +133,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _o
                             animate-scale-in">
               <input
                 autoFocus
-                placeholder="Column title…"
+                placeholder="Kolon başlığı…"
                 value={newColTitle}
                 onChange={(e) => setNewColTitle(e.target.value)}
                 onKeyDown={(e) => {
@@ -143,11 +143,11 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _o
                 className="field text-sm mb-2"
               />
               <div className="flex gap-2">
-                <button onClick={handleAddColumn} className="btn-primary flex-1 py-1.5 text-xs">
-                  Add
+                <button onClick={handleAddColumn} className="btn-primary flex-1 py-1.5 text-xs font-semibold">
+                  Ekle
                 </button>
                 <button onClick={() => { setAddingCol(false); setNewColTitle(''); }} className="btn-ghost py-1.5 text-xs">
-                  Cancel
+                  İptal
                 </button>
               </div>
             </div>
@@ -156,14 +156,14 @@ export default function KanbanBoard({ boardId, columns, onColumns, onAddTask: _o
               onClick={() => setAddingCol(true)}
               className="flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 rounded-xl
                          border-2 border-dashed border-slate-300 hover:border-blue-400
-                         text-slate-400 hover:text-blue-600 transition-all duration-200 group"
+                         text-slate-500 hover:text-blue-600 transition-all duration-200 group bg-slate-50/50 hover:bg-white"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
                    className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
                 <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
+                <line x1="5"  y1="12" x2="19" y2="12" />
               </svg>
-              <span className="text-sm font-medium">Add column</span>
+              <span className="text-sm font-semibold">Yeni Kolon Ekle</span>
             </button>
           )
         )}

@@ -137,7 +137,7 @@ export default function KanbanColumn({
 
             {/* Empty state */}
             {column.tasks.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex flex-col items-center justify-center py-10 text-center rounded-xl border border-dashed border-slate-200/80 bg-white/40">
+              <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-slate-200/80 bg-white/40">
                 <p className="text-xs font-medium text-slate-400">Görev bulunmuyor</p>
                 <p className="text-[11px] text-slate-300 mt-0.5">Kartları buraya sürükleyin</p>
               </div>

@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import type { BoardRequest } from '@/types';
+import type { BoardRequest, OrganizationDto } from '@/types';
 import { boardApi } from '@/api/boardApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { organizationService } from '@/services/organizationService';
 
 interface Props {
   isOpen:         boolean;
@@ -10,9 +12,30 @@ interface Props {
 }
 
 export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Props) {
-  const [form, setForm]       = useState<BoardRequest>({ name: '', description: '' });
-  const [loading, setLoading] = useState(false);
+  const { user, isAdmin } = useAuth();
+  const isSuperAdmin = isAdmin && !user?.organizationId && !user?.organizationName;
+
+  const [form, setForm]                   = useState<BoardRequest>({ name: '', description: '', organizationId: undefined });
+  const [organizations, setOrganizations] = useState<OrganizationDto[]>([]);
+  const [loadingOrgs, setLoadingOrgs]     = useState(false);
+  const [loading, setLoading]             = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen && isSuperAdmin) {
+      setLoadingOrgs(true);
+      organizationService
+        .getAll()
+        .then((orgs) => {
+          setOrganizations(orgs);
+          if (orgs.length > 0 && !form.organizationId) {
+            setForm((prev) => ({ ...prev, organizationId: orgs[0].id }));
+          }
+        })
+        .catch(() => { /* fallback */ })
+        .finally(() => setLoadingOrgs(false));
+    }
+  }, [isOpen, isSuperAdmin]);
 
   if (!isOpen) return null;
 
@@ -21,10 +44,14 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
     if (!form.name.trim()) return;
     setLoading(true);
     try {
-      await boardApi.create({ name: form.name.trim(), description: form.description?.trim() });
+      await boardApi.create({
+        name:           form.name.trim(),
+        description:    form.description?.trim(),
+        organizationId: isSuperAdmin ? form.organizationId : undefined,
+      });
       onBoardCreated();
-      toast.success('Yeni pano oluşturuldu!');
-      setForm({ name: '', description: '' });
+      toast.success('Yeni pano başarıyla oluşturuldu.');
+      setForm({ name: '', description: '', organizationId: undefined });
       onClose();
     } catch {
       toast.error('Pano oluşturulamadı.');
@@ -54,9 +81,33 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+
+          {/* Super Admin: Departman Seçimi */}
+          {isSuperAdmin && (
+            <div>
+              <label htmlFor="board-org" className="field-label font-semibold text-slate-700">
+                Hangi Departman İçin? <span className="text-rose-500">*</span>
+              </label>
+              <select
+                id="board-org"
+                disabled={loadingOrgs}
+                value={form.organizationId ?? ''}
+                onChange={(e) => setForm({ ...form, organizationId: Number(e.target.value) })}
+                className="field font-semibold text-slate-800"
+                required
+              >
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name} {org.description ? `(${org.description})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
-            <label htmlFor="board-name" className="field-label font-semibold text-slate-600">
-              Pano Adı <span className="text-red-500">*</span>
+            <label htmlFor="board-name" className="field-label font-semibold text-slate-700">
+              Pano Adı <span className="text-rose-500">*</span>
             </label>
             <input
               id="board-name"
@@ -64,7 +115,7 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
               autoFocus
               required
               maxLength={100}
-              placeholder="Örn: Sprint 42 veya Ürün Yol Haritası"
+              placeholder="Örn: 2026 Q3 Bütçe Planı veya Operasyon Takibi"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="field"
@@ -72,7 +123,7 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
           </div>
 
           <div>
-            <label htmlFor="board-desc" className="field-label font-semibold text-slate-600">Açıklama</label>
+            <label htmlFor="board-desc" className="field-label font-semibold text-slate-700">Açıklama</label>
             <textarea
               id="board-desc"
               rows={3}

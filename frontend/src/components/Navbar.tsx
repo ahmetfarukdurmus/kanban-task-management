@@ -27,6 +27,9 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserSummary[]>([]);
 
+  const isSuperAdmin = isAdmin && !user?.organizationId && !user?.organizationName;
+  const isDeptAdmin  = isAdmin && (!!user?.organizationId || !!user?.organizationName);
+
   useEffect(() => {
     if (user) {
       userService
@@ -48,31 +51,48 @@ export default function Navbar() {
     <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
       <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 h-14 flex items-center justify-between">
 
-        {/* Logo */}
-        <Link
-          to="/boards"
-          className="flex items-center gap-2.5 group"
-          aria-label="Panolara git"
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl
-                           bg-blue-600 shadow-sm
-                           group-hover:bg-blue-700 transition-colors duration-200">
-            <svg viewBox="0 0 24 24" fill="none" className="w-4.5 h-4.5 text-white" stroke="currentColor" strokeWidth={2.5}>
-              <rect x="3" y="3" width="7" height="18" rx="1.5" />
-              <rect x="14" y="3" width="7" height="11" rx="1.5" />
-              <rect x="14" y="18" width="7" height="3"  rx="1.5" />
-            </svg>
-          </span>
-          <span className="font-bold text-slate-900 tracking-tight text-base">
-            Kanban
-          </span>
-        </Link>
+        {/* Logo & Role / Department Badge */}
+        <div className="flex items-center gap-3">
+          <Link
+            to="/boards"
+            className="flex items-center gap-2.5 group"
+            aria-label="Panolara git"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl
+                             bg-blue-600 shadow-sm
+                             group-hover:bg-blue-700 transition-colors duration-200">
+              <svg viewBox="0 0 24 24" fill="none" className="w-4.5 h-4.5 text-white" stroke="currentColor" strokeWidth={2.5}>
+                <rect x="3" y="3" width="7" height="18" rx="1.5" />
+                <rect x="14" y="3" width="7" height="11" rx="1.5" />
+                <rect x="14" y="18" width="7" height="3"  rx="1.5" />
+              </svg>
+            </span>
+            <span className="font-bold text-slate-900 tracking-tight text-base">
+              Kanban
+            </span>
+          </Link>
+
+          {/* Clean Role & Department Badge */}
+          {isSuperAdmin ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200/90 shadow-xs">
+              Super Admin
+            </span>
+          ) : isDeptAdmin ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/90 shadow-xs truncate max-w-[170px] sm:max-w-[240px]">
+              {user?.organizationName} (Yönetici)
+            </span>
+          ) : user?.organizationName ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/90 shadow-xs truncate max-w-[150px] sm:max-w-[220px]">
+              {user.organizationName}
+            </span>
+          ) : null}
+        </div>
 
         {/* Right side */}
         <div className="flex items-center gap-4 sm:gap-6">
           {user && (
             <>
-              {/* ── Active Team / Online Users Stack ────────────────── */}
+              {/* ── Active Team Stack ── */}
               {users.length > 0 && (
                 <div className="hidden md:flex items-center gap-2.5 pl-3 pr-2 py-1 rounded-full bg-slate-50 border border-slate-200/80">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mr-1">
@@ -101,6 +121,9 @@ export default function Navbar() {
                             <div className="bg-slate-900 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-xl whitespace-nowrap">
                               <span className="font-bold">{u.username}</span>
                               <span className="text-slate-400 block text-[10px]">{u.email}</span>
+                              {u.organizationName && (
+                                <span className="text-blue-300 block text-[10px]">{u.organizationName}</span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -125,12 +148,8 @@ export default function Navbar() {
                   {user.username.charAt(0).toUpperCase()}
                 </span>
                 <span className="text-xs text-slate-800 font-semibold">{user.username}</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  isAdmin
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-slate-200 text-slate-600'
-                }`}>
-                  {isAdmin ? 'Admin' : 'Üye'}
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                  {isSuperAdmin ? 'Super Admin' : isDeptAdmin ? 'Yönetici' : 'Üye'}
                 </span>
               </div>
 
