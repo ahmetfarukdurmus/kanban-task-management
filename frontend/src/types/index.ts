@@ -8,6 +8,8 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  organizationId?: number;
+  role?: string;
 }
 
 export interface AuthResponse {
@@ -17,6 +19,8 @@ export interface AuthResponse {
   email: string;
   /** e.g. "ROLE_ADMIN" or "ROLE_USER" */
   role: string;
+  organizationId?: number | null;
+  organizationName?: string | null;
 }
 
 export interface AuthUser {
@@ -24,12 +28,22 @@ export interface AuthUser {
   username: string;
   email: string;
   role: string;
+  organizationId?: number | null;
+  organizationName?: string | null;
+}
+
+/* ── Organization ──────────────────────────────────────────────────── */
+export interface OrganizationDto {
+  id: number;
+  name: string;
+  description?: string;
 }
 
 /* ── Board ─────────────────────────────────────────────────────────── */
 export interface BoardRequest {
   name: string;
   description?: string;
+  organizationId?: number;
 }
 
 export interface BoardResponse {
@@ -38,6 +52,8 @@ export interface BoardResponse {
   description: string | null;
   createdAt: string;
   columns: ColumnResponse[];
+  organizationId?: number | null;
+  organizationName?: string | null;
 }
 
 /* ── Column ────────────────────────────────────────────────────────── */
@@ -89,6 +105,8 @@ export interface UserSummary {
   id: number;
   username: string;
   email: string;
+  organizationId?: number | null;
+  organizationName?: string | null;
 }
 
 /* ── Comment ───────────────────────────────────────────────────────── */

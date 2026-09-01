@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -13,14 +13,45 @@ import { FileIcon, PlusIcon, TrashIcon } from '@/components/icons';
 
 export default function BoardsPage() {
   const queryClient               = useQueryClient();
-  const { isAdmin }               = useAuth();
+  const { user, isAdmin }         = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting,  setDeleting]  = useState<number | null>(null);
+  const [selectedOrgFilter, setSelectedOrgFilter] = useState<string>('ALL');
+
+  const isSuperAdmin = isAdmin && !user?.organizationId && !user?.organizationName;
+  const isDeptAdmin  = isAdmin && (!!user?.organizationId || !!user?.organizationName);
+
+  const pageTitle = isSuperAdmin
+    ? 'Tüm Panolar'
+    : (user?.organizationName ? `${user.organizationName} Panoları` : 'Panolarım');
+
+  const pageSubtitle = isSuperAdmin
+    ? 'Tüm departmanlara ait panoları, iş süreçlerini ve ilerlemeleri merkezi olarak yönetin.'
+    : (user?.organizationName
+        ? `${user.organizationName} departmanına ait tüm projeleri, süreçleri ve işleri yönetin.`
+        : 'Tüm projelerinizi, süreçlerinizi ve takım işlerinizi tek bir yerden yönetin.');
 
   const { data: boards = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['boards'],
     queryFn:  boardApi.getAll,
   });
+
+  // Extract distinct organization names for super admin filtering
+  const availableOrgs = useMemo(() => {
+    const orgs = new Set<string>();
+    boards.forEach((b) => {
+      if (b.organizationName) orgs.add(b.organizationName);
+    });
+    return Array.from(orgs);
+  }, [boards]);
+
+  // Filtered boards for view
+  const filteredBoards = useMemo(() => {
+    if (!isSuperAdmin || selectedOrgFilter === 'ALL') {
+      return boards;
+    }
+    return boards.filter((b) => b.organizationName === selectedOrgFilter);
+  }, [boards, isSuperAdmin, selectedOrgFilter]);
 
   const handleDelete = async (e: React.MouseEvent, board: BoardResponse) => {
     e.preventDefault();
@@ -46,16 +77,32 @@ export default function BoardsPage() {
       <main className="mx-auto max-w-screen-xl px-4 sm:px-6 py-8 sm:py-10">
 
         {/* ── Page Header ────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-5 border-b border-slate-200/80">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-200/80">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Panolarım
-            </h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                {pageTitle}
+              </h1>
+              {isSuperAdmin ? (
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+                  Super Admin
+                </span>
+              ) : isDeptAdmin ? (
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  Departman Yöneticisi
+                </span>
+              ) : user?.organizationName ? (
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                  Ekip Üyesi
+                </span>
+              ) : null}
+            </div>
             <p className="text-sm text-slate-500 mt-1 font-medium">
-              Tüm projelerinizi, süreçlerinizi ve takım işlerinizi tek bir yerden yönetin.
+              {pageSubtitle}
             </p>
           </div>
 
+          {/* New Board Button (Super Admin & Department Admin) */}
           {isAdmin && (
             <button
               onClick={() => setModalOpen(true)}
@@ -66,6 +113,43 @@ export default function BoardsPage() {
             </button>
           )}
         </div>
+
+        {/* ── Super Admin Department Filter Bar ───────────────────── */}
+        {isSuperAdmin && availableOrgs.length > 0 && !isLoading && (
+          <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">
+              Departman:
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedOrgFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selectedOrgFilter === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+              }`}
+            >
+              Tümü ({boards.length})
+            </button>
+            {availableOrgs.map((orgName) => {
+              const count = boards.filter((b) => b.organizationName === orgName).length;
+              return (
+                <button
+                  key={orgName}
+                  type="button"
+                  onClick={() => setSelectedOrgFilter(orgName)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    selectedOrgFilter === orgName
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                  }`}
+                >
+                  {orgName} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* ── Loading State ──────────────────────────────────────── */}
         {isLoading && (
@@ -94,7 +178,7 @@ export default function BoardsPage() {
         )}
 
         {/* ── Empty State ────────────────────────────────────────── */}
-        {!isLoading && !isError && boards.length === 0 && (
+        {!isLoading && !isError && filteredBoards.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 px-4 max-w-md mx-auto text-center bg-white rounded-3xl border border-slate-200/80 shadow-sm p-8 my-6">
             <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-4 shadow-xs">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-8 h-8 text-blue-600">
@@ -103,9 +187,11 @@ export default function BoardsPage() {
                 <rect x="14" y="18" width="7" height="3" rx="1.5" />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-slate-800">Henüz Bir Pano Bulunmuyor</h2>
+            <h2 className="text-lg font-bold text-slate-800">
+              {selectedOrgFilter !== 'ALL' ? 'Bu Departmana Ait Pano Bulunamadı' : 'Henüz Bir Pano Bulunmuyor'}
+            </h2>
             <p className="text-xs text-slate-500 mt-1.5 mb-6 leading-relaxed">
-              Ekip çalışmalarınızı veya kişisel hedeflerinizi organize etmek için yeni bir Kanban panosu oluşturarak başlayın.
+              Ekip çalışmalarınızı veya hedeflerinizi organize etmek için yeni bir Kanban panosu oluşturarak başlayın.
             </p>
             {isAdmin ? (
               <button
@@ -117,16 +203,16 @@ export default function BoardsPage() {
               </button>
             ) : (
               <span className="text-xs font-medium text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">
-                Yöneticinizin pano eklemesi bekleniyor.
+                Departman yöneticinizin pano eklemesi bekleniyor.
               </span>
             )}
           </div>
         )}
 
         {/* ── Board Grid ─────────────────────────────────────────── */}
-        {!isLoading && boards.length > 0 && (
+        {!isLoading && filteredBoards.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {boards.map((board) => {
+            {filteredBoards.map((board) => {
               const totalTasks = board.columns?.reduce((sum, col) => sum + (col.tasks?.length || 0), 0) ?? 0;
               const columnCount = board.columns?.length ?? 0;
 
@@ -138,15 +224,24 @@ export default function BoardsPage() {
                 >
                   {/* Top Header inside Card */}
                   <div>
-                    <div className="flex items-start justify-between gap-3 mb-4">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/80 group-hover:scale-105 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-xs">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5">
-                          <rect x="3" y="3" width="7" height="18" rx="1.5" />
-                          <rect x="14" y="3" width="7" height="11" rx="1.5" />
-                        </svg>
+                    <div className="flex items-start justify-between gap-3 mb-3.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/80 group-hover:scale-105 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-xs">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4.5 h-4.5">
+                            <rect x="3" y="3" width="7" height="18" rx="1.5" />
+                            <rect x="14" y="3" width="7" height="11" rx="1.5" />
+                          </svg>
+                        </div>
+
+                        {/* Organization Badge (Super Admin or Multi-team view) */}
+                        {board.organizationName && (
+                          <span className="inline-flex items-center font-medium text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/80">
+                            {board.organizationName}
+                          </span>
+                        )}
                       </div>
 
-                      {/* Delete Button (Only for Admin) */}
+                      {/* Delete Button (Only for Super Admin & Department Admin) */}
                       {isAdmin && (
                         <button
                           type="button"
@@ -166,7 +261,7 @@ export default function BoardsPage() {
                     </div>
 
                     {/* Board Title */}
-                    <h2 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                    <h2 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate mt-1">
                       {board.name}
                     </h2>
 

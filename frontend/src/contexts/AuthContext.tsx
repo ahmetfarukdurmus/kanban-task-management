@@ -51,20 +51,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (data: LoginRequest) => {
     const res = await authApi.login(data);
     persist(res.token, {
-      id:       res.id,
-      username: res.username,
-      email:    res.email,
-      role:     res.role,
+      id:               res.id,
+      username:         res.username,
+      email:            res.email,
+      role:             res.role,
+      organizationId:   res.organizationId,
+      organizationName: res.organizationName,
     });
   }, [persist]);
 
   const register = useCallback(async (data: RegisterRequest) => {
     const res = await authApi.register(data);
     persist(res.token, {
-      id:       res.id,
-      username: res.username,
-      email:    res.email,
-      role:     res.role,
+      id:               res.id,
+      username:         res.username,
+      email:            res.email,
+      role:             res.role,
+      organizationId:   res.organizationId,
+      organizationName: res.organizationName,
     });
   }, [persist]);
 

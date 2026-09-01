@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import KanbanBoard from '@/components/KanbanBoard';
 import AddTaskModal from '@/components/AddTaskModal';
@@ -14,69 +15,61 @@ export default function BoardDetailPage() {
   const boardId = Number(id);
   const { isAdmin } = useAuth();
 
-  /* ── Board & Column State ───────────────────────────────────────── */
-  const [boardData, setBoardData]     = useState<BoardResponse | null>(null);
-  const [columns, setColumns]         = useState<ColumnResponse[]>([]);
-  const [isLoading, setIsLoading]     = useState(true);
-  const [isError, setIsError]         = useState(false);
+  const [boardData,           setBoardData]           = useState<BoardResponse | null>(null);
+  const [columns,             setColumns]             = useState<ColumnResponse[]>([]);
+  const [isLoading,           setIsLoading]           = useState(true);
+  const [isError,             setIsError]             = useState(false);
 
-  /* ── Modals State ──────────────────────────────────────────────── */
-  const [addTaskModalOpen, setAddTaskModalOpen]     = useState(false);
-  const [addColumnModalOpen, setAddColumnModalOpen] = useState(false);
-  const [selectedTask, setSelectedTask]             = useState<TaskResponse | null>(null);
+  // Modals state
+  const [addTaskModalOpen,    setAddTaskModalOpen]    = useState(false);
+  const [selectedColumnId,    setSelectedColumnId]    = useState<number | null>(null);
+  const [addColumnModalOpen,  setAddColumnModalOpen]  = useState(false);
+  const [selectedTask,        setSelectedTask]        = useState<TaskResponse | null>(null);
 
-  /* ── Fetch fresh board details from backend ────────────────────── */
-  const fetchBoardDetails = useCallback(async (silent = false) => {
-    if (!boardId || isNaN(boardId)) return;
-    if (!silent) setIsLoading(true);
-    setIsError(false);
-
-    try {
-      const data = await boardApi.getOne(boardId);
-      setBoardData(data);
-
-      if (data?.columns) {
-        const sorted = [...data.columns]
-          .sort((a, b) => a.position - b.position)
-          .map((col) => ({
-            ...col,
-            tasks: [...(col.tasks || [])].sort((a, b) => a.position - b.position),
-          }));
-        setColumns(sorted);
-      } else {
-        setColumns([]);
+  /* ── Fetch Board & Full Tree ────────────────────────────────────── */
+  const fetchBoardDetails = useCallback(
+    async (isBackground = false) => {
+      if (!isBackground) setIsLoading(true);
+      try {
+        const data = await boardApi.getOne(boardId);
+        setBoardData(data);
+        setColumns(data.columns || []);
+        setIsError(false);
+      } catch {
+        setIsError(true);
+        if (!isBackground) {
+          toast.error('Pano bilgileri yüklenirken bir sorun oluştu.');
+        }
+      } finally {
+        if (!isBackground) setIsLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to fetch board details:', err);
-      setIsError(true);
-    } finally {
-      if (!silent) setIsLoading(false);
-    }
-  }, [boardId]);
+    },
+    [boardId],
+  );
 
-  /* Re-fetch when page mounts or boardId changes */
   useEffect(() => {
-    fetchBoardDetails(false);
-  }, [fetchBoardDetails]);
+    if (boardId) {
+      fetchBoardDetails(false);
+    }
+  }, [boardId, fetchBoardDetails]);
 
-  /* ── Callbacks on modal / action success ────────────────────────── */
-  const handleTaskAdded = (_task: TaskResponse) => {
-    // Re-fetch fresh board data from backend to ensure consistent state
+  /* ── Task created handler ───────────────────────────────────────── */
+  const handleTaskCreated = () => {
     fetchBoardDetails(true);
   };
 
-  const handleTaskUpdated = (_updated: TaskResponse) => {
-    // Re-fetch fresh board data from backend to ensure consistent state
+  /* ── Column added handler ───────────────────────────────────────── */
+  const handleColumnAdded = () => {
     fetchBoardDetails(true);
   };
 
-  const handleTaskDeleted = (_taskId: number, _columnId: number) => {
-    // Re-fetch fresh board data from backend to ensure consistent state
+  /* ── Task updated / deleted handler ─────────────────────────────── */
+  const handleTaskUpdated = () => {
     fetchBoardDetails(true);
   };
 
-  const handleColumnAdded = (_newCol: ColumnResponse) => {
-    // Re-fetch fresh board data from backend to ensure consistent state
+  const handleTaskDeleted = () => {
+    setSelectedTask(null);
     fetchBoardDetails(true);
   };
 
@@ -153,8 +146,15 @@ export default function BoardDetailPage() {
             </span>
           )}
 
+          {/* Department badge if present */}
+          {boardData.organizationName && (
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              {boardData.organizationName}
+            </span>
+          )}
+
           {/* Counters */}
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium ml-1">
             <span className="bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full font-semibold">
               {columns.length} kolon
             </span>
@@ -163,10 +163,10 @@ export default function BoardDetailPage() {
             </span>
           </div>
 
-          {/* ── Admin-only Action Buttons in Header ─────────────────── */}
-          {isAdmin && (
-            <div className="ml-auto flex items-center gap-2">
-              {/* + Kolon Ekle Butonu */}
+          {/* ── Action Buttons in Header ────────────────────────────── */}
+          <div className="ml-auto flex items-center gap-2">
+            {/* + Kolon Ekle Butonu (Admin Only) */}
+            {isAdmin && (
               <button
                 onClick={() => setAddColumnModalOpen(true)}
                 className="btn-secondary text-xs sm:text-sm py-2 px-3 gap-1.5 font-semibold"
@@ -179,74 +179,58 @@ export default function BoardDetailPage() {
                 </svg>
                 + Kolon Ekle
               </button>
+            )}
 
-              {/* + Yeni Görev Oluştur Butonu */}
-              <button
-                onClick={() => setAddTaskModalOpen(true)}
-                disabled={columns.length === 0}
-                className="btn-primary text-xs sm:text-sm py-2 px-3 gap-1.5 font-semibold disabled:opacity-40"
-                title={columns.length === 0 ? 'Önce bir kolon ekleyin' : 'Yeni Görev Oluştur'}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
-                     className="w-4 h-4">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5"  y1="12" x2="19" y2="12" />
-                </svg>
-                + Yeni Görev Oluştur
-              </button>
-            </div>
-          )}
+            {/* + Yeni Görev Oluştur Butonu (All Users / Jira Standard) */}
+            <button
+              onClick={() => {
+                setSelectedColumnId(columns[0]?.id || null);
+                setAddTaskModalOpen(true);
+              }}
+              disabled={columns.length === 0}
+              className="btn-primary text-xs sm:text-sm py-2 px-3 gap-1.5 font-semibold disabled:opacity-40"
+              title={columns.length === 0 ? 'Önce bir kolon ekleyin' : 'Yeni Görev Oluştur'}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
+                   className="w-4 h-4">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5"  y1="12" x2="19" y2="12" />
+              </svg>
+              + Yeni Görev Oluştur
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Board Canvas ───────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full px-4 sm:px-6 overflow-x-auto">
-          {columns.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center pt-24">
-              <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mb-4">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
-                     className="w-8 h-8 text-slate-400">
-                  <rect x="3" y="3" width="7" height="18" rx="1.5" />
-                  <rect x="14" y="3" width="7" height="11" rx="1.5" />
-                </svg>
-              </div>
-              <p className="text-slate-700 text-base font-semibold">Henüz kolon oluşturulmamış</p>
-              {isAdmin ? (
-                <div className="mt-2">
-                  <p className="text-slate-400 text-xs mb-3">Başlamak için üstteki "+ Kolon Ekle" butonunu kullanın.</p>
-                  <button onClick={() => setAddColumnModalOpen(true)} className="btn-primary text-xs">
-                    + Kolon Ekle
-                  </button>
-                </div>
-              ) : (
-                <p className="text-slate-400 text-xs mt-1">Yöneticinin kolon eklemesi bekleniyor.</p>
-              )}
-            </div>
-          )}
-
-          <KanbanBoard
-            boardId={boardId}
-            columns={columns}
-            onColumns={setColumns}
-            onAddTask={() => setAddTaskModalOpen(true)}
-            onEditTask={(task) => setSelectedTask(task)}
-          />
-        </div>
-      </div>
+      {/* ── Kanban Board Workspace ──────────────────────────────────── */}
+      <main className="flex-1 mx-auto max-w-screen-2xl w-full px-4 sm:px-6 py-4 flex flex-col min-h-0">
+        <KanbanBoard
+          boardId={boardId}
+          columns={columns}
+          onColumns={setColumns}
+          onEditTask={(task) => setSelectedTask(task)}
+        />
+      </main>
 
       {/* ── Modals ─────────────────────────────────────────────────── */}
-      {/* 1. Yeni Görev Oluşturma Modalı (Admin Only) */}
-      <AddTaskModal
-        isOpen={addTaskModalOpen}
-        onClose={() => setAddTaskModalOpen(false)}
-        boardId={boardId}
-        columnId={columns[0]?.id ?? 0}
-        columns={columns}
-        onTaskAdded={handleTaskAdded}
-      />
+      {columns.length > 0 && (
+        <AddTaskModal
+          isOpen={addTaskModalOpen}
+          boardId={boardId}
+          columnId={selectedColumnId ?? columns[0].id}
+          columns={columns}
+          onClose={() => {
+            setAddTaskModalOpen(false);
+            setSelectedColumnId(null);
+          }}
+          onTaskAdded={() => {
+            handleTaskCreated();
+            setAddTaskModalOpen(false);
+            setSelectedColumnId(null);
+          }}
+        />
+      )}
 
-      {/* 2. Yeni Kolon Ekleme Modalı (Admin Only) */}
       <AddColumnModal
         isOpen={addColumnModalOpen}
         boardId={boardId}
@@ -254,14 +238,13 @@ export default function BoardDetailPage() {
         onColumnAdded={handleColumnAdded}
       />
 
-      {/* 3. 2 Kolonlu Geniş Görev Detay Modalı (Admin & User) */}
       <TaskDetailModal
         task={selectedTask}
         boardId={boardId}
         columns={columns}
         onClose={() => setSelectedTask(null)}
-        onUpdated={handleTaskUpdated}
-        onDeleted={handleTaskDeleted}
+        onUpdated={() => handleTaskUpdated()}
+        onDeleted={() => handleTaskDeleted()}
       />
     </div>
   );
