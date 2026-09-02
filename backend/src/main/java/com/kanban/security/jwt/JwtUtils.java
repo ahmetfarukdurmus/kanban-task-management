@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
@@ -20,7 +21,7 @@ import java.util.Date;
 @Component
 public class JwtUtils {
 
-    /** Base64-encoded 256-bit (or longer) secret. Injected from application.yml / env. */
+    /** Secret key string. Injected from application.yml / env. */
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
@@ -31,7 +32,18 @@ public class JwtUtils {
     // ── Key helper ───────────────────────────────────────────────────────
 
     private SecretKey signingKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+        byte[] keyBytes;
+        try {
+            // Attempt Base64URL / Base64 decoding first
+            keyBytes = Decoders.BASE64URL.decode(jwtSecret);
+            if (keyBytes.length < 32) {
+                // If decoded bytes are less than 256 bits, fallback to UTF-8 bytes
+                keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            // Fallback to UTF-8 raw bytes if string is not valid Base64
+            keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        }
         return Keys.hmacShaKeyFor(keyBytes);
     }
 

@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 
 /**
  * Seeds the database on startup with default departments and user accounts.
- * Boards list is left completely clean/empty for user creation.
+ * Always hashes passwords with BCrypt PasswordEncoder on creation and update.
  */
 @Slf4j
 @Component
@@ -52,10 +52,11 @@ public class DataInitializer implements CommandLineRunner {
         seedUser("muhasebe_admin", "muhasebe_admin@kanban.local", "admin123", Role.ROLE_ADMIN, muhasebe);
         seedUser("uyum_admin", "uyum_admin@kanban.local", "admin123", Role.ROLE_ADMIN, uyumRisk);
 
-        // Ensure legacy admin account is Super Admin
+        // Ensure legacy admin account is Super Admin with encoded password
         userRepository.findByUsername("admin").ifPresent(adminUser -> {
             adminUser.setRole(Role.ROLE_ADMIN);
             adminUser.setOrganization(null);
+            adminUser.setPassword(passwordEncoder.encode("admin123"));
             userRepository.save(adminUser);
         });
 
@@ -65,12 +66,13 @@ public class DataInitializer implements CommandLineRunner {
         seedUser("yunus_uyum", "yunus_uyum@kanban.local", "user123", Role.ROLE_USER, uyumRisk);
         seedUser("elif_uyum", "elif_uyum@kanban.local", "user123", Role.ROLE_USER, uyumRisk);
 
-        log.info("DataInitializer completed: seeded 2 departments and 7 users. Boards list left empty.");
+        log.info("DataInitializer completed: seeded 2 departments and 7 users with BCrypt encoded passwords.");
     }
 
     private User seedUser(String username, String email, String rawPassword, Role role, Organization org) {
         return userRepository.findByUsername(username).map(existing -> {
             existing.setEmail(email);
+            existing.setPassword(passwordEncoder.encode(rawPassword));
             existing.setRole(role);
             existing.setOrganization(org);
             return userRepository.save(existing);

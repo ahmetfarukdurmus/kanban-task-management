@@ -13,11 +13,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Proxy /api requests to the Spring Boot backend in development.
-      // Production traffic is handled by Nginx (see frontend/Dockerfile).
+      // Proxy /api requests to the Spring Boot backend in development (localhost:8080)
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        secure: false,
       },
     },
   },
