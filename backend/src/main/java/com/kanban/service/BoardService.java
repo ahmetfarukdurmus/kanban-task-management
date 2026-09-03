@@ -55,7 +55,7 @@ public class BoardService {
     private final SecurityUtils          securityUtils;
 
     private boolean isSuperAdmin(User user) {
-        return user.getRole() == Role.ROLE_SUPER_ADMIN || (user.getRole() == Role.ROLE_ADMIN && (user.getOrganizations() == null || user.getOrganizations().isEmpty()));
+        return user.getRole() == Role.ROLE_SUPER_ADMIN;
     }
 
     // ── Queries ──────────────────────────────────────────────────────────────

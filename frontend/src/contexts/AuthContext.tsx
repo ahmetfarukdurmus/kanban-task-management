@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const isSuper = user?.role === 'ROLE_SUPER_ADMIN' || (user?.role === 'ROLE_ADMIN' && !user?.organizationId);
+  const isSuper = user?.role === 'ROLE_SUPER_ADMIN';
   const isAdm   = isSuper || user?.role === 'ROLE_ADMIN';
 
   const value = useMemo<AuthContextType>(

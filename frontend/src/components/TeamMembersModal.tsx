@@ -424,8 +424,6 @@ export default function TeamMembersModal({
           ) : (
             filteredUsers.map((u) => {
               const avatar = getAvatarColor(u.username);
-              const isSuper = u.role === 'ROLE_SUPER_ADMIN' || (u.role === 'ROLE_ADMIN' && (!u.organizationIds || u.organizationIds.length === 0));
-              const isDeptAdmin = u.role === 'ROLE_ADMIN' && !isSuper;
 
               return (
                 <div
@@ -472,17 +470,17 @@ export default function TeamMembersModal({
                       </span>
                     )}
 
-                    {/* Role Badge */}
-                    {isSuper ? (
-                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-900 text-white shadow-2xs">
+                    {/* Role Badge - based strictly on u.role */}
+                    {u.role === 'ROLE_SUPER_ADMIN' ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-900 text-white shadow-2xs">
                         Super Admin
                       </span>
-                    ) : isDeptAdmin ? (
-                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                    ) : u.role === 'ROLE_ADMIN' ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                         Yönetici
                       </span>
                     ) : (
-                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                         Kullanıcı
                       </span>
                     )}

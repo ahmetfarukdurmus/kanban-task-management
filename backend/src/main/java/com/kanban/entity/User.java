@@ -41,7 +41,7 @@ public class User implements UserDetails {
     private String password;
 
     /**
-     * RBAC role – stored as a string enum value.
+     * RBAC role – stored as a string enum value (ROLE_USER, ROLE_ADMIN, ROLE_SUPER_ADMIN).
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -94,13 +94,11 @@ public class User implements UserDetails {
     // ─── UserDetails contract ────────────────────────────────────────────
 
     /**
-     * Returns granted authorities for Spring Security.
-     * Super Admins (ROLE_SUPER_ADMIN or ROLE_ADMIN with no organizations) receive both
-     * ROLE_ADMIN and ROLE_SUPER_ADMIN authorities.
+     * Returns granted authorities for Spring Security based solely on user.role.
      */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        if (role == Role.ROLE_SUPER_ADMIN || (role == Role.ROLE_ADMIN && (organizations == null || organizations.isEmpty()))) {
+        if (role == Role.ROLE_SUPER_ADMIN) {
             return List.of(
                     new SimpleGrantedAuthority(Role.ROLE_ADMIN.name()),
                     new SimpleGrantedAuthority(Role.ROLE_SUPER_ADMIN.name())

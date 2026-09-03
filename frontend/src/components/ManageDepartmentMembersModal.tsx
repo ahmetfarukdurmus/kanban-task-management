@@ -324,12 +324,16 @@ export default function ManageDepartmentMembersModal({
 
                       {/* Right: Badges & Remove button */}
                       <div className="flex items-center gap-2 shrink-0">
-                        {m.role === 'ROLE_ADMIN' ? (
-                          <span className="inline-flex items-center px-2 py-0.2 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                        {m.role === 'ROLE_SUPER_ADMIN' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-900 text-white shadow-2xs">
+                            Super Admin
+                          </span>
+                        ) : m.role === 'ROLE_ADMIN' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                             Yönetici
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                             Kullanıcı
                           </span>
                         )}
