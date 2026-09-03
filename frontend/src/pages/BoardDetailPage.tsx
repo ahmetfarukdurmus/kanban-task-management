@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import KanbanBoard from '@/components/KanbanBoard';
@@ -8,12 +8,14 @@ import AddColumnModal from '@/components/AddColumnModal';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import { boardApi } from '@/api/boardApi';
 import { useAuth } from '@/contexts/AuthContext';
+import { TrashIcon } from '@/components/icons';
 import type { BoardResponse, ColumnResponse, TaskResponse } from '@/types';
 
 export default function BoardDetailPage() {
   const { id } = useParams<{ id: string }>();
   const boardId = Number(id);
-  const { isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const { user, isAdmin, isSuperAdmin } = useAuth();
 
   const [boardData,           setBoardData]           = useState<BoardResponse | null>(null);
   const [columns,             setColumns]             = useState<ColumnResponse[]>([]);
@@ -48,41 +50,35 @@ export default function BoardDetailPage() {
   );
 
   useEffect(() => {
-    if (boardId) {
-      fetchBoardDetails(false);
+    fetchBoardDetails();
+  }, [fetchBoardDetails]);
+
+  const canDelete = isSuperAdmin || (user?.role === 'ROLE_ADMIN' && boardData && (
+    (boardData.organizationId && user.organizationId && boardData.organizationId === user.organizationId) ||
+    (boardData.organizationName && user.organizationName && boardData.organizationName === user.organizationName)
+  ));
+
+  const handleDeleteCurrentBoard = async () => {
+    if (!boardData) return;
+    if (!confirm(`Bu panoyu (${boardData.name}) ve içindeki tüm görevleri silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) return;
+    try {
+      await boardApi.remove(boardId);
+      toast.success(`"${boardData.name}" panosu başarıyla silindi.`);
+      navigate('/boards', { replace: true });
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Pano silinirken bir hata oluştu.';
+      toast.error(msg);
     }
-  }, [boardId, fetchBoardDetails]);
-
-  /* ── Task created handler ───────────────────────────────────────── */
-  const handleTaskCreated = () => {
-    fetchBoardDetails(true);
   };
 
-  /* ── Column added handler ───────────────────────────────────────── */
-  const handleColumnAdded = () => {
-    fetchBoardDetails(true);
-  };
-
-  /* ── Task updated / deleted handler ─────────────────────────────── */
-  const handleTaskUpdated = () => {
-    fetchBoardDetails(true);
-  };
-
-  const handleTaskDeleted = () => {
-    setSelectedTask(null);
-    fetchBoardDetails(true);
-  };
-
-  /* ── Render ────────────────────────────────────────────────────── */
+  /* ── Loading Spinner ────────────────────────────────────────────── */
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <Navbar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm font-medium text-slate-500">Pano yükleniyor…</p>
-          </div>
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+          <p className="text-slate-500 text-sm font-medium">Pano yükleniyor…</p>
         </div>
       </div>
     );
@@ -146,7 +142,7 @@ export default function BoardDetailPage() {
             </span>
           )}
 
-          {/* Department badge if present */}
+          {/* Organization badge if present */}
           {boardData.organizationName && (
             <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
               {boardData.organizationName}
@@ -198,6 +194,18 @@ export default function BoardDetailPage() {
               </svg>
               + Yeni Görev Oluştur
             </button>
+
+            {/* Panoyu Sil Butonu (Admin / Super Admin) */}
+            {canDelete && (
+              <button
+                onClick={handleDeleteCurrentBoard}
+                className="btn-ghost p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                title="Panoyu Sil"
+                aria-label="Panoyu Sil"
+              >
+                <TrashIcon className="w-4 h-4 text-rose-500" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -213,21 +221,14 @@ export default function BoardDetailPage() {
       </main>
 
       {/* ── Modals ─────────────────────────────────────────────────── */}
-      {columns.length > 0 && (
+      {addTaskModalOpen && selectedColumnId && (
         <AddTaskModal
           isOpen={addTaskModalOpen}
+          onClose={() => setAddTaskModalOpen(false)}
           boardId={boardId}
-          columnId={selectedColumnId ?? columns[0].id}
+          columnId={selectedColumnId}
           columns={columns}
-          onClose={() => {
-            setAddTaskModalOpen(false);
-            setSelectedColumnId(null);
-          }}
-          onTaskAdded={() => {
-            handleTaskCreated();
-            setAddTaskModalOpen(false);
-            setSelectedColumnId(null);
-          }}
+          onTaskAdded={() => fetchBoardDetails(true)}
         />
       )}
 
@@ -235,17 +236,19 @@ export default function BoardDetailPage() {
         isOpen={addColumnModalOpen}
         boardId={boardId}
         onClose={() => setAddColumnModalOpen(false)}
-        onColumnAdded={handleColumnAdded}
+        onColumnAdded={() => fetchBoardDetails(true)}
       />
 
-      <TaskDetailModal
-        task={selectedTask}
-        boardId={boardId}
-        columns={columns}
-        onClose={() => setSelectedTask(null)}
-        onUpdated={() => handleTaskUpdated()}
-        onDeleted={() => handleTaskDeleted()}
-      />
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          boardId={boardId}
+          columns={columns}
+          onClose={() => setSelectedTask(null)}
+          onUpdated={() => fetchBoardDetails(true)}
+          onDeleted={() => fetchBoardDetails(true)}
+        />
+      )}
     </div>
   );
 }

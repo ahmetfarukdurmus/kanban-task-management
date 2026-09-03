@@ -54,6 +54,15 @@ public class GlobalExceptionHandler {
         return pd;
     }
 
+    /** Access Denied / 403 Forbidden. */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ProblemDetail handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, ex.getMessage() != null ? ex.getMessage() : "Bu işlem için yetkiniz bulunmamaktadır.");
+        pd.setTitle("Forbidden");
+        return pd;
+    }
+
     /** Catch-all for unexpected errors. */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGeneric(Exception ex) {

@@ -220,11 +220,12 @@ public class BoardService {
     }
 
     /**
-     * Permanently deletes a board (Admin only):
+     * Permanently deletes a board:
      * - Super Admin can delete any board.
-     * - Department Admin can only delete boards belonging to their department.
+     * - Organization Admin can only delete boards belonging to their organization.
      */
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @Transactional
     public void deleteBoard(Long id) {
         User currentUser = securityUtils.getCurrentUser();
         boolean superAdmin = isSuperAdmin(currentUser);
@@ -233,11 +234,17 @@ public class BoardService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Board", id));
 
         if (!superAdmin) {
+            if (currentUser.getRole() != Role.ROLE_ADMIN) {
+                throw new org.springframework.security.access.AccessDeniedException("Bu panoyu silme yetkiniz yok.");
+            }
+            if (board.getOrganization() == null) {
+                throw new org.springframework.security.access.AccessDeniedException("Bu panoyu silme yetkiniz yok.");
+            }
             Set<Long> orgIds = currentUser.getOrganizations() != null
                     ? currentUser.getOrganizations().stream().map(Organization::getId).collect(Collectors.toSet())
                     : Set.of();
-            if (board.getOrganization() != null && !orgIds.contains(board.getOrganization().getId())) {
-                throw ResourceNotFoundException.of("Board", id);
+            if (!orgIds.contains(board.getOrganization().getId())) {
+                throw new org.springframework.security.access.AccessDeniedException("Bu panoyu silme yetkiniz yok.");
             }
         }
 

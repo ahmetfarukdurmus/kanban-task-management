@@ -74,18 +74,32 @@ export default function BoardsPage() {
     return boards.filter((b) => b.organizationName === selectedOrgFilter);
   }, [boards, selectedOrgFilter]);
 
+  const canDeleteBoard = (board: BoardResponse): boolean => {
+    if (isSuperAdmin) return true;
+    if (user?.role === 'ROLE_ADMIN') {
+      if (!board.organizationName && !board.organizationId) return false;
+      if (board.organizationId && user.organizationId && board.organizationId === user.organizationId) return true;
+      if (board.organizationName && user.organizationName) {
+        return board.organizationName === user.organizationName;
+      }
+      return false;
+    }
+    return false;
+  };
+
   const handleDelete = async (e: React.MouseEvent, board: BoardResponse) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm(`"${board.name}" panosunu ve altındaki tüm görevleri kalıcı olarak silmek istediğinizden emin misiniz?`)) return;
+    if (!confirm(`Bu panoyu (${board.name}) ve içindeki tüm görevleri silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) return;
 
     setDeleting(board.id);
     try {
       await boardApi.remove(board.id);
       await queryClient.invalidateQueries({ queryKey: ['boards'] });
-      toast.success('Pano başarıyla silindi.');
-    } catch {
-      toast.error('Pano silinirken bir hata oluştu.');
+      toast.success(`"${board.name}" panosu başarıyla silindi.`);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Pano silinirken bir hata oluştu.';
+      toast.error(msg);
     } finally {
       setDeleting(null);
     }
@@ -358,8 +372,8 @@ export default function BoardsPage() {
                         )}
                       </div>
 
-                      {/* Delete Button (Only for Super Admin & Organization Admin of own board) */}
-                      {isAdmin && (!user?.organizationName || board.organizationName === user.organizationName || isSuperAdmin) && (
+                      {/* Delete Button (Only for Super Admin & Organization Admin of own organization) */}
+                      {canDeleteBoard(board) && (
                         <button
                           type="button"
                           onClick={(e) => handleDelete(e, board)}
