@@ -3,6 +3,7 @@ package com.kanban.service;
 import com.kanban.dto.comment.CommentDto;
 import com.kanban.dto.comment.CreateCommentRequest;
 import com.kanban.entity.Comment;
+import com.kanban.entity.Role;
 import com.kanban.entity.Task;
 import com.kanban.entity.User;
 import com.kanban.exception.ResourceNotFoundException;
@@ -67,6 +68,25 @@ public class CommentService {
                 .build();
 
         return toDto(commentRepository.save(comment));
+    }
+
+    /**
+     * Deletes a comment. Only the author or an admin may delete it.
+     */
+    public void deleteComment(Long taskId, Long commentId) {
+        requireTask(taskId);
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Comment", commentId));
+
+        User currentUser = securityUtils.getCurrentUser();
+        boolean isAdmin = currentUser.getRole() == Role.ROLE_ADMIN || currentUser.getRole() == Role.ROLE_SUPER_ADMIN;
+        boolean isAuthor = comment.getAuthor() != null && comment.getAuthor().getId().equals(currentUser.getId());
+
+        if (!isAdmin && !isAuthor) {
+            throw new IllegalArgumentException("Yalnızca yorum yazarı veya yönetici bu yorumu silebilir.");
+        }
+
+        commentRepository.delete(comment);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

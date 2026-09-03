@@ -15,7 +15,8 @@ import { queryClient } from '@/queryClient';
 interface AuthContextType {
   user:            AuthUser | null;
   isAuthenticated: boolean;
-  isAdmin:         boolean;   // true when user.role === 'ROLE_ADMIN'
+  isAdmin:         boolean;   // true when user is Admin or Super Admin
+  isSuperAdmin:    boolean;   // true when user.role === 'ROLE_SUPER_ADMIN' or (ROLE_ADMIN without org)
   isLoading:       boolean;
   login:           (data: LoginRequest)    => Promise<void>;
   register:        (data: RegisterRequest) => Promise<void>;
@@ -79,17 +80,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const isSuper = user?.role === 'ROLE_SUPER_ADMIN' || (user?.role === 'ROLE_ADMIN' && !user?.organizationId);
+  const isAdm   = isSuper || user?.role === 'ROLE_ADMIN';
+
   const value = useMemo<AuthContextType>(
     () => ({
       user,
       isAuthenticated: !!user,
-      isAdmin:         user?.role === 'ROLE_ADMIN',
+      isAdmin:         isAdm,
+      isSuperAdmin:    isSuper,
       isLoading,
       login,
       register,
       logout,
     }),
-    [user, isLoading, login, register, logout],
+    [user, isAdm, isSuper, isLoading, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

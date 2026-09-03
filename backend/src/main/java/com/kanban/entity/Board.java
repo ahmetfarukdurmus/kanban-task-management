@@ -27,6 +27,11 @@ public class Board {
     @Column(length = 500)
     private String description;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private BoardType boardType = BoardType.STANDARD;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

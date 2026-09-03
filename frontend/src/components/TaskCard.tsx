@@ -82,7 +82,7 @@ export default function TaskCard({ task, index, onEdit }: Props) {
 
             {/* Meta row */}
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-100/80">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {/* Priority Badge */}
                 <span className={priority.className}>
                   {priority.label}
@@ -100,6 +100,21 @@ export default function TaskCard({ task, index, onEdit }: Props) {
                   >
                     <CalendarIcon className="w-3 h-3" />
                     {format(parseISO(task.dueDate), 'd MMM')}
+                  </span>
+                )}
+
+                {/* Custom Fields Count Badge */}
+                {task.customFields && task.customFields.length > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-50 text-slate-500 border border-slate-200/60"
+                    title={`${task.customFields.length} özel alan`}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 text-slate-400">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <path d="M3 9h18" />
+                      <path d="M9 21V9" />
+                    </svg>
+                    {task.customFields.length}
                   </span>
                 )}
               </div>

@@ -49,6 +49,15 @@ export function UserIcon({ className = 'w-4 h-4', ...props }: IconProps) {
   );
 }
 
+export function SearchIcon({ className = 'w-4 h-4', ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
 export function PlusIcon({ className = 'w-4 h-4', ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
@@ -132,7 +141,7 @@ export function AlertCircleIcon({ className = 'w-4 h-4', ...props }: IconProps) 
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
       <circle cx="12" cy="12" r="10" />
-      <line x1="12" x2="12" y1="8" y2="12" />
+      <line x1="12" x2="8" y1="2" y2="12" />
       <line x1="12" x2="12.01" y1="16" y2="16" />
     </svg>
   );

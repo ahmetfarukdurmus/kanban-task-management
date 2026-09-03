@@ -20,7 +20,7 @@ export default function RegisterPage() {
   useEffect(() => {
     setLoadingOrgs(true);
     organizationService
-      .getAll()
+      .getPublic()
       .then((data) => {
         setOrganizations(data);
         if (data.length > 0) {
@@ -28,12 +28,20 @@ export default function RegisterPage() {
         }
       })
       .catch(() => {
-        const defaults: OrganizationDto[] = [
-          { id: 1, name: 'Muhasebe', description: 'Mali İşler ve Muhasebe Departmanı' },
-          { id: 2, name: 'Uyum & Risk', description: 'Yasal Uyum ve Risk Yönetimi Departmanı' },
-        ];
-        setOrganizations(defaults);
-        setOrganizationId(defaults[0].id);
+        organizationService
+          .getAll()
+          .then((data) => {
+            setOrganizations(data);
+            if (data.length > 0) setOrganizationId(data[0].id);
+          })
+          .catch(() => {
+            const defaults: OrganizationDto[] = [
+              { id: 1, name: 'Muhasebe', description: 'Mali İşler ve Muhasebe Departmanı' },
+              { id: 2, name: 'Uyum & Risk', description: 'Yasal Uyum ve Risk Yönetimi Departmanı' },
+            ];
+            setOrganizations(defaults);
+            setOrganizationId(defaults[0].id);
+          });
       })
       .finally(() => setLoadingOrgs(false));
   }, []);

@@ -15,6 +15,7 @@ import java.util.List;
  * @param columns          ordered list of columns
  * @param organizationId   organization identifier
  * @param organizationName organization display name
+ * @param boardType        board template type
  */
 public record BoardResponse(
         Long                 id,
@@ -23,9 +24,14 @@ public record BoardResponse(
         Instant              createdAt,
         List<ColumnResponse> columns,
         Long                 organizationId,
-        String               organizationName
+        String               organizationName,
+        String               boardType
 ) {
     public BoardResponse(Long id, String name, String description, Instant createdAt, List<ColumnResponse> columns) {
-        this(id, name, description, createdAt, columns, null, null);
+        this(id, name, description, createdAt, columns, null, null, "STANDARD");
+    }
+
+    public BoardResponse(Long id, String name, String description, Instant createdAt, List<ColumnResponse> columns, Long organizationId, String organizationName) {
+        this(id, name, description, createdAt, columns, organizationId, organizationName, "STANDARD");
     }
 }

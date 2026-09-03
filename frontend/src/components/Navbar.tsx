@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/userService';
 import type { UserSummary } from '@/types';
+import TeamMembersModal from './TeamMembersModal';
 
 function getAvatarColor(name: string): { bg: string; text: string } {
   const colors = [
@@ -23,12 +24,12 @@ function getAvatarColor(name: string): { bg: string; text: string } {
 }
 
 export default function Navbar() {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, isSuperAdmin, logout } = useAuth();
   const navigate = useNavigate();
-  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [users, setUsers]                 = useState<UserSummary[]>([]);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
 
-  const isSuperAdmin = isAdmin && !user?.organizationId && !user?.organizationName;
-  const isDeptAdmin  = isAdmin && (!!user?.organizationId || !!user?.organizationName);
+  const isDeptAdmin = isAdmin && !isSuperAdmin && (!!user?.organizationId || !!user?.organizationName);
 
   useEffect(() => {
     if (user) {
@@ -92,10 +93,15 @@ export default function Navbar() {
         <div className="flex items-center gap-4 sm:gap-6">
           {user && (
             <>
-              {/* ── Active Team Stack ── */}
+              {/* ── Active Team Stack (Clickable Button) ── */}
               {users.length > 0 && (
-                <div className="hidden md:flex items-center gap-2.5 pl-3 pr-2 py-1 rounded-full bg-slate-50 border border-slate-200/80">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mr-1">
+                <button
+                  type="button"
+                  onClick={() => setTeamModalOpen(true)}
+                  className="hidden md:flex items-center gap-2.5 pl-3 pr-2 py-1 rounded-full bg-slate-50 border border-slate-200/80 hover:bg-slate-100 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer group"
+                  title="Aktif ekip listesini görüntülemek için tıklayın"
+                >
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mr-1 group-hover:text-blue-600 transition-colors">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <span>Aktif Ekip</span>
                   </div>
@@ -106,40 +112,27 @@ export default function Navbar() {
                       return (
                         <div
                           key={u.id}
-                          className="relative group cursor-pointer"
-                          title={`${u.username} (${u.email})`}
+                          className="relative"
                         >
                           <span
-                            className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ring-2 ring-white shadow-xs transition-transform group-hover:scale-110 group-hover:z-10 relative ${color.bg} ${color.text}`}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ring-2 ring-white shadow-xs relative ${color.bg} ${color.text}`}
                           >
                             {u.username.charAt(0).toUpperCase()}
                           </span>
                           <span className="absolute bottom-0 right-0 block h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-
-                          {/* Hover Tooltip */}
-                          <div className="absolute top-9 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
-                            <div className="bg-slate-900 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-xl whitespace-nowrap">
-                              <span className="font-bold">{u.username}</span>
-                              <span className="text-slate-400 block text-[10px]">{u.email}</span>
-                              {u.organizationName && (
-                                <span className="text-blue-300 block text-[10px]">{u.organizationName}</span>
-                              )}
-                            </div>
-                          </div>
                         </div>
                       );
                     })}
 
                     {remainingCount > 0 && (
                       <span
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 ring-2 ring-white shadow-xs cursor-pointer"
-                        title={`${remainingCount} diğer ekip üyesi`}
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 ring-2 ring-white shadow-xs"
                       >
                         +{remainingCount}
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               )}
 
               {/* User Profile Pill */}
@@ -172,6 +165,13 @@ export default function Navbar() {
           )}
         </div>
       </div>
+
+      {/* ── Team Members Modal ── */}
+      <TeamMembersModal
+        isOpen={teamModalOpen}
+        onClose={() => setTeamModalOpen(false)}
+        users={users}
+      />
     </header>
   );
 }

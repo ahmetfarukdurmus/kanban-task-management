@@ -17,7 +17,7 @@ export interface AuthResponse {
   id: number;
   username: string;
   email: string;
-  /** e.g. "ROLE_ADMIN" or "ROLE_USER" */
+  /** e.g. "ROLE_SUPER_ADMIN", "ROLE_ADMIN" or "ROLE_USER" */
   role: string;
   organizationId?: number | null;
   organizationName?: string | null;
@@ -39,11 +39,35 @@ export interface OrganizationDto {
   description?: string;
 }
 
+export interface NewAdminDto {
+  username: string;
+  email?: string;
+  password?: string;
+}
+
+export interface NewUserDto {
+  username: string;
+  email?: string;
+  password?: string;
+}
+
+export interface CreateOrganizationRequest {
+  name: string;
+  description?: string;
+  adminUserId?: number | null;
+  newAdmin?: NewAdminDto | null;
+  initialUserId?: number | null;
+  newUser?: NewUserDto | null;
+}
+
 /* ── Board ─────────────────────────────────────────────────────────── */
+export type BoardType = 'STANDARD' | 'INTEGRATION' | 'QA_TEST';
+
 export interface BoardRequest {
   name: string;
   description?: string;
   organizationId?: number;
+  boardType?: BoardType;
 }
 
 export interface BoardResponse {
@@ -54,6 +78,7 @@ export interface BoardResponse {
   columns: ColumnResponse[];
   organizationId?: number | null;
   organizationName?: string | null;
+  boardType?: BoardType;
 }
 
 /* ── Column ────────────────────────────────────────────────────────── */
@@ -73,6 +98,16 @@ export interface ColumnResponse {
   tasks: TaskResponse[];
 }
 
+/* ── Custom Field ──────────────────────────────────────────────────── */
+export type CustomFieldType = 'TEXT' | 'NUMBER' | 'DATE';
+
+export interface CustomFieldDto {
+  id?: number;
+  fieldName: string;
+  fieldType: CustomFieldType;
+  fieldValue: string;
+}
+
 /* ── Task ──────────────────────────────────────────────────────────── */
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -82,6 +117,7 @@ export interface TaskRequest {
   priority?: Priority;
   dueDate?: string;   // ISO-8601 date string (YYYY-MM-DD)
   assignee?: string;
+  customFields?: CustomFieldDto[];
 }
 
 export interface MoveTaskRequest {
@@ -98,6 +134,7 @@ export interface TaskResponse {
   assignee: string | null;
   position: number;
   columnId: number;
+  customFields?: CustomFieldDto[];
 }
 
 /* ── User ──────────────────────────────────────────────────────────── */
@@ -105,8 +142,10 @@ export interface UserSummary {
   id: number;
   username: string;
   email: string;
+  role?: string;
   organizationId?: number | null;
   organizationName?: string | null;
+  createdAt?: string;
 }
 
 /* ── Comment ───────────────────────────────────────────────────────── */

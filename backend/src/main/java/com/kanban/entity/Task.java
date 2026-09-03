@@ -73,6 +73,14 @@ public class Task {
     @Builder.Default
     private List<Attachment> attachments = new ArrayList<>();
 
+    /** Custom fields on this task – cascaded on delete */
+    @OneToMany(mappedBy = "task",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    @OrderBy("id ASC")
+    @Builder.Default
+    private List<TaskCustomField> customFields = new ArrayList<>();
+
     // ─── Priority enum ───────────────────────────────────────────────────
 
     public enum Priority {

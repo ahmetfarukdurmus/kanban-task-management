@@ -2,7 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import type { AttachmentDto, ColumnResponse, CommentDto, Priority, TaskRequest, TaskResponse, UserSummary } from '@/types';
+import type {
+  AttachmentDto,
+  ColumnResponse,
+  CommentDto,
+  CustomFieldDto,
+  CustomFieldType,
+  Priority,
+  TaskRequest,
+  TaskResponse,
+  UserSummary,
+} from '@/types';
 import { taskApi } from '@/api/taskApi';
 import { userService } from '@/services/userService';
 import { commentService } from '@/services/commentService';
@@ -13,6 +23,7 @@ import {
   FileIcon,
   MessageSquareIcon,
   PaperclipIcon,
+  PlusIcon,
   TrashIcon,
   UploadCloudIcon,
 } from './icons';
@@ -69,6 +80,13 @@ export default function TaskDetailModal({
   const [dueDate, setDueDate]         = useState('');
   const [assignee, setAssignee]       = useState('');
   const [columnId, setColumnId]       = useState<number>(0);
+  const [customFields, setCustomFields] = useState<CustomFieldDto[]>([]);
+
+  /* ── Custom Field Addition Form State ───────────────────────────── */
+  const [showAddField, setShowAddField]   = useState(false);
+  const [newFieldName, setNewFieldName]   = useState('');
+  const [newFieldType, setNewFieldType]   = useState<CustomFieldType>('TEXT');
+  const [newFieldValue, setNewFieldValue] = useState('');
 
   /* ── Data & Async State ─────────────────────────────────────────── */
   const [users, setUsers]                         = useState<UserSummary[]>([]);
@@ -93,7 +111,9 @@ export default function TaskDetailModal({
       setDueDate(task.dueDate ?? '');
       setAssignee(task.assignee ?? '');
       setColumnId(task.columnId);
+      setCustomFields(task.customFields || []);
       setNewComment('');
+      setShowAddField(false);
 
       // 1. Fetch fresh users list every time modal opens
       userService
@@ -111,6 +131,7 @@ export default function TaskDetailModal({
           setDueDate(freshTask.dueDate ?? '');
           setAssignee(freshTask.assignee ?? '');
           setColumnId(freshTask.columnId);
+          setCustomFields(freshTask.customFields || []);
         })
         .catch(() => { /* use prop task as fallback */ });
 
@@ -133,6 +154,39 @@ export default function TaskDetailModal({
   }, [task, boardId]);
 
   if (!task) return null;
+
+  /* ── Custom Field Handlers ──────────────────────────────────────── */
+  const handleCustomFieldValueChange = (index: number, value: string) => {
+    setCustomFields((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], fieldValue: value };
+      return copy;
+    });
+  };
+
+  const handleDeleteCustomField = (index: number) => {
+    setCustomFields((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddCustomField = () => {
+    const trimmed = newFieldName.trim();
+    if (!trimmed) {
+      toast.error('Lütfen alan adı girin.');
+      return;
+    }
+    setCustomFields((prev) => [
+      ...prev,
+      {
+        fieldName: trimmed,
+        fieldType: newFieldType,
+        fieldValue: newFieldValue,
+      },
+    ]);
+    setNewFieldName('');
+    setNewFieldType('TEXT');
+    setNewFieldValue('');
+    setShowAddField(false);
+  };
 
   /* ── Save Task Changes ──────────────────────────────────────────── */
   const handleSave = async (e?: React.FormEvent) => {
@@ -161,6 +215,7 @@ export default function TaskDetailModal({
         priority,
         dueDate:     dueDate || undefined,
         assignee:    assignee.trim() || undefined,
+        customFields,
       };
 
       const updated = await taskApi.update(boardId, currentColId, task.id, payload);
@@ -198,11 +253,10 @@ export default function TaskDetailModal({
 
     setSubmittingComment(true);
     try {
-      const created = await commentService.addComment(task.id, content);
-      setComments((prev) => [...prev, created]);
+      const added = await commentService.addComment(task.id, content);
+      setComments((prev) => [...prev, added]);
       setNewComment('');
       toast.success('Yorum eklendi.');
-      onUpdated({ ...task, columnId });
     } catch {
       toast.error('Yorum eklenirken hata oluştu.');
     } finally {
@@ -210,43 +264,54 @@ export default function TaskDetailModal({
     }
   };
 
-  /* ── Upload Attachment ──────────────────────────────────────────── */
+  /* ── Delete Comment ─────────────────────────────────────────────── */
+  const handleDeleteComment = async (commentId: number) => {
+    if (!confirm('Bu yorumu silmek istediğinize emin misiniz?')) return;
+    try {
+      await commentService.deleteComment(task.id, commentId);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      toast.success('Yorum silindi.');
+    } catch {
+      toast.error('Yorum silinemedi.');
+    }
+  };
+
+  /* ── File Upload ────────────────────────────────────────────────── */
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('Dosya boyutu en fazla 10MB olabilir.');
+      toast.error('Dosya boyutu 10MB sınırını aşamaz.');
       return;
     }
 
     setUploadingFile(true);
     try {
-      const uploaded = await attachmentService.uploadAttachment(task.id, file);
-      setAttachments((prev) => [uploaded, ...prev]);
+      const added = await attachmentService.uploadAttachment(task.id, file);
+      setAttachments((prev) => [added, ...prev]);
       toast.success('Dosya başarıyla yüklendi.');
-      onUpdated({ ...task, columnId });
     } catch {
-      toast.error('Dosya yüklenemedi. Lütfen tekrar deneyin.');
+      toast.error('Dosya yüklenirken hata oluştu.');
     } finally {
       setUploadingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const isImageFile = (fileName: string, fileType?: string) => {
-    if (fileType && fileType.startsWith('image/')) return true;
-    return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName);
+  const isImageFile = (fileName: string, fileType: string) => {
+    return fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileName);
   };
 
-  const currentColumn = columns.find((c) => c.id === columnId) || columns.find((c) => c.id === task.columnId);
+  const currentColumn = columns.find((c) => c.id === columnId);
   const currentAvatar = assignee ? getAvatarColor(assignee) : null;
-  const userAvatar = user?.username ? getAvatarColor(user.username) : null;
 
   return (
     <div
-      className="modal-overlay"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="w-full max-w-5xl min-h-[600px] bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-6 flex flex-col my-8 animate-scale-in max-h-[90vh] overflow-y-auto">
 
@@ -289,7 +354,7 @@ export default function TaskDetailModal({
 
           {/* ══════════════════════════════════════════════════════════
               SOL BÖLÜM (~%70 / 8 Kolon):
-              Başlık, Açıklama, Medya/Ekler, Aktivite & Yorumlar
+              Başlık, Açıklama, Özel Alanlar, Medya/Ekler, Aktivite & Yorumlar
              ══════════════════════════════════════════════════════════ */}
           <div className="lg:col-span-8 space-y-6">
 
@@ -324,6 +389,200 @@ export default function TaskDetailModal({
                 placeholder="Bu göreve dair detaylı açıklama, yapılacaklar veya hedefler ekleyin..."
                 className="field resize-none text-sm text-slate-700 leading-relaxed"
               />
+            </div>
+
+            {/* ── Özel Alanlar (Custom Fields) Bölümü ──────────────────── */}
+            <div className="pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-slate-500">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18" />
+                    <path d="M9 21V9" />
+                  </svg>
+                  <h3 className="text-sm font-bold text-slate-800">Özel Alanlar</h3>
+                  <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-semibold border border-slate-200/60">
+                    {customFields.length}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddField(!showAddField)}
+                  className="btn-secondary py-1.5 px-3 text-xs gap-1.5 font-medium text-slate-700 hover:text-blue-600"
+                >
+                  <PlusIcon className="w-3.5 h-3.5" />
+                  <span>Yeni Alan Ekle</span>
+                </button>
+              </div>
+
+              {/* Add new custom field inline form */}
+              {showAddField && (
+                <div className="mb-4 p-3.5 rounded-xl bg-blue-50/50 border border-blue-200/80 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">Yeni Özel Alan Tanımla</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddField(false)}
+                      className="text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Alan Adı <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="örn: Jira Kodu, Test Tarihi"
+                        value={newFieldName}
+                        onChange={(e) => setNewFieldName(e.target.value)}
+                        className="field w-full text-xs bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Alan Tipi
+                      </label>
+                      <select
+                        value={newFieldType}
+                        onChange={(e) => setNewFieldType(e.target.value as CustomFieldType)}
+                        className="field w-full text-xs bg-white font-medium"
+                      >
+                        <option value="TEXT">Metin (Text)</option>
+                        <option value="NUMBER">Sayı (Number)</option>
+                        <option value="DATE">Tarih (Date)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Değer
+                      </label>
+                      {newFieldType === 'DATE' ? (
+                        <input
+                          type="date"
+                          value={newFieldValue}
+                          onChange={(e) => setNewFieldValue(e.target.value)}
+                          className="field w-full text-xs bg-white"
+                        />
+                      ) : newFieldType === 'NUMBER' ? (
+                        <input
+                          type="number"
+                          placeholder="örn: 42"
+                          value={newFieldValue}
+                          onChange={(e) => setNewFieldValue(e.target.value)}
+                          className="field w-full text-xs bg-white"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="örn: KAN-104"
+                          value={newFieldValue}
+                          onChange={(e) => setNewFieldValue(e.target.value)}
+                          className="field w-full text-xs bg-white"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddField(false)}
+                      className="btn-ghost py-1 px-3 text-xs"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomField}
+                      className="btn-primary py-1 px-3 text-xs font-semibold"
+                    >
+                      Alanı Ekle
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Fields List */}
+              {customFields.length === 0 && !showAddField ? (
+                <div className="p-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/40 text-center">
+                  <p className="text-xs text-slate-400 font-medium">Özel alan eklenmemiş.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddField(true)}
+                    className="mt-1 text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                  >
+                    + Yeni Özel Alan Ekle
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {customFields.map((cf, index) => {
+                    const typeLabel = cf.fieldType === 'DATE' ? 'Tarih' : cf.fieldType === 'NUMBER' ? 'Sayı' : 'Metin';
+                    const typeBadgeColor = cf.fieldType === 'DATE' ? 'bg-amber-50 text-amber-700 border-amber-200' : cf.fieldType === 'NUMBER' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-600 border-slate-200';
+
+                    return (
+                      <div
+                        key={index}
+                        className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition-all space-y-1.5 group relative"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-xs font-bold text-slate-700 truncate" title={cf.fieldName}>
+                              {cf.fieldName}
+                            </span>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded border ${typeBadgeColor}`}>
+                              {typeLabel}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomField(index)}
+                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-all"
+                            title="Alanı Sil"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Input according to field type */}
+                        {cf.fieldType === 'DATE' ? (
+                          <input
+                            type="date"
+                            value={cf.fieldValue || ''}
+                            onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
+                            className="field w-full text-xs bg-white py-1.5"
+                          />
+                        ) : cf.fieldType === 'NUMBER' ? (
+                          <input
+                            type="number"
+                            value={cf.fieldValue || ''}
+                            placeholder="Sayısal değer..."
+                            onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
+                            className="field w-full text-xs bg-white py-1.5"
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={cf.fieldValue || ''}
+                            placeholder="Metin girin..."
+                            onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
+                            className="field w-full text-xs bg-white py-1.5"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Medya & Ekler Bölümü */}
@@ -456,73 +715,75 @@ export default function TaskDetailModal({
                 </span>
               </div>
 
-              {/* Yorum Yap Formu */}
-              <form onSubmit={handleAddComment} className="flex gap-3 items-start">
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shadow-xs flex-shrink-0 mt-0.5 border border-white ${userAvatar?.bg || 'bg-blue-100'} ${userAvatar?.text || 'text-blue-700'}`}
-                >
-                  {user?.username?.charAt(0).toUpperCase() || 'U'}
-                </span>
-                <div className="flex-1 space-y-2">
-                  <textarea
-                    rows={2}
+              {/* Yorum Ekleme Formu */}
+              <form onSubmit={handleAddComment} className="flex gap-2">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Bu göreve bir yorum veya not ekleyin..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Bir yorum, güncelleme veya not yazın..."
-                    className="field text-sm resize-none"
+                    className="field w-full text-xs"
+                    disabled={submittingComment}
                   />
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={submittingComment || !newComment.trim()}
-                      className="btn-primary py-1.5 px-3.5 text-xs font-semibold"
-                    >
-                      {submittingComment ? 'Gönderiliyor…' : 'Yorum Yap'}
-                    </button>
-                  </div>
                 </div>
+                <button
+                  type="submit"
+                  disabled={submittingComment || !newComment.trim()}
+                  className="btn-primary py-1.5 px-3 text-xs font-semibold shrink-0"
+                >
+                  {submittingComment ? 'Gönderiliyor…' : 'Yorum Yaz'}
+                </button>
               </form>
 
-              {/* Yorumlar Akışı */}
+              {/* Yorumlar Listesi */}
               {loadingComments ? (
-                <div className="py-6 flex justify-center">
+                <div className="py-4 flex justify-center">
                   <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : comments.length === 0 ? (
-                <p className="text-xs text-slate-400 py-3 text-center bg-slate-50/50 rounded-xl border border-slate-100">
-                  Henüz yorum yapılmadı. İlk yorumu siz ekleyin.
-                </p>
+                <p className="text-xs text-slate-400 py-2 italic">Henüz yorum yapılmamış.</p>
               ) : (
-                <div className="space-y-3 pt-1">
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                   {comments.map((comment) => {
-                    const commentAvatar = getAvatarColor(comment.authorName || 'User');
-                    let timeAgo = '';
-                    try {
-                      timeAgo = formatDistanceToNow(parseISO(comment.createdAt), {
-                        addSuffix: true,
-                        locale: tr,
-                      });
-                    } catch {
-                      timeAgo = format(parseISO(comment.createdAt), 'dd MMM yyyy');
-                    }
+                    const avatar = getAvatarColor(comment.authorName);
+                    const canDelete = isAdmin || (user && user.id === comment.authorId);
 
                     return (
-                      <div key={comment.id} className="flex gap-3 items-start group">
+                      <div
+                        key={comment.id}
+                        className="group flex items-start gap-2.5 p-3 rounded-xl bg-slate-50/70 border border-slate-200/70 text-xs hover:bg-slate-50 transition-colors"
+                      >
                         <span
-                          className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 mt-0.5 shadow-xs border border-white ${commentAvatar.bg} ${commentAvatar.text}`}
+                          className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold shrink-0 ${avatar.bg} ${avatar.text}`}
                         >
-                          {comment.authorName ? comment.authorName.charAt(0).toUpperCase() : '?'}
+                          {comment.authorName.charAt(0).toUpperCase()}
                         </span>
-                        <div className="flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-xl p-3 border border-slate-200/80 transition-colors">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-slate-800 text-xs">
-                              {comment.authorName}
-                            </span>
-                            <span className="text-[11px] font-medium text-slate-400" title={format(parseISO(comment.createdAt), 'dd MMMM yyyy HH:mm')}>
-                              {timeAgo}
-                            </span>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-800">{comment.authorName}</span>
+                              <span className="text-[11px] text-slate-400">
+                                {formatDistanceToNow(parseISO(comment.createdAt), {
+                                  addSuffix: true,
+                                  locale: tr,
+                                })}
+                              </span>
+                            </div>
+
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteComment(comment.id)}
+                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded transition-opacity"
+                                title="Yorumu Sil"
+                              >
+                                <TrashIcon className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
-                          <p className="text-slate-700 text-xs leading-relaxed whitespace-pre-wrap">
+                          <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">
                             {comment.content}
                           </p>
                         </div>

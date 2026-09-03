@@ -20,6 +20,9 @@ export const taskApi = {
   update: (boardId: number, columnId: number, taskId: number, data: TaskRequest): Promise<TaskResponse> =>
     api.put<TaskResponse>(`${base(boardId, columnId)}/${taskId}`, data).then((r) => r.data),
 
+  updateDirect: (taskId: number, data: TaskRequest): Promise<TaskResponse> =>
+    api.put<TaskResponse>(`/tasks/${taskId}`, data).then((r) => r.data),
+
   remove: (boardId: number, columnId: number, taskId: number): Promise<void> =>
     api.delete(`${base(boardId, columnId)}/${taskId}`).then(() => undefined),
 

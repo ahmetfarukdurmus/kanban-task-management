@@ -39,11 +39,9 @@ public class User implements UserDetails {
 
     /**
      * RBAC role – stored as a string enum value.
-     * Defaults to {@link Role#ROLE_USER}; the first registered user is promoted
-     * to {@link Role#ROLE_ADMIN} by {@code AuthService}.
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     @Builder.Default
     private Role role = Role.ROLE_USER;
 
@@ -68,11 +66,18 @@ public class User implements UserDetails {
     // ─── UserDetails contract ────────────────────────────────────────────
 
     /**
-     * Returns the user's single authority derived from their {@link Role}.
-     * Spring Security's {@code hasRole("ADMIN")} checks for authority {@code "ROLE_ADMIN"}.
+     * Returns granted authorities for Spring Security.
+     * Super Admins (ROLE_SUPER_ADMIN or ROLE_ADMIN with null organization) receive both
+     * ROLE_ADMIN and ROLE_SUPER_ADMIN authorities.
      */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (role == Role.ROLE_SUPER_ADMIN || (role == Role.ROLE_ADMIN && organization == null)) {
+            return List.of(
+                    new SimpleGrantedAuthority(Role.ROLE_ADMIN.name()),
+                    new SimpleGrantedAuthority(Role.ROLE_SUPER_ADMIN.name())
+            );
+        }
         return List.of(new SimpleGrantedAuthority(role.name()));
     }
 

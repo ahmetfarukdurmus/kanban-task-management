@@ -37,7 +37,8 @@ public class UserController {
     @GetMapping
     public ResponseEntity<List<UserSummaryDto>> listUsers() {
         User currentUser = securityUtils.getCurrentUser();
-        boolean isSuperAdmin = currentUser.getRole() == Role.ROLE_ADMIN && currentUser.getOrganization() == null;
+        boolean isSuperAdmin = currentUser.getRole() == Role.ROLE_SUPER_ADMIN
+                || (currentUser.getRole() == Role.ROLE_ADMIN && currentUser.getOrganization() == null);
 
         List<User> users;
         if (isSuperAdmin) {
@@ -56,8 +57,10 @@ public class UserController {
                         u.getId(),
                         u.getUsername(),
                         u.getEmail(),
+                        u.getRole() != null ? u.getRole().name() : "ROLE_USER",
                         u.getOrganization() != null ? u.getOrganization().getId() : null,
-                        u.getOrganization() != null ? u.getOrganization().getName() : null))
+                        u.getOrganization() != null ? u.getOrganization().getName() : null,
+                        u.getCreatedAt()))
                 .toList();
 
         return ResponseEntity.ok(dtos);

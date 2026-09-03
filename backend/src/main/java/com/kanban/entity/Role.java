@@ -4,14 +4,13 @@ package com.kanban.entity;
  * Application-level roles used for RBAC.
  *
  * <ul>
- *   <li>{@link #ROLE_USER}  – Standard user; can read boards/tasks and move tasks (DnD).</li>
- *   <li>{@link #ROLE_ADMIN} – Administrator; can also create/delete tasks and add columns.</li>
+ *   <li>{@link #ROLE_USER}        – Standard team member.</li>
+ *   <li>{@link #ROLE_ADMIN}       – Department Administrator.</li>
+ *   <li>{@link #ROLE_SUPER_ADMIN} – Super Administrator with company-wide authority.</li>
  * </ul>
- *
- * The {@code ROLE_} prefix is the Spring Security convention so that
- * {@code hasRole("ADMIN")} automatically maps to the authority {@code "ROLE_ADMIN"}.
  */
 public enum Role {
     ROLE_USER,
-    ROLE_ADMIN
+    ROLE_ADMIN,
+    ROLE_SUPER_ADMIN
 }

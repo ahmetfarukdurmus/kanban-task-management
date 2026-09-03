@@ -14,6 +14,12 @@ export const commentService = {
    */
   addComment: (taskId: number, content: string): Promise<CommentDto> =>
     api.post<CommentDto>(`/tasks/${taskId}/comments`, { content }).then((r) => r.data),
+
+  /**
+   * Deletes a comment from a task.
+   */
+  deleteComment: (taskId: number, commentId: number): Promise<void> =>
+    api.delete(`/tasks/${taskId}/comments/${commentId}`).then(() => undefined),
 };
 
 export default commentService;

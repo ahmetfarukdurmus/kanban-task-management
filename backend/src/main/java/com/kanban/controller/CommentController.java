@@ -15,12 +15,13 @@ import java.util.List;
  * REST controller for Comment resources, nested under a Task.
  *
  * <pre>
- * GET  /api/tasks/{taskId}/comments   – list all comments (chronological)
- * POST /api/tasks/{taskId}/comments   – add a comment (author = logged-in user)
+ * GET    /api/tasks/{taskId}/comments              – list all comments (chronological)
+ * POST   /api/tasks/{taskId}/comments              – add a comment (author = logged-in user)
+ * DELETE /api/tasks/{taskId}/comments/{commentId}  – delete a comment
  * </pre>
  *
- * <p>Access policy: any authenticated user (ROLE_USER or ROLE_ADMIN) may
- * read and create comments.  This is enforced in {@code SecurityConfig}.</p>
+ * <p>Access policy: any authenticated user (ROLE_USER, ROLE_ADMIN or ROLE_SUPER_ADMIN) may
+ * read and create comments.</p>
  */
 @RestController
 @RequestMapping("/tasks/{taskId}/comments")
@@ -39,5 +40,12 @@ public class CommentController {
                                                   @Valid @RequestBody CreateCommentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                              .body(commentService.addComment(taskId, request));
+    }
+
+    @DeleteMapping("/{commentId}")
+    public ResponseEntity<Void> deleteComment(@PathVariable Long taskId,
+                                              @PathVariable Long commentId) {
+        commentService.deleteComment(taskId, commentId);
+        return ResponseEntity.noContent().build();
     }
 }

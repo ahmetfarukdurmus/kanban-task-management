@@ -48,13 +48,13 @@ public class DataInitializer implements CommandLineRunner {
                         .build()));
 
         // 2. Seed Admins (Password: admin123)
-        seedUser("superadmin", "superadmin@kanban.local", "admin123", Role.ROLE_ADMIN, null);
+        seedUser("superadmin", "superadmin@kanban.local", "admin123", Role.ROLE_SUPER_ADMIN, null);
         seedUser("muhasebe_admin", "muhasebe_admin@kanban.local", "admin123", Role.ROLE_ADMIN, muhasebe);
         seedUser("uyum_admin", "uyum_admin@kanban.local", "admin123", Role.ROLE_ADMIN, uyumRisk);
 
         // Ensure legacy admin account is Super Admin with encoded password
         userRepository.findByUsername("admin").ifPresent(adminUser -> {
-            adminUser.setRole(Role.ROLE_ADMIN);
+            adminUser.setRole(Role.ROLE_SUPER_ADMIN);
             adminUser.setOrganization(null);
             adminUser.setPassword(passwordEncoder.encode("admin123"));
             userRepository.save(adminUser);

@@ -67,6 +67,12 @@ public class TaskController {
         return ResponseEntity.ok(taskService.updateTask(boardId, columnId, taskId, request));
     }
 
+    @PutMapping("/tasks/{taskId}")
+    public ResponseEntity<TaskResponse> updateTaskDirect(@PathVariable Long taskId,
+                                                         @Valid @RequestBody TaskRequest request) {
+        return ResponseEntity.ok(taskService.updateTaskDirect(taskId, request));
+    }
+
     @DeleteMapping("/boards/{boardId}/columns/{columnId}/tasks/{taskId}")
     public ResponseEntity<Void> deleteTask(@PathVariable Long boardId,
                                            @PathVariable Long columnId,

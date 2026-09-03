@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import type { BoardRequest, OrganizationDto } from '@/types';
+import type { BoardRequest, BoardType, OrganizationDto } from '@/types';
 import { boardApi } from '@/api/boardApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { organizationService } from '@/services/organizationService';
@@ -11,33 +11,75 @@ interface Props {
   onBoardCreated: () => void;
 }
 
+const TEMPLATES: {
+  type: BoardType;
+  title: string;
+  desc: string;
+  columns: string[];
+}[] = [
+  {
+    type: 'STANDARD',
+    title: 'Standart Kanban',
+    desc: 'Genel görev ve süreç yönetimi için standart 4 aşamalı iş akışı',
+    columns: ['To Do', 'In Progress', 'In Review', 'Done'],
+  },
+  {
+    type: 'INTEGRATION',
+    title: 'Entegrasyon & API',
+    desc: 'API, veri eşleme (mapping) ve canlıya alma entegrasyon süreçleri için',
+    columns: ['Backlog', 'Analiz & Mapping', 'Geliştirme', 'Sandbox Test', 'Canlıya Alındı'],
+  },
+  {
+    type: 'QA_TEST',
+    title: 'Test & QA',
+    desc: 'Kalite güvence, test doğrulama ve hata yönetim döngüsü için',
+    columns: ['Backlog', 'Geliştirme', 'Teste Hazır', 'Test Ediliyor', 'Tamamlandı'],
+  },
+];
+
 export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Props) {
   const { user, isAdmin } = useAuth();
   const isSuperAdmin = isAdmin && !user?.organizationId && !user?.organizationName;
 
-  const [form, setForm]                   = useState<BoardRequest>({ name: '', description: '', organizationId: undefined });
+  const [form, setForm]                   = useState<BoardRequest>({
+    name: '',
+    description: '',
+    organizationId: undefined,
+    boardType: 'STANDARD',
+  });
   const [organizations, setOrganizations] = useState<OrganizationDto[]>([]);
   const [loadingOrgs, setLoadingOrgs]     = useState(false);
   const [loading, setLoading]             = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isOpen && isSuperAdmin) {
-      setLoadingOrgs(true);
-      organizationService
-        .getAll()
-        .then((orgs) => {
-          setOrganizations(orgs);
-          if (orgs.length > 0 && !form.organizationId) {
-            setForm((prev) => ({ ...prev, organizationId: orgs[0].id }));
-          }
-        })
-        .catch(() => { /* fallback */ })
-        .finally(() => setLoadingOrgs(false));
+    if (isOpen) {
+      setForm({
+        name: '',
+        description: '',
+        organizationId: undefined,
+        boardType: 'STANDARD',
+      });
+
+      if (isSuperAdmin) {
+        setLoadingOrgs(true);
+        organizationService
+          .getAll()
+          .then((orgs) => {
+            setOrganizations(orgs);
+            if (orgs.length > 0) {
+              setForm((prev) => ({ ...prev, organizationId: orgs[0].id }));
+            }
+          })
+          .catch(() => { /* fallback */ })
+          .finally(() => setLoadingOrgs(false));
+      }
     }
   }, [isOpen, isSuperAdmin]);
 
   if (!isOpen) return null;
+
+  const selectedTemplate = TEMPLATES.find((t) => t.type === (form.boardType || 'STANDARD')) || TEMPLATES[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,10 +90,11 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
         name:           form.name.trim(),
         description:    form.description?.trim(),
         organizationId: isSuperAdmin ? form.organizationId : undefined,
+        boardType:      form.boardType || 'STANDARD',
       });
       onBoardCreated();
       toast.success('Yeni pano başarıyla oluşturuldu.');
-      setForm({ name: '', description: '', organizationId: undefined });
+      setForm({ name: '', description: '', organizationId: undefined, boardType: 'STANDARD' });
       onClose();
     } catch {
       toast.error('Pano oluşturulamadı.');
@@ -62,7 +105,7 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
+      <div className="modal-box max-w-lg">
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
@@ -105,6 +148,7 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
             </div>
           )}
 
+          {/* Pano Adı */}
           <div>
             <label htmlFor="board-name" className="field-label font-semibold text-slate-700">
               Pano Adı <span className="text-rose-500">*</span>
@@ -122,11 +166,52 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
             />
           </div>
 
+          {/* Pano Türü / Şablonu Seçimi */}
           <div>
-            <label htmlFor="board-desc" className="field-label font-semibold text-slate-700">Açıklama</label>
+            <label htmlFor="board-type" className="field-label font-semibold text-slate-700">
+              Pano Türü / Çalışma Şablonu <span className="text-rose-500">*</span>
+            </label>
+            <select
+              id="board-type"
+              value={form.boardType || 'STANDARD'}
+              onChange={(e) => setForm({ ...form, boardType: e.target.value as BoardType })}
+              className="field font-semibold text-slate-800"
+              required
+            >
+              <option value="STANDARD">Standart Kanban (To Do, In Progress, Done)</option>
+              <option value="INTEGRATION">Entegrasyon & API (Analiz, Geliştirme, Test, Canlı)</option>
+              <option value="QA_TEST">Test & QA (Geliştirme, Teste Hazır, Test Ediliyor, Tamamlandı)</option>
+            </select>
+
+            {/* Template Information & Columns Preview */}
+            <div className="mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <p className="text-xs text-slate-600 font-medium">
+                {selectedTemplate.desc}
+              </p>
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200/60">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                  Otomatik Kolonlar:
+                </span>
+                {selectedTemplate.columns.map((colTitle, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center text-[11px] font-semibold bg-white text-slate-700 px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs"
+                  >
+                    {idx + 1}. {colTitle}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Açıklama */}
+          <div>
+            <label htmlFor="board-desc" className="field-label font-semibold text-slate-700">
+              Açıklama <span className="text-slate-400 font-normal text-[11px]">(Opsiyonel)</span>
+            </label>
             <textarea
               id="board-desc"
-              rows={3}
+              rows={2}
               maxLength={500}
               placeholder="Bu pano ne amaçla kullanılıyor?"
               value={form.description}
@@ -135,6 +220,7 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
             />
           </div>
 
+          {/* Buttons */}
           <div className="flex gap-2 pt-2 border-t border-slate-100">
             <button
               type="submit"

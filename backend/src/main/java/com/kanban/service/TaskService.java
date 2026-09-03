@@ -1,11 +1,13 @@
 package com.kanban.service;
 
+import com.kanban.dto.task.CustomFieldDto;
 import com.kanban.dto.task.MoveTaskRequest;
 import com.kanban.dto.task.TaskRequest;
 import com.kanban.dto.task.TaskResponse;
 import com.kanban.entity.BoardColumn;
 import com.kanban.entity.Task;
 import com.kanban.entity.Task.Priority;
+import com.kanban.entity.TaskCustomField;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.BoardColumnRepository;
 import com.kanban.repository.BoardRepository;
@@ -14,10 +16,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Business logic for Task CRUD, in-column reordering, and cross-column moves.
+ * Business logic for Task CRUD, custom fields, in-column reordering, and cross-column moves.
  */
 @Service
 @RequiredArgsConstructor
@@ -70,7 +73,23 @@ public class TaskService {
                 .assignee(request.assignee())
                 .position(nextPosition)
                 .column(column)
+                .comments(new ArrayList<>())
+                .attachments(new ArrayList<>())
+                .customFields(new ArrayList<>())
                 .build();
+
+        if (request.customFields() != null) {
+            for (CustomFieldDto dto : request.customFields()) {
+                if (dto.fieldName() != null && !dto.fieldName().isBlank()) {
+                    task.getCustomFields().add(TaskCustomField.builder()
+                            .task(task)
+                            .fieldName(dto.fieldName().trim())
+                            .fieldType(parseFieldType(dto.fieldType()))
+                            .fieldValue(dto.fieldValue())
+                            .build());
+                }
+            }
+        }
 
         Task saved = taskRepository.save(task);
         taskRepository.flush();
@@ -78,13 +97,26 @@ public class TaskService {
     }
 
     /**
-     * Updates the fields of an existing task.
+     * Updates the fields and custom fields of an existing task.
      * Does NOT change position or column — use {@link #moveTask} for that.
      */
     public TaskResponse updateTask(Long boardId, Long columnId, Long taskId, TaskRequest request) {
         requireColumn(boardId, columnId);
 
         Task task = requireTask(columnId, taskId);
+        return applyUpdate(task, request);
+    }
+
+    /**
+     * Direct update by taskId (top-level endpoint support).
+     */
+    public TaskResponse updateTaskDirect(Long taskId, TaskRequest request) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Task", taskId));
+        return applyUpdate(task, request);
+    }
+
+    private TaskResponse applyUpdate(Task task, TaskRequest request) {
         task.setTitle(request.title());
         task.setDescription(request.description());
         if (request.priority() != null) {
@@ -92,6 +124,21 @@ public class TaskService {
         }
         task.setDueDate(request.dueDate());
         task.setAssignee(request.assignee());
+
+        // Update custom fields if provided
+        if (request.customFields() != null) {
+            task.getCustomFields().clear();
+            for (CustomFieldDto dto : request.customFields()) {
+                if (dto.fieldName() != null && !dto.fieldName().isBlank()) {
+                    task.getCustomFields().add(TaskCustomField.builder()
+                            .task(task)
+                            .fieldName(dto.fieldName().trim())
+                            .fieldType(parseFieldType(dto.fieldType()))
+                            .fieldValue(dto.fieldValue())
+                            .build());
+                }
+            }
+        }
 
         Task saved = taskRepository.save(task);
         taskRepository.flush();
@@ -117,10 +164,6 @@ public class TaskService {
 
     /**
      * Moves or reorders a task via the unified Kanban drag-and-drop endpoint.
-     *
-     * @param taskId  identifier of the task being dragged
-     * @param request destination column + position
-     * @return the updated task response
      */
     public TaskResponse moveTask(Long taskId, MoveTaskRequest request) {
         Task task = taskRepository.findById(taskId)
@@ -159,7 +202,7 @@ public class TaskService {
 
             // 2. Clamp dst to [0, targetCount] then open slot in target column
             int targetCount = taskRepository.countByColumnId(dstColId);
-            int clampedDst  = Math.min(dstPos, targetCount);   // targetCount = valid append pos
+            int clampedDst  = Math.min(dstPos, targetCount);
 
             taskRepository.shiftPositionsRight(dstColId, clampedDst, Integer.MAX_VALUE);
 
@@ -188,7 +231,22 @@ public class TaskService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Task", taskId));
     }
 
-    private TaskResponse toResponse(Task task) {
+    private TaskCustomField.FieldType parseFieldType(String typeStr) {
+        if (typeStr == null) return TaskCustomField.FieldType.TEXT;
+        try {
+            return TaskCustomField.FieldType.valueOf(typeStr.toUpperCase().trim());
+        } catch (IllegalArgumentException e) {
+            return TaskCustomField.FieldType.TEXT;
+        }
+    }
+
+    public TaskResponse toResponse(Task task) {
+        List<CustomFieldDto> fields = task.getCustomFields() != null
+                ? task.getCustomFields().stream()
+                        .map(f -> new CustomFieldDto(f.getId(), f.getFieldName(), f.getFieldType().name(), f.getFieldValue()))
+                        .toList()
+                : List.of();
+
         return new TaskResponse(
                 task.getId(),
                 task.getTitle(),
@@ -197,6 +255,7 @@ public class TaskService {
                 task.getDueDate(),
                 task.getAssignee(),
                 task.getPosition(),
-                task.getColumn().getId());
+                task.getColumn().getId(),
+                fields);
     }
 }
