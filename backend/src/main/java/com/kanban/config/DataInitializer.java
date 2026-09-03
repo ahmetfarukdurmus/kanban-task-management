@@ -16,7 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 
 /**
- * Initializes essential super admin accounts and cleans up legacy demo seed organizations.
+ * Initializes clean, organization-independent test user accounts and cleans up legacy demo seed organizations.
  */
 @Slf4j
 @Component
@@ -31,7 +31,7 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        log.info("Running DataInitializer for initial superadmin account...");
+        log.info("Running DataInitializer for initial clean test accounts...");
 
         // 1. Clean up legacy seed demo organizations if they exist
         List.of("Muhasebe", "Uyum & Risk").forEach(orgName -> {
@@ -70,8 +70,13 @@ public class DataInitializer implements CommandLineRunner {
             });
         });
 
-        // 3. Seed Super Admin (Password: admin123)
-        seedSuperAdmin("superadmin", "superadmin@kanban.local", "admin123");
+        // 3. Seed Super Admin & Clean Test Users (No organizations attached)
+        seedUser("superadmin", "superadmin@kanban.local", "admin123", Role.ROLE_SUPER_ADMIN);
+        seedUser("ali_yilmaz", "ali@kanban.local", "user123", Role.ROLE_USER);
+        seedUser("ayse_kaya", "ayse@kanban.local", "user123", Role.ROLE_USER);
+        seedUser("mehmet_demir", "mehmet@kanban.local", "user123", Role.ROLE_USER);
+        seedUser("zeynep_celik", "zeynep@kanban.local", "user123", Role.ROLE_USER);
+        seedUser("can_ozkan", "can@kanban.local", "user123", Role.ROLE_ADMIN);
 
         // Ensure legacy admin account is Super Admin with encoded password
         userRepository.findByUsername("admin").ifPresent(adminUser -> {
@@ -83,27 +88,28 @@ public class DataInitializer implements CommandLineRunner {
             userRepository.save(adminUser);
         });
 
-        log.info("DataInitializer completed: Super Admin account initialized.");
+        log.info("DataInitializer completed: Clean test user accounts initialized.");
     }
 
-    private void seedSuperAdmin(String username, String email, String rawPassword) {
-        userRepository.findByUsername(username).map(existing -> {
-            existing.setEmail(email);
-            existing.setPassword(passwordEncoder.encode(rawPassword));
-            existing.setRole(Role.ROLE_SUPER_ADMIN);
-            if (existing.getOrganizations() != null) {
-                existing.getOrganizations().clear();
-            }
-            return userRepository.save(existing);
-        }).orElseGet(() -> {
-            User newUser = User.builder()
-                    .username(username)
-                    .email(email)
-                    .password(passwordEncoder.encode(rawPassword))
-                    .role(Role.ROLE_SUPER_ADMIN)
-                    .organizations(new HashSet<>())
-                    .build();
-            return userRepository.save(newUser);
-        });
+    private void seedUser(String username, String email, String rawPassword, Role role) {
+        userRepository.findByUsername(username).ifPresentOrElse(
+                existing -> {
+                    existing.setEmail(email);
+                    existing.setPassword(passwordEncoder.encode(rawPassword));
+                    existing.setRole(role);
+                    userRepository.save(existing);
+                },
+                () -> {
+                    User newUser = User.builder()
+                            .username(username)
+                            .email(email)
+                            .password(passwordEncoder.encode(rawPassword))
+                            .role(role)
+                            .organizations(new HashSet<>())
+                            .build();
+                    userRepository.save(newUser);
+                    log.info("Created seed user: {} ({})", username, role);
+                }
+        );
     }
 }

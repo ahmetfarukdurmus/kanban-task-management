@@ -834,11 +834,17 @@ export default function TaskDetailModal({
                   className="field text-sm font-medium text-slate-700"
                 >
                   <option value="">Seçiniz / Atanmamış</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.username}>
-                      {u.username} {u.organizationName ? `(${u.organizationName})` : '(Genel)'}
-                    </option>
-                  ))}
+                  {users.map((u) => {
+                    const orgLabel =
+                      u.organizationNames && u.organizationNames.length > 0
+                        ? u.organizationNames.join(', ')
+                        : u.organizationName || '';
+                    return (
+                      <option key={u.id} value={u.username}>
+                        {u.username} {orgLabel ? `(${orgLabel})` : ''}
+                      </option>
+                    );
+                  })}
                   {assignee && !users.some((u) => u.username === assignee) && (
                     <option value={assignee}>{assignee}</option>
                   )}
