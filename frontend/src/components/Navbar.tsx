@@ -31,13 +31,17 @@ export default function Navbar() {
 
   const isDeptAdmin = isAdmin && !isSuperAdmin && (!!user?.organizationId || !!user?.organizationName);
 
-  useEffect(() => {
+  const loadUsers = () => {
     if (user) {
       userService
         .getAll()
         .then((data) => setUsers(data))
         .catch(() => { /* fallback */ });
     }
+  };
+
+  useEffect(() => {
+    loadUsers();
   }, [user]);
 
   const handleLogout = () => {
@@ -99,11 +103,10 @@ export default function Navbar() {
                   type="button"
                   onClick={() => setTeamModalOpen(true)}
                   className="hidden md:flex items-center gap-2.5 pl-3 pr-2 py-1 rounded-full bg-slate-50 border border-slate-200/80 hover:bg-slate-100 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer group"
-                  title="Aktif ekip listesini görüntülemek için tıklayın"
+                  title="Ekip listesini görüntülemek için tıklayın"
                 >
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mr-1 group-hover:text-blue-600 transition-colors">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Aktif Ekip</span>
+                    <span>Ekip</span>
                   </div>
 
                   <div className="flex items-center -space-x-2 overflow-hidden py-0.5">
@@ -119,7 +122,6 @@ export default function Navbar() {
                           >
                             {u.username.charAt(0).toUpperCase()}
                           </span>
-                          <span className="absolute bottom-0 right-0 block h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
                         </div>
                       );
                     })}
@@ -171,6 +173,7 @@ export default function Navbar() {
         isOpen={teamModalOpen}
         onClose={() => setTeamModalOpen(false)}
         users={users}
+        onMembersUpdated={loadUsers}
       />
     </header>
   );

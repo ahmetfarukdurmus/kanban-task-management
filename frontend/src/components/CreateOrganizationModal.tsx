@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { organizationService } from '@/services/organizationService';
 import { userService } from '@/services/userService';
 import type { CreateOrganizationRequest, OrganizationDto, UserSummary } from '@/types';
-import { PlusIcon } from './icons';
+import { PlusIcon, SearchIcon } from './icons';
 
 interface Props {
   isOpen: boolean;
@@ -12,7 +12,7 @@ interface Props {
 }
 
 type AdminMode = 'none' | 'existing' | 'new';
-type UserMode  = 'none' | 'existing' | 'new';
+type MemberMode = 'none' | 'existing' | 'new';
 
 export default function CreateOrganizationModal({
   isOpen,
@@ -29,9 +29,10 @@ export default function CreateOrganizationModal({
   const [newEmail, setNewEmail]       = useState('');
   const [newPassword, setNewPassword] = useState('admin123');
 
-  // Initial team member section state
-  const [userMode, setUserMode]                   = useState<UserMode>('none');
-  const [initialUserId, setInitialUserId]         = useState<number | null>(null);
+  // Members section state (Multi-select)
+  const [memberMode, setMemberMode]               = useState<MemberMode>('none');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
+  const [memberSearch, setMemberSearch]           = useState('');
   const [newMemberUsername, setNewMemberUsername] = useState('');
   const [newMemberEmail, setNewMemberEmail]       = useState('');
   const [newMemberPassword, setNewMemberPassword] = useState('user123');
@@ -51,8 +52,9 @@ export default function CreateOrganizationModal({
       setNewEmail('');
       setNewPassword('admin123');
 
-      setUserMode('none');
-      setInitialUserId(null);
+      setMemberMode('none');
+      setSelectedMemberIds([]);
+      setMemberSearch('');
       setNewMemberUsername('');
       setNewMemberEmail('');
       setNewMemberPassword('user123');
@@ -64,7 +66,6 @@ export default function CreateOrganizationModal({
           setUsers(data);
           if (data.length > 0) {
             setAdminUserId(data[0].id);
-            setInitialUserId(data[0].id);
           }
         })
         .catch(() => { /* ignore */ })
@@ -73,6 +74,26 @@ export default function CreateOrganizationModal({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleToggleMember = (id: number) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllMembers = () => {
+    setSelectedMemberIds(users.map((u) => u.id));
+  };
+
+  const handleClearMembers = () => {
+    setSelectedMemberIds([]);
+  };
+
+  const filteredUsersForMembers = users.filter((u) => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return true;
+    return u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,10 +124,10 @@ export default function CreateOrganizationModal({
       };
     }
 
-    // 2. Process Initial User / Member
-    if (userMode === 'existing' && initialUserId) {
-      payload.initialUserId = initialUserId;
-    } else if (userMode === 'new') {
+    // 2. Process Members (Multi-select or new user)
+    if (memberMode === 'existing' && selectedMemberIds.length > 0) {
+      payload.memberUserIds = selectedMemberIds;
+    } else if (memberMode === 'new') {
       const trimmedMember = newMemberUsername.trim();
       if (!trimmedMember) {
         toast.error('Lütfen yeni ekip üyesi için kullanıcı adı girin.');
@@ -147,7 +168,7 @@ export default function CreateOrganizationModal({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">Yeni Departman Oluştur</h2>
-              <p className="text-xs text-slate-500 font-medium">Organizasyon, yönetici ve ekip üyesi tanımlama</p>
+              <p className="text-xs text-slate-500 font-medium">Organizasyon, yönetici ve çoklu üye atama</p>
             </div>
           </div>
           <button
@@ -311,19 +332,26 @@ export default function CreateOrganizationModal({
             )}
           </div>
 
-          {/* İlk Ekip Üyesi / Kullanıcı Ekle (Opsiyonel) Bölümü */}
+          {/* Departman Üyeleri Ekle (Çoklu Seçim) Bölümü */}
           <div className="pt-2 border-t border-slate-100">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              İlk Ekip Üyesi / Kullanıcı Ekle <span className="text-slate-400 font-normal text-[11px]">(Opsiyonel)</span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Departman Üyeleri Ekle <span className="text-slate-400 font-normal text-[11px]">(Çoklu)</span>
+              </label>
+              {memberMode === 'existing' && selectedMemberIds.length > 0 && (
+                <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                  {selectedMemberIds.length} üye seçildi
+                </span>
+              )}
+            </div>
 
             {/* Segmented Mode Selector */}
             <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl mb-3 text-xs font-semibold">
               <button
                 type="button"
-                onClick={() => setUserMode('none')}
+                onClick={() => setMemberMode('none')}
                 className={`py-1.5 px-2 rounded-lg transition-all text-center ${
-                  userMode === 'none'
+                  memberMode === 'none'
                     ? 'bg-white text-slate-900 shadow-xs font-bold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -332,20 +360,20 @@ export default function CreateOrganizationModal({
               </button>
               <button
                 type="button"
-                onClick={() => setUserMode('existing')}
+                onClick={() => setMemberMode('existing')}
                 className={`py-1.5 px-2 rounded-lg transition-all text-center ${
-                  userMode === 'existing'
+                  memberMode === 'existing'
                     ? 'bg-white text-slate-900 shadow-xs font-bold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Mevcut Kullanıcı
+                Mevcut Kullanıcılar
               </button>
               <button
                 type="button"
-                onClick={() => setUserMode('new')}
+                onClick={() => setMemberMode('new')}
                 className={`py-1.5 px-2 rounded-lg transition-all text-center ${
-                  userMode === 'new'
+                  memberMode === 'new'
                     ? 'bg-white text-slate-900 shadow-xs font-bold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -354,35 +382,80 @@ export default function CreateOrganizationModal({
               </button>
             </div>
 
-            {/* Mode: Existing User */}
-            {userMode === 'existing' && (
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 animate-fade-in">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Ekip Üyesi Olarak Eklenecek Kullanıcı:
-                </label>
-                {loadingUsers ? (
-                  <div className="text-xs text-slate-400 py-1">Kullanıcılar yükleniyor...</div>
-                ) : (
-                  <select
-                    value={initialUserId || ''}
-                    onChange={(e) => setInitialUserId(Number(e.target.value))}
-                    className="field w-full text-xs font-medium bg-white"
-                  >
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.username} ({u.email}) {u.organizationName ? `– [${u.organizationName}]` : '– [Departmansız]'}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <p className="text-[11px] text-slate-500">
-                  Seçilen kullanıcının departmanı güncellenecek ve rolü Ekip Üyesi (`ROLE_USER`) olacaktır.
-                </p>
+            {/* Mode: Existing Users (Multi-select checkbox list) */}
+            {memberMode === 'existing' && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2.5 animate-fade-in">
+                {/* Search & Actions */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="relative flex-1">
+                    <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Kullanıcı ara..."
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                      className="field pl-8 text-xs w-full py-1.5 bg-white"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllMembers}
+                      className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 px-1.5 py-1 rounded hover:bg-blue-50"
+                    >
+                      Tümünü Seç
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearMembers}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 px-1.5 py-1 rounded hover:bg-slate-200/60"
+                    >
+                      Temizle
+                    </button>
+                  </div>
+                </div>
+
+                {/* Checkbox List */}
+                <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                  {filteredUsersForMembers.length === 0 ? (
+                    <div className="text-xs text-slate-400 py-3 text-center">Kullanıcı bulunamadı.</div>
+                  ) : (
+                    filteredUsersForMembers.map((u) => {
+                      const isChecked = selectedMemberIds.includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-all ${
+                            isChecked
+                              ? 'bg-blue-50/80 border-blue-200 text-blue-900 font-semibold'
+                              : 'bg-white border-slate-200/80 text-slate-700 hover:bg-slate-100/60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleMember(u.id)}
+                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="truncate">{u.username}</span>
+                            <span className="text-[11px] text-slate-400 truncate">({u.email})</span>
+                          </div>
+                          {u.organizationName && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
+                              {u.organizationName}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
 
             {/* Mode: New User */}
-            {userMode === 'new' && (
+            {memberMode === 'new' && (
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2.5 animate-fade-in">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 mb-1">

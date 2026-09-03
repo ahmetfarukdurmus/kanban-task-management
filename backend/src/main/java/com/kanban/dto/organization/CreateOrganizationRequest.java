@@ -4,8 +4,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 /**
- * Request payload for creating a new Department / Organization with optional Admin and initial Member assignment.
+ * Request payload for creating a new Department / Organization with optional Admin and member assignments.
  */
 public record CreateOrganizationRequest(
         @NotBlank(message = "Departman adı zorunludur")
@@ -21,6 +23,8 @@ public record CreateOrganizationRequest(
         NewAdminDto newAdmin,
 
         Long initialUserId,
+
+        List<Long> memberUserIds,
 
         @Valid
         NewUserDto newUser

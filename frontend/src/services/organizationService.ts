@@ -15,10 +15,16 @@ export const organizationService = {
     api.get<OrganizationDto[]>('/organizations').then((r) => r.data),
 
   /**
-   * Creates a new organization with optional admin assignment (Super Admin only).
+   * Creates a new organization with optional admin and member assignments (Super Admin only).
    */
   create: (data: CreateOrganizationRequest): Promise<OrganizationDto> =>
     api.post<OrganizationDto>('/organizations', data).then((r) => r.data),
+
+  /**
+   * Bulk assigns users to an existing organization (Super Admin only).
+   */
+  assignMembers: (organizationId: number, userIds: number[]): Promise<void> =>
+    api.post<void>(`/organizations/${organizationId}/members`, { userIds }).then(() => undefined),
 };
 
 export default organizationService;

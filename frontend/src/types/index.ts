@@ -57,7 +57,12 @@ export interface CreateOrganizationRequest {
   adminUserId?: number | null;
   newAdmin?: NewAdminDto | null;
   initialUserId?: number | null;
+  memberUserIds?: number[] | null;
   newUser?: NewUserDto | null;
+}
+
+export interface AssignMembersRequest {
+  userIds: number[];
 }
 
 /* ── Board ─────────────────────────────────────────────────────────── */

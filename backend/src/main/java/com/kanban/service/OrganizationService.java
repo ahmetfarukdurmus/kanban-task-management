@@ -14,10 +14,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Service managing Organization resources, department administrator assignments, and initial team members.
+ * Service managing Organization resources, department administrator assignments, and team members.
  */
 @Slf4j
 @Service
@@ -37,8 +38,8 @@ public class OrganizationService {
     }
 
     /**
-     * Creates a new organization, and optionally assigns or provisions a department administrator
-     * and an initial team member.
+     * Creates a new organization, and optionally assigns a department administrator
+     * and one or more initial team members.
      */
     @Transactional
     public OrganizationDto createOrganization(CreateOrganizationRequest request) {
@@ -93,18 +94,32 @@ public class OrganizationService {
             log.info("Created new admin user '{}' for organization '{}'", username, savedOrg.getName());
         }
 
-        // 3. Assign existing user as initial team member if initialUserId provided
-        if (request.initialUserId() != null) {
-            User existingMember = userRepository.findById(request.initialUserId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Seçilen üye kullanıcı bulunamadı: ID " + request.initialUserId()));
-
-            existingMember.setOrganization(savedOrg);
-            existingMember.setRole(Role.ROLE_USER);
-            userRepository.save(existingMember);
-            log.info("Assigned existing user '{}' as initial team member for organization '{}'", existingMember.getUsername(), savedOrg.getName());
+        // 3. Assign multiple existing users as team members if memberUserIds provided
+        List<Long> memberIds = new ArrayList<>();
+        if (request.memberUserIds() != null && !request.memberUserIds().isEmpty()) {
+            memberIds.addAll(request.memberUserIds());
+        } else if (request.initialUserId() != null) {
+            memberIds.add(request.initialUserId());
         }
+
+        for (Long memberId : memberIds) {
+            // Avoid overriding newly assigned admin role if same user selected
+            if (request.adminUserId() != null && request.adminUserId().equals(memberId)) {
+                continue;
+            }
+
+            userRepository.findById(memberId).ifPresent(user -> {
+                user.setOrganization(savedOrg);
+                if (user.getRole() != Role.ROLE_ADMIN && user.getRole() != Role.ROLE_SUPER_ADMIN) {
+                    user.setRole(Role.ROLE_USER);
+                }
+                userRepository.save(user);
+                log.info("Assigned existing user '{}' as team member for organization '{}'", user.getUsername(), savedOrg.getName());
+            });
+        }
+
         // 4. Or provision a new team member if newUser provided
-        else if (request.newUser() != null && request.newUser().username() != null && !request.newUser().username().isBlank()) {
+        if (request.newUser() != null && request.newUser().username() != null && !request.newUser().username().isBlank()) {
             CreateOrganizationRequest.NewUserDto userDto = request.newUser();
             String username = userDto.username().trim();
             String email = (userDto.email() != null && !userDto.email().isBlank())
@@ -133,5 +148,26 @@ public class OrganizationService {
         }
 
         return new OrganizationDto(savedOrg.getId(), savedOrg.getName(), savedOrg.getDescription());
+    }
+
+    /**
+     * Assigns existing users to an existing organization.
+     */
+    @Transactional
+    public void assignMembersToOrganization(Long organizationId, List<Long> userIds) {
+        Organization organization = organizationRepository.findById(organizationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Departman bulunamadı: ID " + organizationId));
+
+        if (userIds != null && !userIds.isEmpty()) {
+            List<User> users = userRepository.findAllById(userIds);
+            for (User user : users) {
+                user.setOrganization(organization);
+                if (user.getRole() != Role.ROLE_ADMIN && user.getRole() != Role.ROLE_SUPER_ADMIN) {
+                    user.setRole(Role.ROLE_USER);
+                }
+                userRepository.save(user);
+                log.info("Assigned user '{}' to organization '{}'", user.getUsername(), organization.getName());
+            }
+        }
     }
 }

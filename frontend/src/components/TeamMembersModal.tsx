@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import type { UserSummary } from '@/types';
-import { SearchIcon, UserIcon } from './icons';
+import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { organizationService } from '@/services/organizationService';
+import type { OrganizationDto, UserSummary } from '@/types';
+import { PlusIcon, SearchIcon, UserIcon } from './icons';
 
 interface Props {
-  isOpen:  boolean;
-  onClose: () => void;
-  users:   UserSummary[];
+  isOpen:            boolean;
+  onClose:           () => void;
+  users:             UserSummary[];
+  onMembersUpdated?: () => void;
 }
 
 function getAvatarColor(name: string): { bg: string; text: string } {
@@ -28,11 +32,41 @@ function getAvatarColor(name: string): { bg: string; text: string } {
   return colors[index];
 }
 
-export default function TeamMembersModal({ isOpen, onClose, users }: Props) {
+export default function TeamMembersModal({
+  isOpen,
+  onClose,
+  users,
+  onMembersUpdated,
+}: Props) {
+  const { isSuperAdmin } = useAuth();
+
   const [search, setSearch]             = useState('');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
 
-  // Extract distinct departments
+  // Assign members panel state (for Super Admin)
+  const [showAssignPanel, setShowAssignPanel]       = useState(false);
+  const [targetOrgId, setTargetOrgId]               = useState<number | null>(null);
+  const [selectedAssignUserIds, setSelectedAssignUserIds] = useState<number[]>([]);
+  const [assignSearch, setAssignSearch]             = useState('');
+  const [organizations, setOrganizations]           = useState<OrganizationDto[]>([]);
+  const [assigning, setAssigning]                   = useState(false);
+
+  // Load organizations when Super Admin opens modal
+  useEffect(() => {
+    if (isOpen && isSuperAdmin) {
+      organizationService
+        .getAll()
+        .then((orgs) => {
+          setOrganizations(orgs);
+          if (orgs.length > 0 && !targetOrgId) {
+            setTargetOrgId(orgs[0].id);
+          }
+        })
+        .catch(() => { /* fallback */ });
+    }
+  }, [isOpen, isSuperAdmin]);
+
+  // Extract distinct departments from users list
   const departments = useMemo(() => {
     const set = new Set<string>();
     users.forEach((u) => {
@@ -43,7 +77,7 @@ export default function TeamMembersModal({ isOpen, onClose, users }: Props) {
     return Array.from(set);
   }, [users]);
 
-  // Filtered users
+  // Filtered users for main list
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter((u) => {
@@ -60,6 +94,60 @@ export default function TeamMembersModal({ isOpen, onClose, users }: Props) {
       return matchSearch && matchDept;
     });
   }, [users, search, selectedDept]);
+
+  // Filtered users for assignment panel
+  const filteredUsersForAssign = useMemo(() => {
+    const q = assignSearch.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.username.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.organizationName && u.organizationName.toLowerCase().includes(q))
+    );
+  }, [users, assignSearch]);
+
+  const handleToggleAssignUser = (id: number) => {
+    setSelectedAssignUserIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllAssign = () => {
+    setSelectedAssignUserIds(filteredUsersForAssign.map((u) => u.id));
+  };
+
+  const handleClearAssign = () => {
+    setSelectedAssignUserIds([]);
+  };
+
+  const handleAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetOrgId) {
+      toast.error('Lütfen bir departman seçin.');
+      return;
+    }
+    if (selectedAssignUserIds.length === 0) {
+      toast.error('Lütfen atanacak en az bir kullanıcı seçin.');
+      return;
+    }
+
+    const targetOrgName = organizations.find((o) => o.id === targetOrgId)?.name || 'Departman';
+
+    setAssigning(true);
+    try {
+      await organizationService.assignMembers(targetOrgId, selectedAssignUserIds);
+      toast.success(`${selectedAssignUserIds.length} kullanıcı "${targetOrgName}" departmanına atandı.`);
+      setShowAssignPanel(false);
+      setSelectedAssignUserIds([]);
+      if (onMembersUpdated) onMembersUpdated();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Kullanıcılar atanırken bir hata oluştu.';
+      toast.error(msg);
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -82,8 +170,8 @@ export default function TeamMembersModal({ isOpen, onClose, users }: Props) {
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900">Aktif Ekip Üyeleri</h2>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <h2 className="text-base font-bold text-slate-900">Ekip Üyeleri</h2>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                   {users.length} Kişi
                 </span>
               </div>
@@ -91,17 +179,161 @@ export default function TeamMembersModal({ isOpen, onClose, users }: Props) {
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="btn-ghost p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
-            aria-label="Kapat"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Super Admin: + Departmana Üye Ekle button */}
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowAssignPanel(!showAssignPanel)}
+                className={`btn-secondary py-1.5 px-3 text-xs gap-1.5 font-semibold transition-all ${
+                  showAssignPanel ? 'bg-blue-50 border-blue-300 text-blue-700' : 'text-slate-700'
+                }`}
+                title="Departmana toplu kullanıcı ata"
+              >
+                <PlusIcon className="w-3.5 h-3.5 text-blue-600" />
+                <span>Departmana Üye Ekle</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="btn-ghost p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
+              aria-label="Kapat"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {/* ── Super Admin: Assign Members to Department Panel ──────── */}
+        {isSuperAdmin && showAssignPanel && (
+          <form onSubmit={handleAssignSubmit} className="p-4 bg-blue-50/50 border-b border-blue-200/80 space-y-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-900">Departmana Üye Ata (Toplu)</span>
+              <button
+                type="button"
+                onClick={() => setShowAssignPanel(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 font-semibold"
+              >
+                ✕ Kapat
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              {/* Department selector */}
+              <div className="sm:col-span-5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Hedef Departman
+                </label>
+                <select
+                  value={targetOrgId || ''}
+                  onChange={(e) => setTargetOrgId(Number(e.target.value))}
+                  className="field w-full text-xs font-semibold bg-white"
+                  required
+                >
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* User search */}
+              <div className="sm:col-span-7">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Atanacak Kullanıcılar ({selectedAssignUserIds.length} seçildi)
+                  </label>
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllAssign}
+                      className="text-blue-600 hover:text-blue-800 font-semibold"
+                    >
+                      Tümü
+                    </button>
+                    <span>&bull;</span>
+                    <button
+                      type="button"
+                      onClick={handleClearAssign}
+                      className="text-slate-500 hover:text-slate-700 font-semibold"
+                    >
+                      Temizle
+                    </button>
+                  </div>
+                </div>
+                <div className="relative">
+                  <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Kullanıcı ara..."
+                    value={assignSearch}
+                    onChange={(e) => setAssignSearch(e.target.value)}
+                    className="field pl-8 text-xs w-full py-1.5 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Checkbox list of users */}
+            <div className="max-h-36 overflow-y-auto space-y-1 p-2 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+              {filteredUsersForAssign.map((u) => {
+                const isChecked = selectedAssignUserIds.includes(u.id);
+                return (
+                  <label
+                    key={u.id}
+                    className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                      isChecked
+                        ? 'bg-blue-50/80 border-blue-200 text-blue-900 font-semibold'
+                        : 'bg-white border-transparent text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleAssignUser(u.id)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="truncate">{u.username}</span>
+                      <span className="text-[11px] text-slate-400 truncate">({u.email})</span>
+                    </div>
+                    {u.organizationName ? (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                        {u.organizationName}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                        Departmansız
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowAssignPanel(false)}
+                className="btn-ghost py-1 px-3 text-xs font-semibold"
+              >
+                İptal
+              </button>
+              <button
+                type="submit"
+                disabled={assigning || selectedAssignUserIds.length === 0}
+                className="btn-primary py-1.5 px-4 text-xs font-semibold gap-1.5 shadow-xs"
+              >
+                {assigning ? 'Atanıyor…' : `Seçilen ${selectedAssignUserIds.length} Kullanıcıyı Ata`}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* ── Search & Filter Bar ──────────────────────────────────── */}
         <div className="px-6 py-3.5 border-b border-slate-100 space-y-3 bg-white">
@@ -110,7 +342,6 @@ export default function TeamMembersModal({ isOpen, onClose, users }: Props) {
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              autoFocus
               placeholder="Kullanıcı adı veya e-posta ile ara..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -187,24 +418,12 @@ export default function TeamMembersModal({ isOpen, onClose, users }: Props) {
                       >
                         {u.username.charAt(0).toUpperCase()}
                       </span>
-                      {/* Active green dot indicator */}
-                      <span
-                        className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white"
-                        title="Çevrim içi / Aktif"
-                      />
                     </div>
 
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-900 truncate">
-                          {u.username}
-                        </span>
-                        {/* Status tag */}
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Çevrim içi
-                        </span>
-                      </div>
+                      <span className="font-bold text-sm text-slate-900 truncate block">
+                        {u.username}
+                      </span>
                       <p className="text-xs text-slate-500 truncate">{u.email}</p>
                     </div>
                   </div>
