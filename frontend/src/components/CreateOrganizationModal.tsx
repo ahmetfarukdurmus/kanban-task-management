@@ -196,7 +196,6 @@ export default function CreateOrganizationModal({
               type="text"
               required
               maxLength={100}
-              placeholder="örn: İnsan Kaynakları, Yazılım & IT, Satış"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="field w-full text-sm"
