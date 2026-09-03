@@ -138,7 +138,7 @@ export default function ManageDepartmentMembersModal({
     setAddingExisting(true);
     try {
       await organizationService.addExistingMembers(organization.id, selectedUserIds);
-      toast.success(`${selectedUserIds.length} kullanıcı "${organization.name}" departmanına eklendi.`);
+      toast.success(`${selectedUserIds.length} kullanıcı "${organization.name}" organizasyonuna eklendi.`);
       setSelectedUserIds([]);
       setActiveTab('current');
       loadData();
@@ -170,7 +170,7 @@ export default function ManageDepartmentMembersModal({
     setCreatingNew(true);
     try {
       await organizationService.createNewMember(organization.id, payload);
-      toast.success(`"${trimmedUser}" kullanıcısı oluşturuldu ve "${organization.name}" departmanına eklendi.`);
+      toast.success(`"${trimmedUser}" kullanıcısı oluşturuldu ve "${organization.name}" organizasyonuna eklendi.`);
       setNewUsername('');
       setNewEmail('');
       setNewPassword('user123');
@@ -187,14 +187,14 @@ export default function ManageDepartmentMembersModal({
 
   // Remove member action
   const handleRemoveMember = async (userId: number, username: string) => {
-    if (!confirm(`"${username}" kullanıcısını "${organization.name}" departmanından çıkarmak istediğinizden emin misiniz?`)) {
+    if (!confirm(`"${username}" kullanıcısını "${organization.name}" organizasyonundan çıkarmak istediğinizden emin misiniz?`)) {
       return;
     }
 
     setRemovingId(userId);
     try {
       await organizationService.removeMember(organization.id, userId);
-      toast.success(`"${username}" "${organization.name}" departmanından çıkarıldı.`);
+      toast.success(`"${username}" "${organization.name}" organizasyonundan çıkarıldı.`);
       loadData();
       if (onMembersChanged) onMembersChanged();
     } catch (err: any) {
@@ -229,7 +229,7 @@ export default function ManageDepartmentMembersModal({
                   {members.length} Üye
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">Departman üyeliklerini düzenleyin veya yeni üye ekleyin</p>
+              <p className="text-xs text-slate-500 font-medium">Organizasyon üyeliklerini düzenleyin veya yeni üye ekleyin</p>
             </div>
           </div>
 
@@ -296,7 +296,7 @@ export default function ManageDepartmentMembersModal({
               ) : filteredCurrentMembers.length === 0 ? (
                 <div className="text-center py-10 text-slate-400">
                   <UserIcon className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                  <p className="text-xs font-semibold text-slate-600">Bu departmanda henüz üye bulunmuyor</p>
+                  <p className="text-xs font-semibold text-slate-600">Bu organizasyonda henüz üye bulunmuyor</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">"Üye Ekle" sekmesinden yeni üyeler atayabilirsiniz.</p>
                 </div>
               ) : (
@@ -343,7 +343,7 @@ export default function ManageDepartmentMembersModal({
                           onClick={() => handleRemoveMember(m.id, m.username)}
                           disabled={isRemoving}
                           className="btn-ghost p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                          title="Departmandan Çıkar"
+                          title="Organizasyondan Çıkar"
                         >
                           {isRemoving ? (
                             <span className="w-3.5 h-3.5 border-2 border-rose-400 border-t-rose-600 rounded-full animate-spin block" />
@@ -528,7 +528,7 @@ export default function ManageDepartmentMembersModal({
                       className="field w-full text-xs font-semibold"
                     >
                       <option value="ROLE_USER">Ekip Üyesi (Kullanıcı)</option>
-                      <option value="ROLE_ADMIN">Departman Yöneticisi</option>
+                      <option value="ROLE_ADMIN">Organizasyon Yöneticisi</option>
                     </select>
                   </div>
                 </div>
@@ -539,7 +539,7 @@ export default function ManageDepartmentMembersModal({
                     disabled={creatingNew || !newUsername.trim()}
                     className="btn-primary py-2 px-4 text-xs font-semibold gap-1.5 shadow-sm"
                   >
-                    {creatingNew ? 'Oluşturuluyor…' : 'Oluştur ve Departmana Ata'}
+                    {creatingNew ? 'Oluşturuluyor…' : 'Oluştur ve Organizasyona Ata'}
                   </button>
                 </div>
               </form>

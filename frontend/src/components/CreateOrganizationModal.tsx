@@ -99,7 +99,7 @@ export default function CreateOrganizationModal({
     e.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) {
-      toast.error('Lütfen departman adı girin.');
+      toast.error('Lütfen organizasyon adı girin.');
       return;
     }
 
@@ -143,11 +143,11 @@ export default function CreateOrganizationModal({
     setSubmitting(true);
     try {
       const createdOrg = await organizationService.create(payload);
-      toast.success(`"${createdOrg.name}" departmanı başarıyla oluşturuldu.`);
+      toast.success(`"${createdOrg.name}" organizasyonu başarıyla oluşturuldu.`);
       onOrganizationCreated(createdOrg);
       onClose();
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Departman oluşturulurken bir hata oluştu.';
+      const msg = err.response?.data?.detail || err.message || 'Organizasyon oluşturulurken bir hata oluştu.';
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -167,7 +167,7 @@ export default function CreateOrganizationModal({
               <PlusIcon className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Yeni Departman Oluştur</h2>
+              <h2 className="text-base font-bold text-slate-900">Yeni Organizasyon Oluştur</h2>
               <p className="text-xs text-slate-500 font-medium">Organizasyon, yönetici ve çoklu üye atama</p>
             </div>
           </div>
@@ -186,10 +186,10 @@ export default function CreateOrganizationModal({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Departman Adı */}
+          {/* Organizasyon Adı */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Departman Adı <span className="text-rose-500">*</span>
+              ORGANİZASYON ADI <span className="text-rose-500">*</span>
             </label>
             <input
               autoFocus
@@ -206,22 +206,22 @@ export default function CreateOrganizationModal({
           {/* Açıklama */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Açıklama <span className="text-slate-400 font-normal text-[11px]">(Opsiyonel)</span>
+              AÇIKLAMA <span className="text-slate-400 font-normal text-[11px]">(Opsiyonel)</span>
             </label>
             <textarea
               rows={2}
               maxLength={255}
-              placeholder="Departmanın çalışma alanı ve genel hedefleri..."
+              placeholder="Organizasyonun çalışma alanı ve genel hedefleri..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="field w-full text-sm resize-none"
             />
           </div>
 
-          {/* Departman Yöneticisi Ata Bölümü */}
+          {/* Organizasyon Yöneticisi Ata Bölümü */}
           <div className="pt-2 border-t border-slate-100">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Departman Yöneticisi Ata
+              ORGANİZASYON YÖNETİCİSİ ATA
             </label>
 
             {/* Segmented Mode Selector */}
@@ -277,13 +277,13 @@ export default function CreateOrganizationModal({
                   >
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.username} ({u.email}) {u.organizationName ? `– [${u.organizationName}]` : '– [Departmansız]'}
+                        {u.username} ({u.email}) {u.organizationName ? `– [${u.organizationName}]` : '– [Organizasyonsuz]'}
                       </option>
                     ))}
                   </select>
                 )}
                 <p className="text-[11px] text-slate-500">
-                  Seçilen kullanıcının rolü otomatik olarak Departman Yöneticisi (`ROLE_ADMIN`) yapılacaktır.
+                  Seçilen kullanıcının rolü otomatik olarak Organizasyon Yöneticisi (`ROLE_ADMIN`) yapılacaktır.
                 </p>
               </div>
             )}
@@ -332,11 +332,11 @@ export default function CreateOrganizationModal({
             )}
           </div>
 
-          {/* Departman Üyeleri Ekle (Çoklu Seçim) Bölümü */}
+          {/* Organizasyon Üyeleri Ekle (Çoklu Seçim) Bölümü */}
           <div className="pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Departman Üyeleri Ekle <span className="text-slate-400 font-normal text-[11px]">(Çoklu)</span>
+                ORGANİZASYON ÜYELERİ EKLE <span className="text-slate-400 font-normal text-[11px]">(Çoklu)</span>
               </label>
               {memberMode === 'existing' && selectedMemberIds.length > 0 && (
                 <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
@@ -521,7 +521,7 @@ export default function CreateOrganizationModal({
               ) : (
                 <>
                   <PlusIcon className="w-3.5 h-3.5" />
-                  <span>Departmanı Oluştur</span>
+                  <span>Organizasyonu Oluştur</span>
                 </>
               )}
             </button>

@@ -36,8 +36,8 @@ export default function RegisterPage() {
           })
           .catch(() => {
             const defaults: OrganizationDto[] = [
-              { id: 1, name: 'Muhasebe', description: 'Mali İşler ve Muhasebe Departmanı' },
-              { id: 2, name: 'Uyum & Risk', description: 'Yasal Uyum ve Risk Yönetimi Departmanı' },
+              { id: 1, name: 'Muhasebe', description: 'Mali İşler ve Muhasebe Organizasyonu' },
+              { id: 2, name: 'Uyum & Risk', description: 'Yasal Uyum ve Risk Yönetimi Organizasyonu' },
             ];
             setOrganizations(defaults);
             setOrganizationId(defaults[0].id);
@@ -80,16 +80,16 @@ export default function RegisterPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Hesap Oluşturun</h1>
-          <p className="mt-1 text-sm text-slate-500 font-medium">Departmanınızı seçin ve ekibinize katılın</p>
+          <p className="mt-1 text-sm text-slate-500 font-medium">Organizasyonunuzu seçin ve ekibinize katılın</p>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-6 sm:p-7">
           <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* Departman Seçimi */}
+            {/* Organizasyon Seçimi */}
             <div>
               <label htmlFor="reg-org" className="field-label font-semibold text-slate-700">
-                Departman / Ekip <span className="text-rose-500">*</span>
+                Organizasyon / Ekip <span className="text-rose-500">*</span>
               </label>
               <select
                 id="reg-org"
@@ -159,10 +159,10 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full justify-center py-2.5 mt-2 font-semibold shadow-sm hover:shadow"
+              className="btn-primary w-full py-2.5 mt-2 font-semibold shadow-sm"
             >
               {loading ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Kayıt olunuyor…
                 </span>
@@ -171,9 +171,9 @@ export default function RegisterPage() {
           </form>
         </div>
 
-        <p className="text-center mt-5 text-sm text-slate-500">
+        <p className="mt-6 text-center text-xs text-slate-500 font-medium">
           Zaten bir hesabınız var mı?{' '}
-          <Link to="/login" className="text-blue-600 hover:text-blue-800 font-semibold transition-colors">
+          <Link to="/login" className="font-bold text-blue-600 hover:text-blue-700 underline underline-offset-2">
             Giriş Yap
           </Link>
         </p>

@@ -136,11 +136,11 @@ export default function CreateBoardModal({
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
 
-          {/* Super Admin: Departman Seçimi */}
+          {/* Super Admin: Organizasyon Seçimi */}
           {isSuperAdmin && (
             <div>
               <label htmlFor="board-org" className="field-label font-semibold text-slate-700">
-                Hangi Departman İçin? <span className="text-rose-500">*</span>
+                Organizasyon Seçimi <span className="text-rose-500">*</span>
               </label>
               <select
                 id="board-org"

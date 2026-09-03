@@ -66,7 +66,7 @@ export default function TeamMembersModal({
     }
   }, [isOpen, isSuperAdmin]);
 
-  // Extract distinct departments from users list (supporting ManyToMany)
+  // Extract distinct organizations from users list (supporting ManyToMany)
   const departments = useMemo(() => {
     const set = new Set<string>();
     users.forEach((u) => {
@@ -131,7 +131,7 @@ export default function TeamMembersModal({
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetOrgId) {
-      toast.error('Lütfen bir departman seçin.');
+      toast.error('Lütfen bir organizasyon seçin.');
       return;
     }
     if (selectedAssignUserIds.length === 0) {
@@ -139,12 +139,12 @@ export default function TeamMembersModal({
       return;
     }
 
-    const targetOrgName = organizations.find((o) => o.id === targetOrgId)?.name || 'Departman';
+    const targetOrgName = organizations.find((o) => o.id === targetOrgId)?.name || 'Organizasyon';
 
     setAssigning(true);
     try {
       await organizationService.addExistingMembers(targetOrgId, selectedAssignUserIds);
-      toast.success(`${selectedAssignUserIds.length} kullanıcı "${targetOrgName}" departmanına atandı.`);
+      toast.success(`${selectedAssignUserIds.length} kullanıcı "${targetOrgName}" organizasyonuna atandı.`);
       setShowAssignPanel(false);
       setSelectedAssignUserIds([]);
       if (onMembersUpdated) onMembersUpdated();
@@ -186,7 +186,7 @@ export default function TeamMembersModal({
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* Super Admin: + Departmana Üye Ekle button */}
+            {/* Super Admin: + Organizasyona Üye Ekle button */}
             {isSuperAdmin && (
               <button
                 type="button"
@@ -194,7 +194,7 @@ export default function TeamMembersModal({
                 className={`btn-secondary py-1 px-2.5 text-[11px] gap-1 font-semibold transition-all ${
                   showAssignPanel ? 'bg-blue-50 border-blue-300 text-blue-700' : 'text-slate-700'
                 }`}
-                title="Departmana toplu kullanıcı ata"
+                title="Organizasyona toplu kullanıcı ata"
               >
                 <PlusIcon className="w-3 h-3 text-blue-600" />
                 <span>Üye Ekle</span>
@@ -214,11 +214,11 @@ export default function TeamMembersModal({
           </div>
         </div>
 
-        {/* ── Super Admin: Assign Members to Department Panel ──────── */}
+        {/* ── Super Admin: Assign Members to Organization Panel ──────── */}
         {isSuperAdmin && showAssignPanel && (
           <form onSubmit={handleAssignSubmit} className="p-3.5 bg-blue-50/60 border-b border-blue-200/80 space-y-2.5 shrink-0 animate-fade-in">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900">Departmana Üye Ata (Toplu)</span>
+              <span className="text-xs font-bold text-slate-900">Organizasyona Üye Ata (Toplu)</span>
               <button
                 type="button"
                 onClick={() => setShowAssignPanel(false)}
@@ -229,10 +229,10 @@ export default function TeamMembersModal({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-              {/* Department selector */}
+              {/* Organization selector */}
               <div className="sm:col-span-5">
                 <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Hedef Departman
+                  Hedef Organizasyon
                 </label>
                 <select
                   value={targetOrgId || ''}
@@ -309,7 +309,7 @@ export default function TeamMembersModal({
                       <span className="text-[10px] text-slate-400 truncate">({u.email})</span>
                     </div>
 
-                    {/* Department pill */}
+                    {/* Organization pill */}
                     {u.organizationNames && u.organizationNames.length > 0 ? (
                       <div className="flex flex-wrap gap-1 items-center">
                         {u.organizationNames.map((orgName, idx) => (
@@ -324,7 +324,7 @@ export default function TeamMembersModal({
                       </span>
                     ) : (
                       <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-                        Departmansız
+                        Organizasyonsuz
                       </span>
                     )}
                   </label>
@@ -374,7 +374,7 @@ export default function TeamMembersModal({
             )}
           </div>
 
-          {/* Department filter pills */}
+          {/* Organization filter pills */}
           <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-xs">
             <button
               type="button"
@@ -446,9 +446,9 @@ export default function TeamMembersModal({
                     </div>
                   </div>
 
-                  {/* Right: Badges & Multi-department Pills */}
+                  {/* Right: Badges & Multi-organization Pills */}
                   <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                    {/* Multi-department Badges */}
+                    {/* Multi-organization Badges */}
                     {u.organizationNames && u.organizationNames.length > 0 ? (
                       <div className="flex flex-wrap gap-1 items-center justify-end">
                         {u.organizationNames.map((orgName, idx) => (
@@ -466,7 +466,7 @@ export default function TeamMembersModal({
                       </span>
                     ) : (
                       <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200">
-                        Departmansız
+                        Organizasyonsuz
                       </span>
                     )}
 

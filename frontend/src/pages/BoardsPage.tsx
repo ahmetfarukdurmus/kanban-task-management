@@ -31,9 +31,9 @@ export default function BoardsPage() {
     : (user?.organizationName ? `${user.organizationName} Panoları` : 'Panolarım');
 
   const pageSubtitle = isSuperAdmin
-    ? 'Tüm departmanlara ait panoları, iş süreçlerini ve ilerlemeleri merkezi olarak yönetin.'
+    ? 'Tüm organizasyonlara ait panoları, iş süreçlerini ve ilerlemeleri merkezi olarak yönetin.'
     : (user?.organizationName
-        ? `${user.organizationName} departmanına ve size atanmış görevlerin bulunduğu panolara buradan erişin.`
+        ? `${user.organizationName} organizasyonuna ve size atanmış görevlerin bulunduğu panolara buradan erişin.`
         : 'Tüm projelerinizi, süreçlerinizi ve takım işlerinizi tek bir yerden yönetin.');
 
   const { data: boards = [], isLoading, isError, refetch } = useQuery({
@@ -46,13 +46,13 @@ export default function BoardsPage() {
     queryFn:  organizationService.getAll,
   });
 
-  // Selected organization object if filtering by specific department
+  // Selected organization object if filtering by specific organization
   const selectedOrgObj = useMemo(() => {
     if (selectedOrgFilter === 'ALL') return null;
     return organizations.find((o) => o.name === selectedOrgFilter) || null;
   }, [organizations, selectedOrgFilter]);
 
-  // Distinct departments extracted from available boards and organizations
+  // Distinct organizations extracted from available boards and organizations
   const availableDepts = useMemo(() => {
     const set = new Set<string>();
     if (isSuperAdmin) {
@@ -92,7 +92,7 @@ export default function BoardsPage() {
   };
 
   const handleDeleteOrg = async (org: OrganizationDto) => {
-    if (!confirm(`Bu departmanı (${org.name}) ve departmana ait tüm panoları silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
+    if (!confirm(`Bu organizasyonu (${org.name}) ve organizasyona ait tüm panoları silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
       return;
     }
 
@@ -102,9 +102,9 @@ export default function BoardsPage() {
       setSelectedOrgFilter('ALL');
       await queryClient.invalidateQueries({ queryKey: ['organizations'] });
       await queryClient.invalidateQueries({ queryKey: ['boards'] });
-      toast.success(`"${org.name}" departmanı başarıyla silindi.`);
+      toast.success(`"${org.name}" organizasyonu başarıyla silindi.`);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Departman silinirken bir hata oluştu.';
+      const msg = err.response?.data?.detail || err.message || 'Organizasyon silinirken bir hata oluştu.';
       toast.error(msg);
     } finally {
       setDeletingOrg(false);
@@ -132,7 +132,7 @@ export default function BoardsPage() {
                 </span>
               ) : isDeptAdmin ? (
                 <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                  Departman Yöneticisi
+                  Organizasyon Yöneticisi
                 </span>
               ) : user?.organizationName ? (
                 <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
@@ -147,19 +147,19 @@ export default function BoardsPage() {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2.5 self-start sm:self-auto">
-            {/* Super Admin: + Yeni Departman Button */}
+            {/* Super Admin: + Yeni Organizasyon Button */}
             {isSuperAdmin && (
               <button
                 onClick={() => setCreateOrgModalOpen(true)}
                 className="btn-secondary gap-2 py-2.5 px-3.5 text-xs font-bold text-slate-700 hover:text-blue-600 shadow-xs hover:border-blue-300"
-                title="Yeni Departman Tanımla"
+                title="Yeni Organizasyon Tanımla"
               >
                 <PlusIcon className="w-4 h-4 text-blue-600" />
-                <span>Yeni Departman</span>
+                <span>Yeni Organizasyon</span>
               </button>
             )}
 
-            {/* New Board Button (Super Admin & Department Admin) */}
+            {/* New Board Button (Super Admin & Organization Admin) */}
             {isAdmin && (
               <button
                 onClick={() => setModalOpen(true)}
@@ -172,11 +172,11 @@ export default function BoardsPage() {
           </div>
         </div>
 
-        {/* ── Department Filter Bar (Super Admin or Cross-Department Access) ── */}
+        {/* ── Organization Filter Bar (Super Admin or Cross-Organization Access) ── */}
         {showFilterBar && (
           <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 flex-wrap sm:flex-nowrap">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">
-              Departman:
+              ORGANİZASYON:
             </span>
             <button
               type="button"
@@ -208,7 +208,7 @@ export default function BoardsPage() {
                     {deptName} ({count})
                   </button>
 
-                  {/* Super Admin Actions when this department is selected */}
+                  {/* Super Admin Actions when this organization is selected */}
                   {isSuperAdmin && isSelected && selectedOrgObj && (
                     <div className="inline-flex items-center gap-1.5 animate-fade-in">
                       {/* Manage Members button */}
@@ -216,26 +216,26 @@ export default function BoardsPage() {
                         type="button"
                         onClick={() => setManageMembersModalOpen(true)}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 border border-blue-300 transition-all shadow-xs"
-                        title={`${deptName} departmanı üyelerini yönet ve yeni üye ekle`}
+                        title={`${deptName} organizasyonu üyelerini yönet ve yeni üye ekle`}
                       >
                         <UserIcon className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Üyeleri Yönet / Ekle</span>
+                        <span>Organizasyon Üyelerini Yönet</span>
                       </button>
 
-                      {/* Delete Department button */}
+                      {/* Delete Organization button */}
                       <button
                         type="button"
                         onClick={() => handleDeleteOrg(selectedOrgObj)}
                         disabled={deletingOrg}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all shadow-xs"
-                        title={`${deptName} departmanını sil`}
+                        title={`${deptName} organizasyonunu sil`}
                       >
                         {deletingOrg ? (
                           <span className="w-3.5 h-3.5 border-2 border-rose-400 border-t-rose-600 rounded-full animate-spin block" />
                         ) : (
                           <TrashIcon className="w-3.5 h-3.5 text-rose-600" />
                         )}
-                        <span>Departmanı Sil</span>
+                        <span>Organizasyonu Sil</span>
                       </button>
                     </div>
                   )}
@@ -243,16 +243,16 @@ export default function BoardsPage() {
               );
             })}
 
-            {/* Quick + Yeni Departman button in filter bar for Super Admin */}
+            {/* Quick + Yeni Organizasyon button in filter bar for Super Admin */}
             {isSuperAdmin && (
               <button
                 type="button"
                 onClick={() => setCreateOrgModalOpen(true)}
                 className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 transition-all shadow-xs shrink-0"
-                title="Yeni Departman Tanımla"
+                title="Yeni Organizasyon Tanımla"
               >
                 <PlusIcon className="w-3.5 h-3.5" />
-                <span>Yeni Departman</span>
+                <span>Yeni Organizasyon</span>
               </button>
             )}
           </div>
@@ -295,7 +295,7 @@ export default function BoardsPage() {
               </svg>
             </div>
             <h2 className="text-lg font-bold text-slate-800">
-              {selectedOrgFilter !== 'ALL' ? 'Bu Departmana Ait Pano Bulunamadı' : 'Henüz Bir Pano Bulunmuyor'}
+              {selectedOrgFilter !== 'ALL' ? 'Bu Organizasyona Ait Pano Bulunamadı' : 'Henüz Bir Pano Bulunmuyor'}
             </h2>
             <p className="text-xs text-slate-500 mt-1.5 mb-6 leading-relaxed">
               Ekip çalışmalarınızı veya hedeflerinizi organize etmek için yeni bir Kanban panosu oluşturarak başlayın.
@@ -310,7 +310,7 @@ export default function BoardsPage() {
               </button>
             ) : (
               <span className="text-xs font-medium text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">
-                Departman yöneticinizin pano eklemesi bekleniyor.
+                Organizasyon yöneticinizin pano eklemesi bekleniyor.
               </span>
             )}
           </div>
@@ -358,7 +358,7 @@ export default function BoardsPage() {
                         )}
                       </div>
 
-                      {/* Delete Button (Only for Super Admin & Department Admin of own board) */}
+                      {/* Delete Button (Only for Super Admin & Organization Admin of own board) */}
                       {isAdmin && (!user?.organizationName || board.organizationName === user.organizationName || isSuperAdmin) && (
                         <button
                           type="button"
@@ -431,7 +431,7 @@ export default function BoardsPage() {
         }}
       />
 
-      {/* Manage Department Members Modal */}
+      {/* Manage Organization Members Modal */}
       <ManageDepartmentMembersModal
         isOpen={manageMembersModalOpen}
         onClose={() => setManageMembersModalOpen(false)}
