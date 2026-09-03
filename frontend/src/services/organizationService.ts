@@ -1,5 +1,10 @@
 import api from '@/api/axiosClient';
-import type { CreateOrganizationRequest, OrganizationDto } from '@/types';
+import type {
+  CreateNewMemberRequest,
+  CreateOrganizationRequest,
+  OrganizationDto,
+  UserSummary,
+} from '@/types';
 
 export const organizationService = {
   /**
@@ -21,10 +26,40 @@ export const organizationService = {
     api.post<OrganizationDto>('/organizations', data).then((r) => r.data),
 
   /**
-   * Bulk assigns users to an existing organization (Super Admin only).
+   * Deletes an organization and cascades its boards (Super Admin only).
+   */
+  delete: (id: number): Promise<void> =>
+    api.delete<void>(`/organizations/${id}`).then(() => undefined),
+
+  /**
+   * Returns all members belonging to an organization.
+   */
+  getMembers: (orgId: number): Promise<UserSummary[]> =>
+    api.get<UserSummary[]>(`/organizations/${orgId}/members`).then((r) => r.data),
+
+  /**
+   * Adds existing users to an organization (ManyToMany - Super Admin only).
+   */
+  addExistingMembers: (orgId: number, userIds: number[]): Promise<void> =>
+    api.post<void>(`/organizations/${orgId}/members/existing`, { userIds }).then(() => undefined),
+
+  /**
+   * Bulk assigns users to an existing organization (alias / compatibility).
    */
   assignMembers: (organizationId: number, userIds: number[]): Promise<void> =>
-    api.post<void>(`/organizations/${organizationId}/members`, { userIds }).then(() => undefined),
+    api.post<void>(`/organizations/${organizationId}/members/existing`, { userIds }).then(() => undefined),
+
+  /**
+   * Creates a brand new user directly attached to an organization (Super Admin only).
+   */
+  createNewMember: (orgId: number, data: CreateNewMemberRequest): Promise<UserSummary> =>
+    api.post<UserSummary>(`/organizations/${orgId}/members/new`, data).then((r) => r.data),
+
+  /**
+   * Removes a user from an organization (Super Admin only).
+   */
+  removeMember: (orgId: number, userId: number): Promise<void> =>
+    api.delete<void>(`/organizations/${orgId}/members/${userId}`).then(() => undefined),
 };
 
 export default organizationService;

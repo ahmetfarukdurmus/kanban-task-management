@@ -18,6 +18,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
+import java.util.List;
+
 /**
  * Business logic for user registration and authentication.
  *
@@ -68,8 +71,12 @@ public class AuthService {
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .role(assignedRole)
-                .organization(organization)
+                .organizations(new HashSet<>())
                 .build();
+
+        if (organization != null) {
+            user.getOrganizations().add(organization);
+        }
 
         userRepository.save(user);
 
@@ -80,8 +87,8 @@ public class AuthService {
                 user.getUsername(),
                 user.getEmail(),
                 user.getRole().name(),
-                user.getOrganization() != null ? user.getOrganization().getId() : null,
-                user.getOrganization() != null ? user.getOrganization().getName() : null);
+                user.getPrimaryOrganizationId(),
+                user.getPrimaryOrganizationName());
     }
 
     /**
@@ -105,7 +112,7 @@ public class AuthService {
                 user.getUsername(),
                 user.getEmail(),
                 user.getRole().name(),
-                user.getOrganization() != null ? user.getOrganization().getId() : null,
-                user.getOrganization() != null ? user.getOrganization().getName() : null);
+                user.getPrimaryOrganizationId(),
+                user.getPrimaryOrganizationName());
     }
 }

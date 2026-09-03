@@ -204,7 +204,7 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
               <option value="">Seçiniz / Atanmamış</option>
               {users.map((u) => (
                 <option key={u.id} value={u.username}>
-                  {u.username} ({u.email})
+                  {u.username} {u.organizationName ? `(${u.organizationName})` : '(Genel)'}
                 </option>
               ))}
             </select>

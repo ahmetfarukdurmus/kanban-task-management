@@ -97,44 +97,54 @@ export default function Navbar() {
         <div className="flex items-center gap-4 sm:gap-6">
           {user && (
             <>
-              {/* ── Active Team Stack (Clickable Button) ── */}
+              {/* ── Active Team Stack & Dropdown Popover ── */}
               {users.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setTeamModalOpen(true)}
-                  className="hidden md:flex items-center gap-2.5 pl-3 pr-2 py-1 rounded-full bg-slate-50 border border-slate-200/80 hover:bg-slate-100 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer group"
-                  title="Ekip listesini görüntülemek için tıklayın"
-                >
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mr-1 group-hover:text-blue-600 transition-colors">
-                    <span>Ekip</span>
-                  </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setTeamModalOpen(!teamModalOpen)}
+                    className="hidden md:flex items-center gap-2.5 pl-3 pr-2 py-1 rounded-full bg-slate-50 border border-slate-200/80 hover:bg-slate-100 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer group"
+                    title="Ekip listesini görüntülemek için tıklayın"
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mr-1 group-hover:text-blue-600 transition-colors">
+                      <span>Ekip</span>
+                    </div>
 
-                  <div className="flex items-center -space-x-2 overflow-hidden py-0.5">
-                    {visibleUsers.map((u) => {
-                      const color = getAvatarColor(u.username);
-                      return (
-                        <div
-                          key={u.id}
-                          className="relative"
-                        >
-                          <span
-                            className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ring-2 ring-white shadow-xs relative ${color.bg} ${color.text}`}
+                    <div className="flex items-center -space-x-2 overflow-hidden py-0.5">
+                      {visibleUsers.map((u) => {
+                        const color = getAvatarColor(u.username);
+                        return (
+                          <div
+                            key={u.id}
+                            className="relative"
                           >
-                            {u.username.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      );
-                    })}
+                            <span
+                              className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ring-2 ring-white shadow-xs relative ${color.bg} ${color.text}`}
+                            >
+                              {u.username.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        );
+                      })}
 
-                    {remainingCount > 0 && (
-                      <span
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 ring-2 ring-white shadow-xs"
-                      >
-                        +{remainingCount}
-                      </span>
-                    )}
-                  </div>
-                </button>
+                      {remainingCount > 0 && (
+                        <span
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 ring-2 ring-white shadow-xs"
+                        >
+                          +{remainingCount}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Dropdown Popover */}
+                  <TeamMembersModal
+                    isOpen={teamModalOpen}
+                    onClose={() => setTeamModalOpen(false)}
+                    users={users}
+                    onMembersUpdated={loadUsers}
+                  />
+                </div>
               )}
 
               {/* User Profile Pill */}
@@ -167,14 +177,6 @@ export default function Navbar() {
           )}
         </div>
       </div>
-
-      {/* ── Team Members Modal ── */}
-      <TeamMembersModal
-        isOpen={teamModalOpen}
-        onClose={() => setTeamModalOpen(false)}
-        users={users}
-        onMembersUpdated={loadUsers}
-      />
     </header>
   );
 }

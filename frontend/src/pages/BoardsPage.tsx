@@ -7,21 +7,24 @@ import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import CreateBoardModal from '@/components/CreateBoardModal';
 import CreateOrganizationModal from '@/components/CreateOrganizationModal';
+import ManageDepartmentMembersModal from '@/components/ManageDepartmentMembersModal';
 import { boardApi } from '@/api/boardApi';
 import { organizationService } from '@/services/organizationService';
 import { useAuth } from '@/contexts/AuthContext';
-import type { BoardResponse } from '@/types';
-import { FileIcon, PlusIcon, TrashIcon } from '@/components/icons';
+import type { BoardResponse, OrganizationDto } from '@/types';
+import { FileIcon, PlusIcon, TrashIcon, UserIcon } from '@/components/icons';
 
 export default function BoardsPage() {
   const queryClient               = useQueryClient();
   const { user, isAdmin, isSuperAdmin } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [createOrgModalOpen, setCreateOrgModalOpen] = useState(false);
+  const [manageMembersModalOpen, setManageMembersModalOpen] = useState(false);
   const [deleting,  setDeleting]  = useState<number | null>(null);
+  const [deletingOrg, setDeletingOrg] = useState(false);
   const [selectedOrgFilter, setSelectedOrgFilter] = useState<string>('ALL');
 
-  const isDeptAdmin  = isAdmin && !isSuperAdmin && (!!user?.organizationId || !!user?.organizationName);
+  const isDeptAdmin = isAdmin && !isSuperAdmin && (!!user?.organizationId || !!user?.organizationName);
 
   const pageTitle = isSuperAdmin
     ? 'Tüm Panolar'
@@ -30,7 +33,7 @@ export default function BoardsPage() {
   const pageSubtitle = isSuperAdmin
     ? 'Tüm departmanlara ait panoları, iş süreçlerini ve ilerlemeleri merkezi olarak yönetin.'
     : (user?.organizationName
-        ? `${user.organizationName} departmanına ait tüm projeleri, süreçleri ve işleri yönetin.`
+        ? `${user.organizationName} departmanına ve size atanmış görevlerin bulunduğu panolara buradan erişin.`
         : 'Tüm projelerinizi, süreçlerinizi ve takım işlerinizi tek bir yerden yönetin.');
 
   const { data: boards = [], isLoading, isError, refetch } = useQuery({
@@ -43,13 +46,33 @@ export default function BoardsPage() {
     queryFn:  organizationService.getAll,
   });
 
+  // Selected organization object if filtering by specific department
+  const selectedOrgObj = useMemo(() => {
+    if (selectedOrgFilter === 'ALL') return null;
+    return organizations.find((o) => o.name === selectedOrgFilter) || null;
+  }, [organizations, selectedOrgFilter]);
+
+  // Distinct departments extracted from available boards and organizations
+  const availableDepts = useMemo(() => {
+    const set = new Set<string>();
+    if (isSuperAdmin) {
+      organizations.forEach((o) => set.add(o.name));
+    }
+    boards.forEach((b) => {
+      if (b.organizationName) {
+        set.add(b.organizationName);
+      }
+    });
+    return Array.from(set);
+  }, [boards, organizations, isSuperAdmin]);
+
   // Filtered boards for view
   const filteredBoards = useMemo(() => {
-    if (!isSuperAdmin || selectedOrgFilter === 'ALL') {
+    if (selectedOrgFilter === 'ALL') {
       return boards;
     }
     return boards.filter((b) => b.organizationName === selectedOrgFilter);
-  }, [boards, isSuperAdmin, selectedOrgFilter]);
+  }, [boards, selectedOrgFilter]);
 
   const handleDelete = async (e: React.MouseEvent, board: BoardResponse) => {
     e.preventDefault();
@@ -67,6 +90,28 @@ export default function BoardsPage() {
       setDeleting(null);
     }
   };
+
+  const handleDeleteOrg = async (org: OrganizationDto) => {
+    if (!confirm(`Bu departmanı (${org.name}) ve departmana ait tüm panoları silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
+      return;
+    }
+
+    setDeletingOrg(true);
+    try {
+      await organizationService.delete(org.id);
+      setSelectedOrgFilter('ALL');
+      await queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      await queryClient.invalidateQueries({ queryKey: ['boards'] });
+      toast.success(`"${org.name}" departmanı başarıyla silindi.`);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Departman silinirken bir hata oluştu.';
+      toast.error(msg);
+    } finally {
+      setDeletingOrg(false);
+    }
+  };
+
+  const showFilterBar = !isLoading && (isSuperAdmin || availableDepts.length > 1);
 
   return (
     <div className="min-h-screen bg-slate-50/70">
@@ -127,8 +172,8 @@ export default function BoardsPage() {
           </div>
         </div>
 
-        {/* ── Super Admin Department Filter Bar ───────────────────── */}
-        {isSuperAdmin && !isLoading && (
+        {/* ── Department Filter Bar (Super Admin or Cross-Department Access) ── */}
+        {showFilterBar && (
           <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 flex-wrap sm:flex-nowrap">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">
               Departman:
@@ -136,7 +181,7 @@ export default function BoardsPage() {
             <button
               type="button"
               onClick={() => setSelectedOrgFilter('ALL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
                 selectedOrgFilter === 'ALL'
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
@@ -144,34 +189,72 @@ export default function BoardsPage() {
             >
               Tümü ({boards.length})
             </button>
-            {organizations.map((org) => {
-              const count = boards.filter((b) => b.organizationId === org.id || b.organizationName === org.name).length;
+
+            {availableDepts.map((deptName) => {
+              const count = boards.filter((b) => b.organizationName === deptName).length;
+              const isSelected = selectedOrgFilter === deptName;
+
               return (
-                <button
-                  key={org.id}
-                  type="button"
-                  onClick={() => setSelectedOrgFilter(org.name)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    selectedOrgFilter === org.name
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
-                  }`}
-                >
-                  {org.name} ({count})
-                </button>
+                <div key={deptName} className="inline-flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrgFilter(deptName)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                    }`}
+                  >
+                    {deptName} ({count})
+                  </button>
+
+                  {/* Super Admin Actions when this department is selected */}
+                  {isSuperAdmin && isSelected && selectedOrgObj && (
+                    <div className="inline-flex items-center gap-1.5 animate-fade-in">
+                      {/* Manage Members button */}
+                      <button
+                        type="button"
+                        onClick={() => setManageMembersModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 border border-blue-300 transition-all shadow-xs"
+                        title={`${deptName} departmanı üyelerini yönet ve yeni üye ekle`}
+                      >
+                        <UserIcon className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Üyeleri Yönet / Ekle</span>
+                      </button>
+
+                      {/* Delete Department button */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteOrg(selectedOrgObj)}
+                        disabled={deletingOrg}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all shadow-xs"
+                        title={`${deptName} departmanını sil`}
+                      >
+                        {deletingOrg ? (
+                          <span className="w-3.5 h-3.5 border-2 border-rose-400 border-t-rose-600 rounded-full animate-spin block" />
+                        ) : (
+                          <TrashIcon className="w-3.5 h-3.5 text-rose-600" />
+                        )}
+                        <span>Departmanı Sil</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })}
 
-            {/* Quick + Yeni Departman button in filter bar */}
-            <button
-              type="button"
-              onClick={() => setCreateOrgModalOpen(true)}
-              className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 transition-all shadow-xs"
-              title="Yeni Departman Tanımla"
-            >
-              <PlusIcon className="w-3.5 h-3.5" />
-              <span>Yeni Departman</span>
-            </button>
+            {/* Quick + Yeni Departman button in filter bar for Super Admin */}
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => setCreateOrgModalOpen(true)}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 transition-all shadow-xs shrink-0"
+                title="Yeni Departman Tanımla"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                <span>Yeni Departman</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -239,6 +322,7 @@ export default function BoardsPage() {
             {filteredBoards.map((board) => {
               const totalTasks = board.columns?.reduce((sum, col) => sum + (col.tasks?.length || 0), 0) ?? 0;
               const columnCount = board.columns?.length ?? 0;
+              const isGuestBoard = !!(user?.organizationName && board.organizationName && board.organizationName !== user.organizationName);
 
               return (
                 <Link
@@ -257,16 +341,25 @@ export default function BoardsPage() {
                           </svg>
                         </div>
 
-                        {/* Organization Badge (Super Admin or Multi-team view) */}
+                        {/* Organization Badge (Super Admin or Guest assigned board view) */}
                         {board.organizationName && (
-                          <span className="inline-flex items-center font-medium text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/80">
+                          <span
+                            className={`inline-flex items-center font-semibold text-[11px] px-2 py-0.5 rounded-md border ${
+                              isGuestBoard
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-200/80'
+                            }`}
+                          >
                             {board.organizationName}
+                            {isGuestBoard && (
+                              <span className="ml-1 text-[10px] text-amber-600 font-normal">(Atanmış)</span>
+                            )}
                           </span>
                         )}
                       </div>
 
-                      {/* Delete Button (Only for Super Admin & Department Admin) */}
-                      {isAdmin && (
+                      {/* Delete Button (Only for Super Admin & Department Admin of own board) */}
+                      {isAdmin && (!user?.organizationName || board.organizationName === user.organizationName || isSuperAdmin) && (
                         <button
                           type="button"
                           onClick={(e) => handleDelete(e, board)}
@@ -319,25 +412,35 @@ export default function BoardsPage() {
             })}
           </div>
         )}
-
       </main>
 
+      {/* ── Modals ──────────────────────────────────────────────── */}
       <CreateBoardModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onBoardCreated={() => queryClient.invalidateQueries({ queryKey: ['boards'] })}
+        defaultDepartmentName={selectedOrgFilter !== 'ALL' ? selectedOrgFilter : undefined}
       />
 
-      {isSuperAdmin && (
-        <CreateOrganizationModal
-          isOpen={createOrgModalOpen}
-          onClose={() => setCreateOrgModalOpen(false)}
-          onOrganizationCreated={() => {
-            queryClient.invalidateQueries({ queryKey: ['organizations'] });
-            queryClient.invalidateQueries({ queryKey: ['boards'] });
-          }}
-        />
-      )}
+      <CreateOrganizationModal
+        isOpen={createOrgModalOpen}
+        onClose={() => setCreateOrgModalOpen(false)}
+        onOrganizationCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['organizations'] });
+          queryClient.invalidateQueries({ queryKey: ['boards'] });
+        }}
+      />
+
+      {/* Manage Department Members Modal */}
+      <ManageDepartmentMembersModal
+        isOpen={manageMembersModalOpen}
+        onClose={() => setManageMembersModalOpen(false)}
+        organization={selectedOrgObj}
+        onMembersChanged={() => {
+          queryClient.invalidateQueries({ queryKey: ['organizations'] });
+          queryClient.invalidateQueries({ queryKey: ['boards'] });
+        }}
+      />
     </div>
   );
 }

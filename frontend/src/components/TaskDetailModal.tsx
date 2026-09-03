@@ -836,7 +836,7 @@ export default function TaskDetailModal({
                   <option value="">Seçiniz / Atanmamış</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.username}>
-                      {u.username} ({u.email})
+                      {u.username} {u.organizationName ? `(${u.organizationName})` : '(Genel)'}
                     </option>
                   ))}
                   {assignee && !users.some((u) => u.username === assignee) && (

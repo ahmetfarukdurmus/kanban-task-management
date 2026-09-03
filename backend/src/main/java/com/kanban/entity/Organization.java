@@ -1,13 +1,17 @@
 package com.kanban.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * Multi-tenant organization / team entity.
+ * Multi-tenant organization / department entity.
  * Users and Boards belong to an Organization.
+ * Users can have ManyToMany memberships with Organizations.
  */
 @Entity
 @Table(name = "organizations", uniqueConstraints = {
@@ -34,4 +38,10 @@ public class Organization {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
+
+    /** Members belonging to this organization. */
+    @JsonIgnore
+    @ManyToMany(mappedBy = "organizations", fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<User> members = new HashSet<>();
 }

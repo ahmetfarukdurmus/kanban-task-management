@@ -6,9 +6,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { organizationService } from '@/services/organizationService';
 
 interface Props {
-  isOpen:         boolean;
-  onClose:        () => void;
-  onBoardCreated: () => void;
+  isOpen:                 boolean;
+  onClose:                () => void;
+  onBoardCreated:         () => void;
+  defaultDepartmentName?: string;
 }
 
 const TEMPLATES: {
@@ -37,9 +38,13 @@ const TEMPLATES: {
   },
 ];
 
-export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Props) {
-  const { user, isAdmin } = useAuth();
-  const isSuperAdmin = isAdmin && !user?.organizationId && !user?.organizationName;
+export default function CreateBoardModal({
+  isOpen,
+  onClose,
+  onBoardCreated,
+  defaultDepartmentName,
+}: Props) {
+  const { user, isSuperAdmin } = useAuth();
 
   const [form, setForm]                   = useState<BoardRequest>({
     name: '',
@@ -68,14 +73,18 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
           .then((orgs) => {
             setOrganizations(orgs);
             if (orgs.length > 0) {
-              setForm((prev) => ({ ...prev, organizationId: orgs[0].id }));
+              const matchingOrg = defaultDepartmentName
+                ? orgs.find((o) => o.name.toLowerCase() === defaultDepartmentName.toLowerCase())
+                : null;
+              const initialOrgId = matchingOrg ? matchingOrg.id : orgs[0].id;
+              setForm((prev) => ({ ...prev, organizationId: initialOrgId }));
             }
           })
           .catch(() => { /* fallback */ })
           .finally(() => setLoadingOrgs(false));
       }
     }
-  }, [isOpen, isSuperAdmin]);
+  }, [isOpen, isSuperAdmin, defaultDepartmentName]);
 
   if (!isOpen) return null;
 
@@ -86,18 +95,20 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
     if (!form.name.trim()) return;
     setLoading(true);
     try {
-      await boardApi.create({
+      const payload: BoardRequest = {
         name:           form.name.trim(),
-        description:    form.description?.trim(),
-        organizationId: isSuperAdmin ? form.organizationId : undefined,
+        description:    form.description?.trim() || undefined,
+        organizationId: isSuperAdmin ? form.organizationId : (user?.organizationId ? user.organizationId : undefined),
         boardType:      form.boardType || 'STANDARD',
-      });
+      };
+      await boardApi.create(payload);
       onBoardCreated();
       toast.success('Yeni pano başarıyla oluşturuldu.');
       setForm({ name: '', description: '', organizationId: undefined, boardType: 'STANDARD' });
       onClose();
-    } catch {
-      toast.error('Pano oluşturulamadı.');
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Pano oluşturulamadı.';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -135,7 +146,10 @@ export default function CreateBoardModal({ isOpen, onClose, onBoardCreated }: Pr
                 id="board-org"
                 disabled={loadingOrgs}
                 value={form.organizationId ?? ''}
-                onChange={(e) => setForm({ ...form, organizationId: Number(e.target.value) })}
+                onChange={(e) => {
+                  const selectedId = Number(e.target.value);
+                  setForm((prev) => ({ ...prev, organizationId: selectedId }));
+                }}
                 className="field font-semibold text-slate-800"
                 required
               >

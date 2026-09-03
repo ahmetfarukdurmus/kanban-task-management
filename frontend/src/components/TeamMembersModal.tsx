@@ -44,14 +44,14 @@ export default function TeamMembersModal({
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
 
   // Assign members panel state (for Super Admin)
-  const [showAssignPanel, setShowAssignPanel]       = useState(false);
-  const [targetOrgId, setTargetOrgId]               = useState<number | null>(null);
+  const [showAssignPanel, setShowAssignPanel]             = useState(false);
+  const [targetOrgId, setTargetOrgId]                     = useState<number | null>(null);
   const [selectedAssignUserIds, setSelectedAssignUserIds] = useState<number[]>([]);
-  const [assignSearch, setAssignSearch]             = useState('');
-  const [organizations, setOrganizations]           = useState<OrganizationDto[]>([]);
-  const [assigning, setAssigning]                   = useState(false);
+  const [assignSearch, setAssignSearch]                   = useState('');
+  const [organizations, setOrganizations]                 = useState<OrganizationDto[]>([]);
+  const [assigning, setAssigning]                         = useState(false);
 
-  // Load organizations when Super Admin opens modal
+  // Load organizations when Super Admin opens dropdown
   useEffect(() => {
     if (isOpen && isSuperAdmin) {
       organizationService
@@ -66,11 +66,13 @@ export default function TeamMembersModal({
     }
   }, [isOpen, isSuperAdmin]);
 
-  // Extract distinct departments from users list
+  // Extract distinct departments from users list (supporting ManyToMany)
   const departments = useMemo(() => {
     const set = new Set<string>();
     users.forEach((u) => {
-      if (u.organizationName) {
+      if (u.organizationNames && u.organizationNames.length > 0) {
+        u.organizationNames.forEach((name) => set.add(name));
+      } else if (u.organizationName) {
         set.add(u.organizationName);
       }
     });
@@ -86,10 +88,15 @@ export default function TeamMembersModal({
         u.username.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q);
 
+      const userOrgs =
+        u.organizationNames && u.organizationNames.length > 0
+          ? u.organizationNames
+          : (u.organizationName ? [u.organizationName] : []);
+
       const matchDept =
         selectedDept === 'ALL' ||
-        (selectedDept === 'UNASSIGNED' && !u.organizationName) ||
-        u.organizationName === selectedDept;
+        (selectedDept === 'UNASSIGNED' && userOrgs.length === 0) ||
+        userOrgs.includes(selectedDept);
 
       return matchSearch && matchDept;
     });
@@ -136,7 +143,7 @@ export default function TeamMembersModal({
 
     setAssigning(true);
     try {
-      await organizationService.assignMembers(targetOrgId, selectedAssignUserIds);
+      await organizationService.addExistingMembers(targetOrgId, selectedAssignUserIds);
       toast.success(`${selectedAssignUserIds.length} kullanıcı "${targetOrgName}" departmanına atandı.`);
       setShowAssignPanel(false);
       setSelectedAssignUserIds([]);
@@ -152,55 +159,54 @@ export default function TeamMembersModal({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <>
+      {/* Invisible backdrop for outside click to close */}
+      <div className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" onClick={onClose} />
+
+      {/* ── Dropdown Popover Panel ────────────────────────────────────── */}
       <div
-        className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/90 flex flex-col my-8 animate-scale-in max-h-[85vh] overflow-hidden"
+        className="absolute right-0 top-full mt-2 z-50 w-[440px] sm:w-[540px] max-w-[92vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 flex flex-col max-h-[480px] sm:max-h-[520px] overflow-hidden animate-scale-in origin-top-right text-left"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Modal Header ─────────────────────────────────────────── */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-200 shadow-xs">
-              <UserIcon className="w-5 h-5" />
+        {/* ── Fixed Header ─────────────────────────────────────────── */}
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-200 shadow-xs">
+              <UserIcon className="w-4 h-4" />
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900">Ekip Üyeleri</h2>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                <h2 className="text-sm font-bold text-slate-900">Aktif Ekip Üyeleri</h2>
+                <span className="inline-flex items-center px-2 py-0.2 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                   {users.length} Kişi
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">Sistemdeki aktif kullanıcılar ve roller</p>
+              <p className="text-[11px] text-slate-500 font-medium">Sistemdeki aktif kullanıcılar ve roller</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {/* Super Admin: + Departmana Üye Ekle button */}
             {isSuperAdmin && (
               <button
                 type="button"
                 onClick={() => setShowAssignPanel(!showAssignPanel)}
-                className={`btn-secondary py-1.5 px-3 text-xs gap-1.5 font-semibold transition-all ${
+                className={`btn-secondary py-1 px-2.5 text-[11px] gap-1 font-semibold transition-all ${
                   showAssignPanel ? 'bg-blue-50 border-blue-300 text-blue-700' : 'text-slate-700'
                 }`}
                 title="Departmana toplu kullanıcı ata"
               >
-                <PlusIcon className="w-3.5 h-3.5 text-blue-600" />
-                <span>Departmana Üye Ekle</span>
+                <PlusIcon className="w-3 h-3 text-blue-600" />
+                <span>Üye Ekle</span>
               </button>
             )}
 
             <button
               onClick={onClose}
-              className="btn-ghost p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
+              className="btn-ghost p-1 text-slate-400 hover:text-slate-700 rounded-lg"
               aria-label="Kapat"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -210,28 +216,28 @@ export default function TeamMembersModal({
 
         {/* ── Super Admin: Assign Members to Department Panel ──────── */}
         {isSuperAdmin && showAssignPanel && (
-          <form onSubmit={handleAssignSubmit} className="p-4 bg-blue-50/50 border-b border-blue-200/80 space-y-3 animate-fade-in">
+          <form onSubmit={handleAssignSubmit} className="p-3.5 bg-blue-50/60 border-b border-blue-200/80 space-y-2.5 shrink-0 animate-fade-in">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-900">Departmana Üye Ata (Toplu)</span>
               <button
                 type="button"
                 onClick={() => setShowAssignPanel(false)}
-                className="text-xs text-slate-400 hover:text-slate-600 font-semibold"
+                className="text-[11px] text-slate-400 hover:text-slate-600 font-semibold"
               >
                 ✕ Kapat
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
               {/* Department selector */}
               <div className="sm:col-span-5">
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Hedef Departman
                 </label>
                 <select
                   value={targetOrgId || ''}
                   onChange={(e) => setTargetOrgId(Number(e.target.value))}
-                  className="field w-full text-xs font-semibold bg-white"
+                  className="field w-full text-xs font-semibold bg-white py-1.5"
                   required
                 >
                   {organizations.map((org) => (
@@ -245,10 +251,10 @@ export default function TeamMembersModal({
               {/* User search */}
               <div className="sm:col-span-7">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                    Atanacak Kullanıcılar ({selectedAssignUserIds.length} seçildi)
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    Kullanıcılar ({selectedAssignUserIds.length} seçildi)
                   </label>
-                  <div className="flex items-center gap-1.5 text-[11px]">
+                  <div className="flex items-center gap-1.5 text-[10px]">
                     <button
                       type="button"
                       onClick={handleSelectAllAssign}
@@ -273,20 +279,20 @@ export default function TeamMembersModal({
                     placeholder="Kullanıcı ara..."
                     value={assignSearch}
                     onChange={(e) => setAssignSearch(e.target.value)}
-                    className="field pl-8 text-xs w-full py-1.5 bg-white"
+                    className="field pl-8 text-xs w-full py-1 bg-white"
                   />
                 </div>
               </div>
             </div>
 
             {/* Checkbox list of users */}
-            <div className="max-h-36 overflow-y-auto space-y-1 p-2 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+            <div className="max-h-28 overflow-y-auto space-y-1 p-2 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
               {filteredUsersForAssign.map((u) => {
                 const isChecked = selectedAssignUserIds.includes(u.id);
                 return (
                   <label
                     key={u.id}
-                    className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                    className={`flex items-center justify-between p-1 rounded-md border text-xs cursor-pointer transition-all ${
                       isChecked
                         ? 'bg-blue-50/80 border-blue-200 text-blue-900 font-semibold'
                         : 'bg-white border-transparent text-slate-700 hover:bg-slate-50'
@@ -299,15 +305,25 @@ export default function TeamMembersModal({
                         onChange={() => handleToggleAssignUser(u.id)}
                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="truncate">{u.username}</span>
-                      <span className="text-[11px] text-slate-400 truncate">({u.email})</span>
+                      <span className="truncate text-xs">{u.username}</span>
+                      <span className="text-[10px] text-slate-400 truncate">({u.email})</span>
                     </div>
-                    {u.organizationName ? (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+
+                    {/* Department pill */}
+                    {u.organizationNames && u.organizationNames.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {u.organizationNames.map((orgName, idx) => (
+                          <span key={idx} className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                            {orgName}
+                          </span>
+                        ))}
+                      </div>
+                    ) : u.organizationName ? (
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
                         {u.organizationName}
                       </span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
                         Departmansız
                       </span>
                     )}
@@ -316,42 +332,42 @@ export default function TeamMembersModal({
               })}
             </div>
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex justify-end gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={() => setShowAssignPanel(false)}
-                className="btn-ghost py-1 px-3 text-xs font-semibold"
+                className="btn-ghost py-1 px-2.5 text-xs font-semibold"
               >
                 İptal
               </button>
               <button
                 type="submit"
                 disabled={assigning || selectedAssignUserIds.length === 0}
-                className="btn-primary py-1.5 px-4 text-xs font-semibold gap-1.5 shadow-xs"
+                className="btn-primary py-1 px-3 text-xs font-semibold gap-1 shadow-xs"
               >
-                {assigning ? 'Atanıyor…' : `Seçilen ${selectedAssignUserIds.length} Kullanıcıyı Ata`}
+                {assigning ? 'Atanıyor…' : `Seçilen ${selectedAssignUserIds.length} Kişiyi Ata`}
               </button>
             </div>
           </form>
         )}
 
-        {/* ── Search & Filter Bar ──────────────────────────────────── */}
-        <div className="px-6 py-3.5 border-b border-slate-100 space-y-3 bg-white">
+        {/* ── Fixed Search & Filter Bar ────────────────────────────── */}
+        <div className="px-5 py-2.5 border-b border-slate-100 space-y-2.5 bg-white shrink-0">
           {/* Search input */}
           <div className="relative">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
               placeholder="Kullanıcı adı veya e-posta ile ara..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="field pl-9.5 text-xs w-full py-2 bg-slate-50/50 focus:bg-white"
+              className="field pl-8.5 text-xs w-full py-1.5 bg-slate-50/50 focus:bg-white"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
               >
                 ✕
               </button>
@@ -359,11 +375,11 @@ export default function TeamMembersModal({
           </div>
 
           {/* Department filter pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
+          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-xs">
             <button
               type="button"
               onClick={() => setSelectedDept('ALL')}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-all shrink-0 ${
+              className={`px-2 py-0.5 rounded-md font-semibold transition-all shrink-0 text-xs ${
                 selectedDept === 'ALL'
                   ? 'bg-blue-600 text-white shadow-2xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -372,13 +388,19 @@ export default function TeamMembersModal({
               Tümü ({users.length})
             </button>
             {departments.map((dept) => {
-              const count = users.filter((u) => u.organizationName === dept).length;
+              const count = users.filter((u) => {
+                const orgs = u.organizationNames && u.organizationNames.length > 0
+                  ? u.organizationNames
+                  : (u.organizationName ? [u.organizationName] : []);
+                return orgs.includes(dept);
+              }).length;
+
               return (
                 <button
                   key={dept}
                   type="button"
                   onClick={() => setSelectedDept(dept)}
-                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all shrink-0 ${
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all shrink-0 text-xs ${
                     selectedDept === dept
                       ? 'bg-blue-600 text-white shadow-2xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -391,74 +413,83 @@ export default function TeamMembersModal({
           </div>
         </div>
 
-        {/* ── Members List ─────────────────────────────────────────── */}
-        <div className="p-6 overflow-y-auto space-y-2.5 max-h-[50vh]">
+        {/* ── Scrollable Members List ──────────────────────────────── */}
+        <div className="p-4 overflow-y-auto space-y-2 flex-1 min-h-0">
           {filteredUsers.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-              <UserIcon className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+            <div className="text-center py-8 text-slate-400">
+              <UserIcon className="w-7 h-7 mx-auto mb-1.5 text-slate-300" />
               <p className="text-xs font-semibold text-slate-600">Ekip üyesi bulunamadı</p>
               <p className="text-[11px] text-slate-400 mt-0.5">Arama kriterlerinizi değiştirmeyi deneyin.</p>
             </div>
           ) : (
             filteredUsers.map((u) => {
               const avatar = getAvatarColor(u.username);
-              const isSuper = u.role === 'ROLE_SUPER_ADMIN' || (u.role === 'ROLE_ADMIN' && !u.organizationId);
+              const isSuper = u.role === 'ROLE_SUPER_ADMIN' || (u.role === 'ROLE_ADMIN' && (!u.organizationIds || u.organizationIds.length === 0));
               const isDeptAdmin = u.role === 'ROLE_ADMIN' && !isSuper;
 
               return (
                 <div
                   key={u.id}
-                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-xs transition-all gap-3"
+                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-xs transition-all gap-2.5"
                 >
                   {/* Left: Avatar & Info */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative shrink-0">
-                      <span
-                        className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold ring-2 ring-white shadow-xs ${avatar.bg} ${avatar.text}`}
-                      >
-                        {u.username.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-2 ring-white shadow-xs ${avatar.bg} ${avatar.text}`}
+                    >
+                      {u.username.charAt(0).toUpperCase()}
+                    </span>
 
                     <div className="min-w-0">
-                      <span className="font-bold text-sm text-slate-900 truncate block">
+                      <span className="font-bold text-xs text-slate-900 truncate block">
                         {u.username}
                       </span>
-                      <p className="text-xs text-slate-500 truncate">{u.email}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
                     </div>
                   </div>
 
-                  {/* Right: Badges & Department */}
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                    {/* Organization / Department Badge */}
-                    {u.organizationName ? (
-                      <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200/80">
+                  {/* Right: Badges & Multi-department Pills */}
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    {/* Multi-department Badges */}
+                    {u.organizationNames && u.organizationNames.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 items-center justify-end">
+                        {u.organizationNames.map((orgName, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/90"
+                          >
+                            {orgName}
+                          </span>
+                        ))}
+                      </div>
+                    ) : u.organizationName ? (
+                      <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/90">
                         {u.organizationName}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200/80">
-                        Tüm Şirket
+                      <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200">
+                        Departmansız
                       </span>
                     )}
 
                     {/* Role Badge */}
                     {isSuper ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-900 text-white shadow-2xs">
+                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-900 text-white shadow-2xs">
                         Super Admin
                       </span>
                     ) : isDeptAdmin ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                         Yönetici
                       </span>
                     ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                         Kullanıcı
                       </span>
                     )}
 
                     {/* Date info if available */}
                     {u.createdAt && (
-                      <span className="hidden md:inline-block text-[11px] text-slate-400 font-medium">
+                      <span className="hidden sm:inline-block text-[10px] text-slate-400 font-medium">
                         {format(parseISO(u.createdAt), 'd MMM yyyy', { locale: tr })}
                       </span>
                     )}
@@ -469,18 +500,18 @@ export default function TeamMembersModal({
           )}
         </div>
 
-        {/* ── Modal Footer ─────────────────────────────────────────── */}
-        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500">
-          <span>Toplam {filteredUsers.length} kişi gösteriliyor</span>
+        {/* ── Fixed Footer ─────────────────────────────────────────── */}
+        <div className="px-5 py-2.5 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between text-xs text-slate-500 shrink-0">
+          <span className="text-[11px]">Toplam {filteredUsers.length} kişi gösteriliyor</span>
           <button
             type="button"
             onClick={onClose}
-            className="btn-secondary py-1.5 px-4 text-xs font-semibold"
+            className="btn-secondary py-1 px-3 text-xs font-semibold"
           >
             Kapat
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }

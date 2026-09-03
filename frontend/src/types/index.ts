@@ -65,6 +65,13 @@ export interface AssignMembersRequest {
   userIds: number[];
 }
 
+export interface CreateNewMemberRequest {
+  username: string;
+  email?: string;
+  password?: string;
+  role?: string;
+}
+
 /* ── Board ─────────────────────────────────────────────────────────── */
 export type BoardType = 'STANDARD' | 'INTEGRATION' | 'QA_TEST';
 
@@ -113,7 +120,7 @@ export interface CustomFieldDto {
   fieldValue: string;
 }
 
-/* ── Task ──────────────────────────────────────────────────────────── */
+/* ── Task ──────────────────────────────────────────────────── */
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface TaskRequest {
@@ -150,6 +157,8 @@ export interface UserSummary {
   role?: string;
   organizationId?: number | null;
   organizationName?: string | null;
+  organizationIds?: number[];
+  organizationNames?: string[];
   createdAt?: string;
 }
 

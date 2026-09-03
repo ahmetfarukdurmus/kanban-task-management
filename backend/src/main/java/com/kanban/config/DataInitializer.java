@@ -13,10 +13,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 
 /**
  * Seeds the database on startup with default departments and user accounts.
  * Always hashes passwords with BCrypt PasswordEncoder on creation and update.
+ * Supports ManyToMany organization memberships.
  */
 @Slf4j
 @Component
@@ -55,7 +57,7 @@ public class DataInitializer implements CommandLineRunner {
         // Ensure legacy admin account is Super Admin with encoded password
         userRepository.findByUsername("admin").ifPresent(adminUser -> {
             adminUser.setRole(Role.ROLE_SUPER_ADMIN);
-            adminUser.setOrganization(null);
+            adminUser.getOrganizations().clear();
             adminUser.setPassword(passwordEncoder.encode("admin123"));
             userRepository.save(adminUser);
         });
@@ -74,14 +76,25 @@ public class DataInitializer implements CommandLineRunner {
             existing.setEmail(email);
             existing.setPassword(passwordEncoder.encode(rawPassword));
             existing.setRole(role);
-            existing.setOrganization(org);
+            if (org != null) {
+                if (existing.getOrganizations() == null) {
+                    existing.setOrganizations(new HashSet<>());
+                }
+                existing.getOrganizations().add(org);
+            }
             return userRepository.save(existing);
-        }).orElseGet(() -> userRepository.save(User.builder()
-                .username(username)
-                .email(email)
-                .password(passwordEncoder.encode(rawPassword))
-                .role(role)
-                .organization(org)
-                .build()));
+        }).orElseGet(() -> {
+            User newUser = User.builder()
+                    .username(username)
+                    .email(email)
+                    .password(passwordEncoder.encode(rawPassword))
+                    .role(role)
+                    .organizations(new HashSet<>())
+                    .build();
+            if (org != null) {
+                newUser.getOrganizations().add(org);
+            }
+            return userRepository.save(newUser);
+        });
     }
 }

@@ -18,16 +18,20 @@ import com.kanban.repository.BoardRepository;
 import com.kanban.repository.OrganizationRepository;
 import com.kanban.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Business logic for Board CRUD supporting Super Admin, Department Admin, and Department Member,
- * along with pre-configured template columns.
+ * along with pre-configured template columns and cross-department task visibility.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -51,15 +55,15 @@ public class BoardService {
     private final SecurityUtils          securityUtils;
 
     private boolean isSuperAdmin(User user) {
-        return user.getRole() == Role.ROLE_SUPER_ADMIN || (user.getRole() == Role.ROLE_ADMIN && user.getOrganization() == null);
+        return user.getRole() == Role.ROLE_SUPER_ADMIN || (user.getRole() == Role.ROLE_ADMIN && (user.getOrganizations() == null || user.getOrganizations().isEmpty()));
     }
 
     // ── Queries ──────────────────────────────────────────────────────────────
 
     /**
-     * Returns boards based on caller's role and organization:
-     * - Super Admin (ROLE_SUPER_ADMIN or ROLE_ADMIN with null org): ALL boards across all departments.
-     * - Department Admin / Member (org != null): ONLY boards in their own department.
+     * Returns boards based on caller's role, organizations (ManyToMany), and cross-department task assignments:
+     * - Super Admin: ALL boards across all departments.
+     * - Department Users: Boards in all their departments + any board from other departments where they have assigned tasks.
      */
     @Transactional(readOnly = true)
     public List<BoardResponse> getAllBoards() {
@@ -70,11 +74,14 @@ public class BoardService {
         if (superAdmin) {
             boards = boardRepository.findAllByOrderByCreatedAtDesc();
         } else {
-            Long orgId = currentUser.getOrganization() != null ? currentUser.getOrganization().getId() : null;
-            if (orgId != null) {
-                boards = boardRepository.findAllByOrganizationIdOrderByCreatedAtDesc(orgId);
+            Set<Long> orgIds = currentUser.getOrganizations() != null
+                    ? currentUser.getOrganizations().stream().map(Organization::getId).collect(Collectors.toSet())
+                    : Set.of();
+
+            if (orgIds.isEmpty()) {
+                boards = boardRepository.findAccessibleBoardsForUser(List.of(-1L), currentUser.getId(), currentUser.getUsername());
             } else {
-                boards = boardRepository.findAllByOrderByCreatedAtDesc();
+                boards = boardRepository.findAccessibleBoardsForUser(orgIds, currentUser.getId(), currentUser.getUsername());
             }
         }
 
@@ -85,7 +92,7 @@ public class BoardService {
 
     /**
      * Returns a single board with all its columns and tasks.
-     * Super Admin can access any board; Department users can only access their department's board.
+     * Accessible if Super Admin, belongs to board's department, OR user has an assigned task on that board.
      *
      * @param id board identifier
      * @throws ResourceNotFoundException if board not found or unauthorized
@@ -98,10 +105,23 @@ public class BoardService {
         Board board = boardRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Board", id));
 
-        // Department isolation check
+        // Department & assigned task visibility check
         if (!superAdmin) {
-            Long orgId = currentUser.getOrganization() != null ? currentUser.getOrganization().getId() : null;
-            if (orgId != null && board.getOrganization() != null && !board.getOrganization().getId().equals(orgId)) {
+            Set<Long> orgIds = currentUser.getOrganizations() != null
+                    ? currentUser.getOrganizations().stream().map(Organization::getId).collect(Collectors.toSet())
+                    : Set.of();
+
+            boolean isOwnOrg = board.getOrganization() != null && orgIds.contains(board.getOrganization().getId());
+
+            boolean hasAssignedTask = false;
+            if (board.getColumns() != null) {
+                hasAssignedTask = board.getColumns().stream()
+                        .flatMap(c -> c.getTasks() != null ? c.getTasks().stream() : java.util.stream.Stream.empty())
+                        .anyMatch(t -> (t.getAssignedUser() != null && t.getAssignedUser().getId().equals(currentUser.getId()))
+                                || (t.getAssignee() != null && t.getAssignee().equalsIgnoreCase(currentUser.getUsername())));
+            }
+
+            if (!isOwnOrg && !hasAssignedTask) {
                 throw ResourceNotFoundException.of("Board", id);
             }
         }
@@ -113,8 +133,8 @@ public class BoardService {
 
     /**
      * Creates a new board and auto-generates columns based on selected template:
-     * - Super Admin: assigns board to the selected department (organizationId in request).
-     * - Department Admin: assigns board automatically to their own department.
+     * - If organizationId provided in request, assigns directly to that department.
+     * - Otherwise defaults to caller's primary department.
      *
      * @param request validated board payload
      * @return the persisted board (with default columns)
@@ -123,16 +143,17 @@ public class BoardService {
         User currentUser = securityUtils.getCurrentUser();
         boolean superAdmin = isSuperAdmin(currentUser);
 
-        Organization targetOrg;
-        if (superAdmin) {
-            if (request.organizationId() != null) {
-                targetOrg = organizationRepository.findById(request.organizationId())
-                        .orElseGet(() -> organizationRepository.findAll().stream().findFirst().orElse(null));
-            } else {
-                targetOrg = organizationRepository.findAll().stream().findFirst().orElse(null);
-            }
-        } else {
-            targetOrg = currentUser.getOrganization();
+        Organization targetOrg = null;
+        if (request.organizationId() != null) {
+            targetOrg = organizationRepository.findById(request.organizationId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Seçilen departman bulunamadı: ID " + request.organizationId()));
+            log.info("Creating board '{}' assigned to selected organization ID: {}", request.name(), request.organizationId());
+        } else if (currentUser.getOrganizations() != null && !currentUser.getOrganizations().isEmpty()) {
+            targetOrg = currentUser.getOrganizations().iterator().next();
+            log.info("Creating board '{}' assigned to current user's primary organization: {}", request.name(), targetOrg.getName());
+        } else if (superAdmin) {
+            targetOrg = organizationRepository.findAllByOrderByNameAsc().stream().findFirst().orElse(null);
+            log.info("Creating board '{}' assigned to default fallback organization", request.name());
         }
 
         BoardType type = request.boardType() != null ? request.boardType() : BoardType.STANDARD;
@@ -182,8 +203,10 @@ public class BoardService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Board", id));
 
         if (!superAdmin) {
-            Long orgId = currentUser.getOrganization() != null ? currentUser.getOrganization().getId() : null;
-            if (orgId != null && board.getOrganization() != null && !board.getOrganization().getId().equals(orgId)) {
+            Set<Long> orgIds = currentUser.getOrganizations() != null
+                    ? currentUser.getOrganizations().stream().map(Organization::getId).collect(Collectors.toSet())
+                    : Set.of();
+            if (board.getOrganization() != null && !orgIds.contains(board.getOrganization().getId())) {
                 throw ResourceNotFoundException.of("Board", id);
             }
         }
@@ -199,7 +222,7 @@ public class BoardService {
     /**
      * Permanently deletes a board (Admin only):
      * - Super Admin can delete any board.
-     * - Department Admin can only delete boards in their own department.
+     * - Department Admin can only delete boards belonging to their department.
      */
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public void deleteBoard(Long id) {
@@ -210,8 +233,10 @@ public class BoardService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Board", id));
 
         if (!superAdmin) {
-            Long orgId = currentUser.getOrganization() != null ? currentUser.getOrganization().getId() : null;
-            if (orgId != null && board.getOrganization() != null && !board.getOrganization().getId().equals(orgId)) {
+            Set<Long> orgIds = currentUser.getOrganizations() != null
+                    ? currentUser.getOrganizations().stream().map(Organization::getId).collect(Collectors.toSet())
+                    : Set.of();
+            if (board.getOrganization() != null && !orgIds.contains(board.getOrganization().getId())) {
                 throw ResourceNotFoundException.of("Board", id);
             }
         }

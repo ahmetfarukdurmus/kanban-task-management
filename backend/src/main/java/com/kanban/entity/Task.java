@@ -39,11 +39,16 @@ public class Task {
     private LocalDate dueDate;
 
     /**
-     * Free-text assignee name (phase 1).
-     * In a future phase this will become a {@code ManyToOne} to {@link User}.
+     * Free-text assignee username (e.g. "ahmet_muhasebe").
      */
     @Column(length = 100)
     private String assignee;
+
+    /** User assigned to this task (nullable, can belong to any department). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_user_id",
+                foreignKey = @ForeignKey(name = "fk_tasks_assigned_user"))
+    private User assignedUser;
 
     /**
      * Zero-based order within its {@link BoardColumn}.

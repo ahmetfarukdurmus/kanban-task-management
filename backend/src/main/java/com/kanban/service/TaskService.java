@@ -8,10 +8,13 @@ import com.kanban.entity.BoardColumn;
 import com.kanban.entity.Task;
 import com.kanban.entity.Task.Priority;
 import com.kanban.entity.TaskCustomField;
+import com.kanban.entity.TaskCustomField.FieldType;
+import com.kanban.entity.User;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.BoardColumnRepository;
 import com.kanban.repository.BoardRepository;
 import com.kanban.repository.TaskRepository;
+import com.kanban.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +23,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Business logic for Task CRUD, custom fields, in-column reordering, and cross-column moves.
+ * Business logic for Task CRUD, custom fields, in-column reordering, cross-column moves,
+ * and cross-department assignee mapping.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,7 @@ public class TaskService {
     private final TaskRepository        taskRepository;
     private final BoardColumnRepository columnRepository;
     private final BoardRepository       boardRepository;
+    private final UserRepository        userRepository;
 
     // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -65,12 +70,18 @@ public class TaskService {
 
         int nextPosition = taskRepository.countByColumnId(columnId);
 
+        User assignedUser = null;
+        if (request.assignee() != null && !request.assignee().isBlank()) {
+            assignedUser = userRepository.findByUsername(request.assignee().trim()).orElse(null);
+        }
+
         Task task = Task.builder()
                 .title(request.title())
                 .description(request.description())
                 .priority(request.priority() != null ? request.priority() : Priority.MEDIUM)
                 .dueDate(request.dueDate())
                 .assignee(request.assignee())
+                .assignedUser(assignedUser)
                 .position(nextPosition)
                 .column(column)
                 .comments(new ArrayList<>())
@@ -124,6 +135,12 @@ public class TaskService {
         }
         task.setDueDate(request.dueDate());
         task.setAssignee(request.assignee());
+
+        User assignedUser = null;
+        if (request.assignee() != null && !request.assignee().isBlank()) {
+            assignedUser = userRepository.findByUsername(request.assignee().trim()).orElse(null);
+        }
+        task.setAssignedUser(assignedUser);
 
         // Update custom fields if provided
         if (request.customFields() != null) {
@@ -200,47 +217,44 @@ public class TaskService {
             // 1. Close gap in source column
             taskRepository.shiftPositionsLeft(srcColId, srcPos, Integer.MAX_VALUE);
 
-            // 2. Clamp dst to [0, targetCount] then open slot in target column
-            int targetCount = taskRepository.countByColumnId(dstColId);
-            int clampedDst  = Math.min(dstPos, targetCount);
+            // 2. Open gap in destination column
+            taskRepository.shiftPositionsRight(dstColId, dstPos, Integer.MAX_VALUE);
 
-            taskRepository.shiftPositionsRight(dstColId, clampedDst, Integer.MAX_VALUE);
-
-            // 3. Assign task to target column at clamped position
+            // 3. Move task
             task.setColumn(targetColumn);
-            task.setPosition(clampedDst);
+            task.setPosition(dstPos);
         }
 
-        Task saved = taskRepository.save(task);
         taskRepository.flush();
-        return toResponse(saved);
+        return toResponse(task);
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     private BoardColumn requireColumn(Long boardId, Long columnId) {
-        boardRepository.findById(boardId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Board", boardId));
-
         return columnRepository.findByIdAndBoardId(columnId, boardId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Column", columnId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Column with ID " + columnId + " not found on board " + boardId));
     }
 
     private Task requireTask(Long columnId, Long taskId) {
         return taskRepository.findByIdAndColumnId(taskId, columnId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Task", taskId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Task with ID " + taskId + " not found in column " + columnId));
     }
 
-    private TaskCustomField.FieldType parseFieldType(String typeStr) {
-        if (typeStr == null) return TaskCustomField.FieldType.TEXT;
+    private FieldType parseFieldType(String typeStr) {
+        if (typeStr == null || typeStr.isBlank()) {
+            return FieldType.TEXT;
+        }
         try {
-            return TaskCustomField.FieldType.valueOf(typeStr.toUpperCase().trim());
+            return FieldType.valueOf(typeStr.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            return TaskCustomField.FieldType.TEXT;
+            return FieldType.TEXT;
         }
     }
 
-    public TaskResponse toResponse(Task task) {
+    private TaskResponse toResponse(Task task) {
         List<CustomFieldDto> fields = task.getCustomFields() != null
                 ? task.getCustomFields().stream()
                         .map(f -> new CustomFieldDto(f.getId(), f.getFieldName(), f.getFieldType().name(), f.getFieldValue()))
