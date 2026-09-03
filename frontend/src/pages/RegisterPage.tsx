@@ -35,12 +35,7 @@ export default function RegisterPage() {
             if (data.length > 0) setOrganizationId(data[0].id);
           })
           .catch(() => {
-            const defaults: OrganizationDto[] = [
-              { id: 1, name: 'Muhasebe', description: 'Mali İşler ve Muhasebe Organizasyonu' },
-              { id: 2, name: 'Uyum & Risk', description: 'Yasal Uyum ve Risk Yönetimi Organizasyonu' },
-            ];
-            setOrganizations(defaults);
-            setOrganizationId(defaults[0].id);
+            setOrganizations([]);
           });
       })
       .finally(() => setLoadingOrgs(false));
@@ -86,26 +81,31 @@ export default function RegisterPage() {
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-6 sm:p-7">
           <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* Organizasyon Seçimi */}
-            <div>
-              <label htmlFor="reg-org" className="field-label font-semibold text-slate-700">
-                Organizasyon / Ekip <span className="text-rose-500">*</span>
-              </label>
-              <select
-                id="reg-org"
-                value={organizationId ?? ''}
-                onChange={(e) => setOrganizationId(Number(e.target.value))}
-                disabled={loadingOrgs}
-                className="field font-semibold text-slate-800"
-                required
-              >
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name} {org.description ? `(${org.description})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Organizasyon Seçimi (Varsa) */}
+            {organizations.length > 0 && (
+              <div>
+                <label htmlFor="reg-org" className="field-label font-semibold text-slate-700">
+                  Organizasyon / Ekip <span className="text-slate-400 font-normal text-xs">(Opsiyonel)</span>
+                </label>
+                <select
+                  id="reg-org"
+                  value={organizationId ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setOrganizationId(val ? Number(val) : undefined);
+                  }}
+                  disabled={loadingOrgs}
+                  className="field font-semibold text-slate-800"
+                >
+                  <option value="">-- Organizasyon Seçin (Opsiyonel) --</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name} {org.description ? `(${org.description})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Kullanıcı Adı */}
             <div>

@@ -1,8 +1,8 @@
 package com.kanban.config;
 
-import com.kanban.entity.Organization;
 import com.kanban.entity.Role;
 import com.kanban.entity.User;
+import com.kanban.repository.BoardRepository;
 import com.kanban.repository.OrganizationRepository;
 import com.kanban.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,13 +12,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.List;
 
 /**
- * Seeds the database on startup with default departments and user accounts.
- * Always hashes passwords with BCrypt PasswordEncoder on creation and update.
- * Supports ManyToMany organization memberships.
+ * Initializes essential super admin accounts and cleans up legacy demo seed organizations.
  */
 @Slf4j
 @Component
@@ -27,60 +25,74 @@ public class DataInitializer implements CommandLineRunner {
 
     private final OrganizationRepository organizationRepository;
     private final UserRepository         userRepository;
+    private final BoardRepository        boardRepository;
     private final PasswordEncoder        passwordEncoder;
 
     @Override
     @Transactional
     public void run(String... args) {
-        log.info("Running DataInitializer for seed departments and accounts...");
+        log.info("Running DataInitializer for initial superadmin account...");
 
-        // 1. Seed Departments (Organizations)
-        Organization muhasebe = organizationRepository.findByName("Muhasebe")
-                .orElseGet(() -> organizationRepository.save(Organization.builder()
-                        .name("Muhasebe")
-                        .description("Mali İşler ve Muhasebe Departmanı")
-                        .createdAt(LocalDateTime.now())
-                        .build()));
+        // 1. Clean up legacy seed demo organizations if they exist
+        List.of("Muhasebe", "Uyum & Risk").forEach(orgName -> {
+            organizationRepository.findByName(orgName).ifPresent(org -> {
+                // Delete associated boards
+                var boards = boardRepository.findAllByOrganizationIdOrderByCreatedAtDesc(org.getId());
+                boardRepository.deleteAll(boards);
+                boardRepository.flush();
 
-        Organization uyumRisk = organizationRepository.findByName("Uyum & Risk")
-                .orElseGet(() -> organizationRepository.save(Organization.builder()
-                        .name("Uyum & Risk")
-                        .description("Yasal Uyum ve Risk Yönetimi Departmanı")
-                        .createdAt(LocalDateTime.now())
-                        .build()));
+                // Detach members
+                var members = userRepository.findAllByOrganizationIdOrderByUsernameAsc(org.getId());
+                for (User member : members) {
+                    member.getOrganizations().remove(org);
+                    userRepository.save(member);
+                }
+                userRepository.flush();
 
-        // 2. Seed Admins (Password: admin123)
-        seedUser("superadmin", "superadmin@kanban.local", "admin123", Role.ROLE_SUPER_ADMIN, null);
-        seedUser("muhasebe_admin", "muhasebe_admin@kanban.local", "admin123", Role.ROLE_ADMIN, muhasebe);
-        seedUser("uyum_admin", "uyum_admin@kanban.local", "admin123", Role.ROLE_ADMIN, uyumRisk);
+                organizationRepository.delete(org);
+                organizationRepository.flush();
+                log.info("Removed legacy seed organization: {}", orgName);
+            });
+        });
+
+        // 2. Clean up legacy demo users if they exist
+        List.of(
+                "muhasebe_admin",
+                "uyum_admin",
+                "ahmet_muhasebe",
+                "mehmet_muhasebe",
+                "yunus_uyum",
+                "elif_uyum"
+        ).forEach(demoUsername -> {
+            userRepository.findByUsername(demoUsername).ifPresent(user -> {
+                userRepository.delete(user);
+                log.info("Removed legacy seed demo user: {}", demoUsername);
+            });
+        });
+
+        // 3. Seed Super Admin (Password: admin123)
+        seedSuperAdmin("superadmin", "superadmin@kanban.local", "admin123");
 
         // Ensure legacy admin account is Super Admin with encoded password
         userRepository.findByUsername("admin").ifPresent(adminUser -> {
             adminUser.setRole(Role.ROLE_SUPER_ADMIN);
-            adminUser.getOrganizations().clear();
+            if (adminUser.getOrganizations() != null) {
+                adminUser.getOrganizations().clear();
+            }
             adminUser.setPassword(passwordEncoder.encode("admin123"));
             userRepository.save(adminUser);
         });
 
-        // 3. Seed Team Members (Password: user123)
-        seedUser("ahmet_muhasebe", "ahmet_muhasebe@kanban.local", "user123", Role.ROLE_USER, muhasebe);
-        seedUser("mehmet_muhasebe", "mehmet_muhasebe@kanban.local", "user123", Role.ROLE_USER, muhasebe);
-        seedUser("yunus_uyum", "yunus_uyum@kanban.local", "user123", Role.ROLE_USER, uyumRisk);
-        seedUser("elif_uyum", "elif_uyum@kanban.local", "user123", Role.ROLE_USER, uyumRisk);
-
-        log.info("DataInitializer completed: seeded 2 departments and 7 users with BCrypt encoded passwords.");
+        log.info("DataInitializer completed: Super Admin account initialized.");
     }
 
-    private User seedUser(String username, String email, String rawPassword, Role role, Organization org) {
-        return userRepository.findByUsername(username).map(existing -> {
+    private void seedSuperAdmin(String username, String email, String rawPassword) {
+        userRepository.findByUsername(username).map(existing -> {
             existing.setEmail(email);
             existing.setPassword(passwordEncoder.encode(rawPassword));
-            existing.setRole(role);
-            if (org != null) {
-                if (existing.getOrganizations() == null) {
-                    existing.setOrganizations(new HashSet<>());
-                }
-                existing.getOrganizations().add(org);
+            existing.setRole(Role.ROLE_SUPER_ADMIN);
+            if (existing.getOrganizations() != null) {
+                existing.getOrganizations().clear();
             }
             return userRepository.save(existing);
         }).orElseGet(() -> {
@@ -88,12 +100,9 @@ public class DataInitializer implements CommandLineRunner {
                     .username(username)
                     .email(email)
                     .password(passwordEncoder.encode(rawPassword))
-                    .role(role)
+                    .role(Role.ROLE_SUPER_ADMIN)
                     .organizations(new HashSet<>())
                     .build();
-            if (org != null) {
-                newUser.getOrganizations().add(org);
-            }
             return userRepository.save(newUser);
         });
     }

@@ -54,16 +54,11 @@ public class AuthService {
             assignedRole = Role.ROLE_ADMIN;
         }
 
-        // Resolve Organization
+        // Resolve Organization if requested
         Organization organization = null;
         if (request.organizationId() != null) {
             organization = organizationRepository.findById(request.organizationId())
                     .orElse(null);
-        }
-
-        if (organization == null) {
-            organization = organizationRepository.findByName("Muhasebe")
-                    .orElseGet(() -> organizationRepository.findAll().stream().findFirst().orElse(null));
         }
 
         User user = User.builder()
