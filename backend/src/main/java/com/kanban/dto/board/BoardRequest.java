@@ -22,13 +22,19 @@ public record BoardRequest(
 
         Long organizationId,
 
-        BoardType boardType
+        BoardType boardType,
+
+        Long taskTypeId
 ) {
     public BoardRequest(String name, String description) {
-        this(name, description, null, BoardType.STANDARD);
+        this(name, description, null, BoardType.STANDARD, null);
+    }
+
+    public BoardRequest(String name, String description, Long organizationId, BoardType boardType) {
+        this(name, description, organizationId, boardType, null);
     }
 
     public BoardRequest(String name, String description, Long organizationId) {
-        this(name, description, organizationId, BoardType.STANDARD);
+        this(name, description, organizationId, BoardType.STANDARD, null);
     }
 }

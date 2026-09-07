@@ -52,6 +52,7 @@ public class BoardService {
     private final BoardRepository        boardRepository;
     private final BoardColumnRepository  columnRepository;
     private final OrganizationRepository organizationRepository;
+    private final com.kanban.repository.TaskTypeRepository taskTypeRepository;
     private final SecurityUtils          securityUtils;
 
     private boolean isSuperAdmin(User user) {
@@ -169,23 +170,43 @@ public class BoardService {
 
         Board savedBoard = boardRepository.save(board);
 
-        // Determine columns based on boardType template
-        List<String> columnTitles = switch (type) {
-            case INTEGRATION -> INTEGRATION_COLUMNS;
-            case QA_TEST     -> QA_TEST_COLUMNS;
-            default          -> STANDARD_COLUMNS;
-        };
+        // If a taskTypeId is specified and that TaskType has dynamic workflow columns, use them!
+        com.kanban.entity.TaskType customTaskType = null;
+        if (request.taskTypeId() != null) {
+            customTaskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
+        }
 
-        // Auto-create default columns for chosen template
-        for (int i = 0; i < columnTitles.size(); i++) {
-            BoardColumn col = BoardColumn.builder()
-                    .title(columnTitles.get(i))
-                    .position(i)
-                    .board(savedBoard)
-                    .tasks(new ArrayList<>())
-                    .build();
-            columnRepository.save(col);
-            savedBoard.getColumns().add(col);
+        if (customTaskType != null && customTaskType.getColumns() != null && !customTaskType.getColumns().isEmpty()) {
+            for (com.kanban.entity.TaskTypeColumn ttCol : customTaskType.getColumns()) {
+                BoardColumn col = BoardColumn.builder()
+                        .title(ttCol.getTitle())
+                        .colorHex(ttCol.getColorHex())
+                        .position(ttCol.getPosition())
+                        .board(savedBoard)
+                        .tasks(new ArrayList<>())
+                        .build();
+                columnRepository.save(col);
+                savedBoard.getColumns().add(col);
+            }
+        } else {
+            // Determine columns based on boardType template
+            List<String> columnTitles = switch (type) {
+                case INTEGRATION -> INTEGRATION_COLUMNS;
+                case QA_TEST     -> QA_TEST_COLUMNS;
+                default          -> STANDARD_COLUMNS;
+            };
+
+            // Auto-create default columns for chosen template
+            for (int i = 0; i < columnTitles.size(); i++) {
+                BoardColumn col = BoardColumn.builder()
+                        .title(columnTitles.get(i))
+                        .position(i)
+                        .board(savedBoard)
+                        .tasks(new ArrayList<>())
+                        .build();
+                columnRepository.save(col);
+                savedBoard.getColumns().add(col);
+            }
         }
 
         boardRepository.flush();

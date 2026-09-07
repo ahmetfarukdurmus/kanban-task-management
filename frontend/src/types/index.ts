@@ -80,6 +80,7 @@ export interface BoardRequest {
   description?: string;
   organizationId?: number;
   boardType?: BoardType;
+  taskTypeId?: number;
 }
 
 export interface BoardResponse {
@@ -125,6 +126,21 @@ export interface CustomFieldDto {
 /* ── Dynamic Task Types & Transition Rules ────────────────────────── */
 export type TransitionRuleType = 'CHECKLIST_REQUIRED' | 'ATTACHMENT_REQUIRED';
 
+export interface TaskTypeColumnDto {
+  id: number;
+  taskTypeId?: number;
+  title: string;
+  colorHex?: string | null;
+  position: number;
+}
+
+export interface CreateTaskTypeColumnRequest {
+  id?: number;
+  title: string;
+  colorHex?: string;
+  position?: number;
+}
+
 export interface TaskTypeTransitionRuleDto {
   id: number;
   taskTypeId: number;
@@ -138,7 +154,9 @@ export interface TaskTypeTransitionRuleDto {
 
 export interface CreateTransitionRuleRequest {
   sourceColumnId?: number | null;
-  targetColumnId: number;
+  sourceColumnTitle?: string;
+  targetColumnId?: number;
+  targetColumnTitle?: string;
   ruleType: TransitionRuleType;
   description?: string;
 }
@@ -149,6 +167,7 @@ export interface TaskTypeDto {
   colorHex?: string | null;
   organizationId?: number | null;
   organizationName?: string | null;
+  columns?: TaskTypeColumnDto[];
   rules: TaskTypeTransitionRuleDto[];
   createdAt?: string;
 }
@@ -157,12 +176,14 @@ export interface CreateTaskTypeRequest {
   name: string;
   colorHex?: string;
   organizationId?: number | null;
+  columns?: CreateTaskTypeColumnRequest[];
   rules?: CreateTransitionRuleRequest[];
 }
 
 export interface UpdateTaskTypeRequest {
   name: string;
   colorHex?: string;
+  columns?: CreateTaskTypeColumnRequest[];
   rules?: CreateTransitionRuleRequest[];
 }
 

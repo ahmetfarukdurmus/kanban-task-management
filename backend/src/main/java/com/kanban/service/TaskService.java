@@ -274,14 +274,44 @@ public class TaskService {
         }
 
         List<TaskTypeTransitionRule> rules = transitionRuleRepository
-                .findAllByTaskTypeIdAndTargetColumnId(task.getTaskType().getId(), targetColumn.getId());
+                .findAllByTaskTypeId(task.getTaskType().getId());
 
         for (TaskTypeTransitionRule rule : rules) {
-            // If rule specifies a source column and does not match, skip
-            if (rule.getSourceColumn() != null && !rule.getSourceColumn().getId().equals(sourceColumn.getId())) {
+            // 1. Check target column match (by ID or Title)
+            boolean targetMatches = false;
+            if (rule.getTargetColumn() != null && rule.getTargetColumn().getId().equals(targetColumn.getId())) {
+                targetMatches = true;
+            } else if (rule.getTargetTaskTypeColumn() != null && rule.getTargetTaskTypeColumn().getTitle().equalsIgnoreCase(targetColumn.getTitle())) {
+                targetMatches = true;
+            } else if (rule.getTargetColumnTitle() != null && rule.getTargetColumnTitle().equalsIgnoreCase(targetColumn.getTitle())) {
+                targetMatches = true;
+            }
+
+            if (!targetMatches) {
                 continue;
             }
 
+            // 2. Check source column match (if source constraint is present)
+            boolean hasSourceConstraint = rule.getSourceColumn() != null
+                    || rule.getSourceTaskTypeColumn() != null
+                    || (rule.getSourceColumnTitle() != null && !rule.getSourceColumnTitle().isBlank());
+
+            if (hasSourceConstraint) {
+                boolean sourceMatches = false;
+                if (rule.getSourceColumn() != null && rule.getSourceColumn().getId().equals(sourceColumn.getId())) {
+                    sourceMatches = true;
+                } else if (rule.getSourceTaskTypeColumn() != null && rule.getSourceTaskTypeColumn().getTitle().equalsIgnoreCase(sourceColumn.getTitle())) {
+                    sourceMatches = true;
+                } else if (rule.getSourceColumnTitle() != null && rule.getSourceColumnTitle().equalsIgnoreCase(sourceColumn.getTitle())) {
+                    sourceMatches = true;
+                }
+
+                if (!sourceMatches) {
+                    continue;
+                }
+            }
+
+            // 3. Enforce Rule Type Guard
             if (rule.getRuleType() == TransitionRuleType.ATTACHMENT_REQUIRED) {
                 if (task.getAttachments() == null || task.getAttachments().isEmpty()) {
                     String extra = (rule.getDescription() != null && !rule.getDescription().isBlank())

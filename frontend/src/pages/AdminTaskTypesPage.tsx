@@ -302,20 +302,71 @@ export default function AdminTaskTypesPage() {
                     </div>
                   </div>
 
-                  {/* Card Body: Transition Rules */}
-                  <div className="p-5 bg-slate-50/40 flex-1 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-blue-600">
-                          <path d="M5 12h14" />
-                          <path d="m12 5 7 7-7 7" />
-                        </svg>
-                        <span>İş Akışı Geçiş Kuralları</span>
-                      </span>
-                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                        {ruleCount} Kural
-                      </span>
+                  {/* Card Body: Workflow Stages & Transition Rules */}
+                  <div className="p-5 bg-slate-50/40 flex-1 space-y-4">
+
+                    {/* Workflow Stages Pipeline */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-blue-600">
+                            <rect x="3" y="3" width="7" height="18" rx="1" />
+                            <rect x="14" y="3" width="7" height="11" rx="1" />
+                          </svg>
+                          <span>İş Akışı Aşamaları (Kolonlar)</span>
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                          {type.columns?.length || 0} Kolon
+                        </span>
+                      </div>
+
+                      {type.columns && type.columns.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-200/70 shadow-2xs">
+                          {type.columns.map((col, cIdx) => (
+                            <div key={col.id || cIdx} className="flex items-center gap-1.5">
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border shadow-2xs"
+                                style={{
+                                  backgroundColor: col.colorHex ? `${col.colorHex}12` : '#f1f5f9',
+                                  borderColor: col.colorHex ? `${col.colorHex}35` : '#e2e8f0',
+                                  color: col.colorHex || '#334155',
+                                }}
+                              >
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: col.colorHex || '#94a3b8' }}
+                                />
+                                <span>{col.title}</span>
+                              </span>
+                              {cIdx < (type.columns?.length || 0) - 1 && (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3 text-slate-400">
+                                  <path d="m9 18 6-6-6-6" />
+                                </svg>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic py-0.5">
+                          Standart pano kolonları kullanılır.
+                        </p>
+                      )}
                     </div>
+
+                    {/* Transition Rules */}
+                    <div className="pt-3 border-t border-slate-200/60 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-blue-600">
+                            <path d="M5 12h14" />
+                            <path d="m12 5 7 7-7 7" />
+                          </svg>
+                          <span>Geçiş Doğrulama Kuralları</span>
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                          {ruleCount} Kural
+                        </span>
+                      </div>
 
                     {ruleCount === 0 ? (
                       <p className="text-xs text-slate-400 italic py-1">
@@ -384,6 +435,7 @@ export default function AdminTaskTypesPage() {
                         })}
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               );

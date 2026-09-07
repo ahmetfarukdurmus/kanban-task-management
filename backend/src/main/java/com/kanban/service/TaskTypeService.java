@@ -97,40 +97,22 @@ public class TaskTypeService {
                 .name(request.name().trim())
                 .colorHex(request.colorHex() != null ? request.colorHex().trim() : null)
                 .organization(organization)
+                .columns(new ArrayList<>())
                 .rules(new ArrayList<>())
                 .build();
 
-        if (request.rules() != null && !request.rules().isEmpty()) {
-            for (CreateTransitionRuleRequest ruleReq : request.rules()) {
-                BoardColumn targetColumn = columnRepository.findById(ruleReq.targetColumnId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Hedef kolon bulunamadı: ID " + ruleReq.targetColumnId()));
-
-                BoardColumn sourceColumn = null;
-                if (ruleReq.sourceColumnId() != null) {
-                    sourceColumn = columnRepository.findById(ruleReq.sourceColumnId())
-                            .orElseThrow(() -> new ResourceNotFoundException("Kaynak kolon bulunamadı: ID " + ruleReq.sourceColumnId()));
-                }
-
-                TaskTypeTransitionRule rule = TaskTypeTransitionRule.builder()
-                        .taskType(taskType)
-                        .sourceColumn(sourceColumn)
-                        .targetColumn(targetColumn)
-                        .ruleType(ruleReq.ruleType())
-                        .description(ruleReq.description() != null ? ruleReq.description().trim() : null)
-                        .build();
-
-                taskType.getRules().add(rule);
-            }
-        }
+        populateColumns(taskType, request.columns());
+        populateRules(taskType, request.rules());
 
         TaskType saved = taskTypeRepository.save(taskType);
-        log.info("Created TaskType '{}' (ID: {}) for organization '{}'",
-                saved.getName(), saved.getId(), organization != null ? organization.getName() : "Global");
+        log.info("Created TaskType '{}' (ID: {}) with {} columns and {} rules for organization '{}'",
+                saved.getName(), saved.getId(), saved.getColumns().size(), saved.getRules().size(),
+                organization != null ? organization.getName() : "Global");
         return toDto(saved);
     }
 
     /**
-     * Updates an existing task type and its transition rules.
+     * Updates an existing task type, its columns and its transition rules.
      */
     public TaskTypeDto updateTaskType(Long id, UpdateTaskTypeRequest request) {
         TaskType taskType = requireTaskType(id);
@@ -146,32 +128,104 @@ public class TaskTypeService {
             taskType.setColorHex(request.colorHex().trim());
         }
 
+        if (request.columns() != null) {
+            taskType.getColumns().clear();
+            populateColumns(taskType, request.columns());
+        }
+
         if (request.rules() != null) {
             taskType.getRules().clear();
-            for (CreateTransitionRuleRequest ruleReq : request.rules()) {
-                BoardColumn targetColumn = columnRepository.findById(ruleReq.targetColumnId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Hedef kolon bulunamadı: ID " + ruleReq.targetColumnId()));
-
-                BoardColumn sourceColumn = null;
-                if (ruleReq.sourceColumnId() != null) {
-                    sourceColumn = columnRepository.findById(ruleReq.sourceColumnId())
-                            .orElseThrow(() -> new ResourceNotFoundException("Kaynak kolon bulunamadı: ID " + ruleReq.sourceColumnId()));
-                }
-
-                TaskTypeTransitionRule rule = TaskTypeTransitionRule.builder()
-                        .taskType(taskType)
-                        .sourceColumn(sourceColumn)
-                        .targetColumn(targetColumn)
-                        .ruleType(ruleReq.ruleType())
-                        .description(ruleReq.description() != null ? ruleReq.description().trim() : null)
-                        .build();
-
-                taskType.getRules().add(rule);
-            }
+            populateRules(taskType, request.rules());
         }
 
         TaskType saved = taskTypeRepository.save(taskType);
         return toDto(saved);
+    }
+
+    private void populateColumns(TaskType taskType, List<CreateTaskTypeColumnRequest> columnRequests) {
+        if (columnRequests == null || columnRequests.isEmpty()) return;
+
+        int pos = 0;
+        for (CreateTaskTypeColumnRequest colReq : columnRequests) {
+            if (colReq.title() == null || colReq.title().isBlank()) continue;
+
+            TaskTypeColumn col = TaskTypeColumn.builder()
+                    .taskType(taskType)
+                    .title(colReq.title().trim())
+                    .colorHex(colReq.colorHex() != null && !colReq.colorHex().isBlank() ? colReq.colorHex().trim() : null)
+                    .position(colReq.position() != null ? colReq.position() : pos)
+                    .build();
+
+            taskType.getColumns().add(col);
+            pos++;
+        }
+    }
+
+    private void populateRules(TaskType taskType, List<CreateTransitionRuleRequest> ruleRequests) {
+        if (ruleRequests == null || ruleRequests.isEmpty()) return;
+
+        for (CreateTransitionRuleRequest ruleReq : ruleRequests) {
+            TaskTypeColumn targetTtCol = findColumn(taskType, ruleReq.targetColumnId(), ruleReq.targetColumnTitle());
+            BoardColumn targetBoardCol = null;
+            if (targetTtCol == null && ruleReq.targetColumnId() != null) {
+                targetBoardCol = columnRepository.findById(ruleReq.targetColumnId()).orElse(null);
+            }
+
+            String targetTitle = ruleReq.targetColumnTitle();
+            if (targetTitle == null || targetTitle.isBlank()) {
+                if (targetTtCol != null) targetTitle = targetTtCol.getTitle();
+                else if (targetBoardCol != null) targetTitle = targetBoardCol.getTitle();
+                else targetTitle = "Hedef Kolon";
+            }
+
+            TaskTypeColumn sourceTtCol = findColumn(taskType, ruleReq.sourceColumnId(), ruleReq.sourceColumnTitle());
+            BoardColumn sourceBoardCol = null;
+            if (sourceTtCol == null && ruleReq.sourceColumnId() != null) {
+                sourceBoardCol = columnRepository.findById(ruleReq.sourceColumnId()).orElse(null);
+            }
+
+            String sourceTitle = ruleReq.sourceColumnTitle();
+            if (sourceTitle == null || sourceTitle.isBlank()) {
+                if (sourceTtCol != null) sourceTitle = sourceTtCol.getTitle();
+                else if (sourceBoardCol != null) sourceTitle = sourceBoardCol.getTitle();
+            }
+
+            TaskTypeTransitionRule rule = TaskTypeTransitionRule.builder()
+                    .taskType(taskType)
+                    .sourceColumn(sourceBoardCol)
+                    .targetColumn(targetBoardCol)
+                    .sourceTaskTypeColumn(sourceTtCol)
+                    .targetTaskTypeColumn(targetTtCol)
+                    .sourceColumnTitle(sourceTitle)
+                    .targetColumnTitle(targetTitle)
+                    .ruleType(ruleReq.ruleType())
+                    .description(ruleReq.description() != null ? ruleReq.description().trim() : null)
+                    .build();
+
+            taskType.getRules().add(rule);
+        }
+    }
+
+    private TaskTypeColumn findColumn(TaskType taskType, Long colId, String colTitle) {
+        if (taskType.getColumns() == null || taskType.getColumns().isEmpty()) {
+            return null;
+        }
+        if (colId != null) {
+            for (TaskTypeColumn c : taskType.getColumns()) {
+                if (c.getId() != null && c.getId().equals(colId)) {
+                    return c;
+                }
+            }
+        }
+        if (colTitle != null && !colTitle.isBlank()) {
+            String trimmed = colTitle.trim();
+            for (TaskTypeColumn c : taskType.getColumns()) {
+                if (c.getTitle() != null && c.getTitle().equalsIgnoreCase(trimmed)) {
+                    return c;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -210,31 +264,56 @@ public class TaskTypeService {
             validateAdminAccess(currentUser, taskType.getOrganization().getId());
         }
 
-        BoardColumn targetColumn = columnRepository.findById(request.targetColumnId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hedef kolon bulunamadı: ID " + request.targetColumnId()));
+        TaskTypeColumn targetTtCol = findColumn(taskType, request.targetColumnId(), request.targetColumnTitle());
+        BoardColumn targetBoardCol = null;
+        if (targetTtCol == null && request.targetColumnId() != null) {
+            targetBoardCol = columnRepository.findById(request.targetColumnId()).orElse(null);
+        }
 
-        BoardColumn sourceColumn = null;
-        if (request.sourceColumnId() != null) {
-            sourceColumn = columnRepository.findById(request.sourceColumnId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Kaynak kolon bulunamadı: ID " + request.sourceColumnId()));
+        String targetTitle = request.targetColumnTitle();
+        if (targetTitle == null || targetTitle.isBlank()) {
+            if (targetTtCol != null) targetTitle = targetTtCol.getTitle();
+            else if (targetBoardCol != null) targetTitle = targetBoardCol.getTitle();
+            else targetTitle = "Hedef Kolon";
+        }
+
+        TaskTypeColumn sourceTtCol = findColumn(taskType, request.sourceColumnId(), request.sourceColumnTitle());
+        BoardColumn sourceBoardCol = null;
+        if (sourceTtCol == null && request.sourceColumnId() != null) {
+            sourceBoardCol = columnRepository.findById(request.sourceColumnId()).orElse(null);
+        }
+
+        String sourceTitle = request.sourceColumnTitle();
+        if (sourceTitle == null || sourceTitle.isBlank()) {
+            if (sourceTtCol != null) sourceTitle = sourceTtCol.getTitle();
+            else if (sourceBoardCol != null) sourceTitle = sourceBoardCol.getTitle();
         }
 
         TaskTypeTransitionRule rule = TaskTypeTransitionRule.builder()
                 .taskType(taskType)
-                .sourceColumn(sourceColumn)
-                .targetColumn(targetColumn)
+                .sourceColumn(sourceBoardCol)
+                .targetColumn(targetBoardCol)
+                .sourceTaskTypeColumn(sourceTtCol)
+                .targetTaskTypeColumn(targetTtCol)
+                .sourceColumnTitle(sourceTitle)
+                .targetColumnTitle(targetTitle)
                 .ruleType(request.ruleType())
                 .description(request.description() != null ? request.description().trim() : null)
                 .build();
 
         TaskTypeTransitionRule saved = transitionRuleRepository.save(rule);
+        Long srcId = saved.getSourceColumn() != null ? saved.getSourceColumn().getId()
+                : (saved.getSourceTaskTypeColumn() != null ? saved.getSourceTaskTypeColumn().getId() : null);
+        Long dstId = saved.getTargetColumn() != null ? saved.getTargetColumn().getId()
+                : (saved.getTargetTaskTypeColumn() != null ? saved.getTargetTaskTypeColumn().getId() : null);
+
         return new TaskTypeTransitionRuleDto(
                 saved.getId(),
                 taskType.getId(),
-                sourceColumn != null ? sourceColumn.getId() : null,
-                sourceColumn != null ? sourceColumn.getTitle() : null,
-                targetColumn.getId(),
-                targetColumn.getTitle(),
+                srcId,
+                saved.getSourceColumnTitle(),
+                dstId,
+                saved.getTargetColumnTitle(),
                 saved.getRuleType(),
                 saved.getDescription());
     }
@@ -286,17 +365,42 @@ public class TaskTypeService {
     }
 
     public TaskTypeDto toDto(TaskType type) {
+        List<TaskTypeColumnDto> columnDtos = type.getColumns() != null
+                ? type.getColumns().stream()
+                        .map(c -> new TaskTypeColumnDto(
+                                c.getId(),
+                                type.getId(),
+                                c.getTitle(),
+                                c.getColorHex(),
+                                c.getPosition()))
+                        .toList()
+                : List.of();
+
         List<TaskTypeTransitionRuleDto> ruleDtos = type.getRules() != null
                 ? type.getRules().stream()
-                        .map(r -> new TaskTypeTransitionRuleDto(
-                                r.getId(),
-                                type.getId(),
-                                r.getSourceColumn() != null ? r.getSourceColumn().getId() : null,
-                                r.getSourceColumn() != null ? r.getSourceColumn().getTitle() : null,
-                                r.getTargetColumn().getId(),
-                                r.getTargetColumn().getTitle(),
-                                r.getRuleType(),
-                                r.getDescription()))
+                        .map(r -> {
+                            Long srcId = r.getSourceColumn() != null ? r.getSourceColumn().getId()
+                                    : (r.getSourceTaskTypeColumn() != null ? r.getSourceTaskTypeColumn().getId() : null);
+                            String srcTitle = r.getSourceColumnTitle() != null ? r.getSourceColumnTitle()
+                                    : (r.getSourceTaskTypeColumn() != null ? r.getSourceTaskTypeColumn().getTitle()
+                                    : (r.getSourceColumn() != null ? r.getSourceColumn().getTitle() : null));
+
+                            Long dstId = r.getTargetColumn() != null ? r.getTargetColumn().getId()
+                                    : (r.getTargetTaskTypeColumn() != null ? r.getTargetTaskTypeColumn().getId() : null);
+                            String dstTitle = r.getTargetColumnTitle() != null ? r.getTargetColumnTitle()
+                                    : (r.getTargetTaskTypeColumn() != null ? r.getTargetTaskTypeColumn().getTitle()
+                                    : (r.getTargetColumn() != null ? r.getTargetColumn().getTitle() : "Hedef Kolon"));
+
+                            return new TaskTypeTransitionRuleDto(
+                                    r.getId(),
+                                    type.getId(),
+                                    srcId,
+                                    srcTitle,
+                                    dstId,
+                                    dstTitle,
+                                    r.getRuleType(),
+                                    r.getDescription());
+                        })
                         .toList()
                 : List.of();
 
@@ -306,6 +410,7 @@ public class TaskTypeService {
                 type.getColorHex(),
                 type.getOrganization() != null ? type.getOrganization().getId() : null,
                 type.getOrganization() != null ? type.getOrganization().getName() : null,
+                columnDtos,
                 ruleDtos,
                 type.getCreatedAt());
     }

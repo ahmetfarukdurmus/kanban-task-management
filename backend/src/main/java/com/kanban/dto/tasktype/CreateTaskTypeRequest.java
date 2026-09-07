@@ -18,5 +18,7 @@ public record CreateTaskTypeRequest(
 
         Long organizationId,
 
+        List<CreateTaskTypeColumnRequest> columns,
+
         List<CreateTransitionRuleRequest> rules
 ) {}

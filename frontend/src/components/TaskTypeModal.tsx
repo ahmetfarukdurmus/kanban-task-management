@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { taskTypeService } from '@/services/taskTypeService';
-import { boardApi } from '@/api/boardApi';
 import { organizationService } from '@/services/organizationService';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
-  BoardResponse,
+  CreateTaskTypeColumnRequest,
   CreateTaskTypeRequest,
   CreateTransitionRuleRequest,
   OrganizationDto,
@@ -22,9 +21,16 @@ interface Props {
   taskTypeToEdit?: TaskTypeDto | null;
 }
 
+interface ColumnFormItem {
+  id?: number;
+  key: string;
+  title: string;
+  colorHex: string;
+}
+
 interface RuleFormState {
-  sourceColumnId?: number | null;
-  targetColumnId: number | '';
+  sourceColumnTitle: string; // empty means "Any column"
+  targetColumnTitle: string;
   ruleType: TransitionRuleType;
   description: string;
 }
@@ -40,6 +46,13 @@ const PRESET_COLORS = [
   { label: 'Gri', hex: '#64748B' },
 ];
 
+const DEFAULT_WORKFLOW_COLUMNS: { title: string; colorHex: string }[] = [
+  { title: 'Yapılacaklar', colorHex: '#64748B' },
+  { title: 'Geliştirmede', colorHex: '#3B82F6' },
+  { title: 'Test & QA', colorHex: '#F59E0B' },
+  { title: 'Tamamlandı', colorHex: '#10B981' },
+];
+
 export default function TaskTypeModal({
   isOpen,
   onClose,
@@ -51,27 +64,20 @@ export default function TaskTypeModal({
   const [name, setName]                     = useState('');
   const [colorHex, setColorHex]             = useState('#3B82F6');
   const [organizationId, setOrganizationId] = useState<number | null>(null);
+  
+  // Dynamic Workflow Columns
+  const [columns, setColumns]               = useState<ColumnFormItem[]>([]);
+  // Dynamic Transition Rules
   const [rules, setRules]                   = useState<RuleFormState[]>([]);
 
-  const [boards, setBoards]                 = useState<BoardResponse[]>([]);
-  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null);
   const [organizations, setOrganizations]   = useState<OrganizationDto[]>([]);
   const [isSubmitting, setIsSubmitting]     = useState(false);
 
   const isEditing = !!taskTypeToEdit;
 
-  // Load boards and organizations
+  // Load organizations if super admin
   useEffect(() => {
     if (!isOpen) return;
-
-    boardApi.getAll()
-      .then((data) => {
-        setBoards(data);
-        if (data.length > 0 && !selectedBoardId) {
-          setSelectedBoardId(data[0].id);
-        }
-      })
-      .catch(() => { /* ignore */ });
 
     if (isSuperAdmin) {
       organizationService.getAll()
@@ -87,11 +93,32 @@ export default function TaskTypeModal({
       setColorHex(taskTypeToEdit.colorHex || '#3B82F6');
       setOrganizationId(taskTypeToEdit.organizationId || null);
 
+      // Populate workflow columns
+      if (taskTypeToEdit.columns && taskTypeToEdit.columns.length > 0) {
+        setColumns(
+          taskTypeToEdit.columns.map((c) => ({
+            id: c.id,
+            key: `col-${c.id}`,
+            title: c.title,
+            colorHex: c.colorHex || '#3B82F6',
+          }))
+        );
+      } else {
+        setColumns(
+          DEFAULT_WORKFLOW_COLUMNS.map((c, i) => ({
+            key: `col-default-${i}`,
+            title: c.title,
+            colorHex: c.colorHex,
+          }))
+        );
+      }
+
+      // Populate transition rules
       if (taskTypeToEdit.rules && taskTypeToEdit.rules.length > 0) {
         setRules(
           taskTypeToEdit.rules.map((r) => ({
-            sourceColumnId: r.sourceColumnId || null,
-            targetColumnId: r.targetColumnId,
+            sourceColumnTitle: r.sourceColumnTitle || '',
+            targetColumnTitle: r.targetColumnTitle || '',
             ruleType: r.ruleType,
             description: r.description || '',
           }))
@@ -103,27 +130,106 @@ export default function TaskTypeModal({
       setName('');
       setColorHex('#3B82F6');
       setOrganizationId(user?.organizationId || null);
+      setColumns(
+        DEFAULT_WORKFLOW_COLUMNS.map((c, i) => ({
+          key: `col-default-${i}`,
+          title: c.title,
+          colorHex: c.colorHex,
+        }))
+      );
       setRules([]);
     }
   }, [taskTypeToEdit, isOpen, user]);
 
   if (!isOpen) return null;
 
-  // Active columns from selected board
-  const selectedBoard = boards.find((b) => b.id === selectedBoardId) || boards[0];
-  const availableColumns = selectedBoard?.columns || [];
+  /* ── Column Management Handlers ── */
+  const handleAddColumn = () => {
+    const newIdx = columns.length + 1;
+    const newCol: ColumnFormItem = {
+      key: `col-new-${Date.now()}`,
+      title: `Aşama ${newIdx}`,
+      colorHex: PRESET_COLORS[(newIdx - 1) % PRESET_COLORS.length].hex,
+    };
+    setColumns((prev) => [...prev, newCol]);
+  };
 
+  const handleRemoveColumn = (index: number) => {
+    const removedCol = columns[index];
+    setColumns((prev) => prev.filter((_, i) => i !== index));
+
+    // Also update any rules referencing this column
+    setRules((prev) =>
+      prev.map((r) => {
+        let updated = { ...r };
+        if (updated.sourceColumnTitle === removedCol.title) {
+          updated.sourceColumnTitle = '';
+        }
+        if (updated.targetColumnTitle === removedCol.title) {
+          updated.targetColumnTitle = '';
+        }
+        return updated;
+      })
+    );
+  };
+
+  const handleColumnChange = (
+    index: number,
+    field: 'title' | 'colorHex',
+    value: string
+  ) => {
+    const oldTitle = columns[index].title;
+    setColumns((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+
+    // If title changed, update existing rules referencing oldTitle
+    if (field === 'title' && oldTitle.trim() !== value.trim()) {
+      setRules((prev) =>
+        prev.map((r) => {
+          let updated = { ...r };
+          if (updated.sourceColumnTitle === oldTitle) {
+            updated.sourceColumnTitle = value;
+          }
+          if (updated.targetColumnTitle === oldTitle) {
+            updated.targetColumnTitle = value;
+          }
+          return updated;
+        })
+      );
+    }
+  };
+
+  const handleMoveColumn = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === columns.length - 1) return;
+
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    setColumns((prev) => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[targetIdx];
+      next[targetIdx] = temp;
+      return next;
+    });
+  };
+
+  /* ── Transition Rule Handlers ── */
   const handleAddRule = () => {
-    if (availableColumns.length === 0) {
-      toast.error('Kural eklemek için önce kolonları olan bir pano seçmelisiniz.');
+    if (columns.length === 0) {
+      toast.error('Kural eklemek için önce en az bir iş akışı kolonu tanımlamalısınız.');
       return;
     }
-    const defaultTarget = availableColumns.length > 1 ? availableColumns[availableColumns.length - 1].id : availableColumns[0].id;
+    const defaultTarget = columns[columns.length - 1]?.title || columns[0]?.title || '';
+    const defaultSource = columns.length > 1 ? columns[columns.length - 2]?.title : '';
+
     setRules((prev) => [
       ...prev,
       {
-        sourceColumnId: null,
-        targetColumnId: defaultTarget,
+        sourceColumnTitle: defaultSource,
+        targetColumnTitle: defaultTarget,
         ruleType: 'CHECKLIST_REQUIRED',
         description: '',
       },
@@ -146,6 +252,7 @@ export default function TaskTypeModal({
     });
   };
 
+  /* ── Form Submission ── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -153,9 +260,22 @@ export default function TaskTypeModal({
       return;
     }
 
+    if (columns.length === 0) {
+      toast.error('Lütfen en az bir iş akışı kolonu ekleyin.');
+      return;
+    }
+
+    // Check for empty column titles
+    for (let i = 0; i < columns.length; i++) {
+      if (!columns[i].title.trim()) {
+        toast.error(`${i + 1}. kolon için bir başlık girmelisiniz.`);
+        return;
+      }
+    }
+
     // Validate rules
     for (let i = 0; i < rules.length; i++) {
-      if (!rules[i].targetColumnId) {
+      if (!rules[i].targetColumnTitle.trim()) {
         toast.error(`${i + 1}. kural için geçerli bir hedef kolon seçilmelidir.`);
         return;
       }
@@ -163,9 +283,16 @@ export default function TaskTypeModal({
 
     setIsSubmitting(true);
     try {
+      const formattedColumns: CreateTaskTypeColumnRequest[] = columns.map((c, idx) => ({
+        id: c.id,
+        title: c.title.trim(),
+        colorHex: c.colorHex.trim() || undefined,
+        position: idx,
+      }));
+
       const formattedRules: CreateTransitionRuleRequest[] = rules.map((r) => ({
-        sourceColumnId: r.sourceColumnId ? Number(r.sourceColumnId) : null,
-        targetColumnId: Number(r.targetColumnId),
+        sourceColumnTitle: r.sourceColumnTitle.trim() || undefined,
+        targetColumnTitle: r.targetColumnTitle.trim(),
         ruleType: r.ruleType,
         description: r.description.trim() || undefined,
       }));
@@ -174,19 +301,21 @@ export default function TaskTypeModal({
         const updatePayload: UpdateTaskTypeRequest = {
           name: name.trim(),
           colorHex: colorHex.trim(),
+          columns: formattedColumns,
           rules: formattedRules,
         };
         await taskTypeService.update(taskTypeToEdit.id, updatePayload);
-        toast.success(`"${name}" görev tipi başarıyla güncellendi.`);
+        toast.success(`"${name}" görev tipi ve iş akışı başarıyla güncellendi.`);
       } else {
         const createPayload: CreateTaskTypeRequest = {
           name: name.trim(),
           colorHex: colorHex.trim(),
           organizationId: organizationId || undefined,
+          columns: formattedColumns,
           rules: formattedRules,
         };
         await taskTypeService.create(createPayload);
-        toast.success(`"${name}" görev tipi başarıyla oluşturuldu.`);
+        toast.success(`"${name}" görev tipi ve iş akışı başarıyla oluşturuldu.`);
       }
 
       onSaved();
@@ -201,21 +330,21 @@ export default function TaskTypeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden my-8">
+      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden my-8 max-h-[90vh] flex flex-col">
         
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-2.5">
             <span
-              className="w-3.5 h-3.5 rounded-full ring-2 ring-white shadow-xs"
+              className="w-3.5 h-3.5 rounded-full ring-2 ring-white shadow-xs shrink-0"
               style={{ backgroundColor: colorHex }}
             />
             <div>
               <h2 className="text-base font-bold text-slate-800">
-                {isEditing ? 'Görev Tipini Düzenle' : 'Yeni Görev Tipi Tanımla'}
+                {isEditing ? 'Görev Tipi & İş Akışını Düzenle' : 'Yeni Görev Tipi & İş Akışı Tanımla'}
               </h2>
               <p className="text-xs text-slate-500">
-                Görev şablonu özelliklerini ve kolon geçiş kurallarını yapılandırın.
+                Özel iş akışı kolonlarını (adımlarını) ve kolonlar arası geçiş kurallarını yapılandırın.
               </p>
             </div>
           </div>
@@ -230,10 +359,10 @@ export default function TaskTypeModal({
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        {/* Modal Body with Scroll */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
 
-          {/* Name & Color */}
+          {/* ── Section 1: Name, Color & Organization ── */}
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -243,7 +372,7 @@ export default function TaskTypeModal({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Örn: Hata Bildirimi / Bug, Tasarım Görevi, Story..."
+                placeholder="Örn: Hata Bildirimi / Bug, Tasarım İş Akışı, Story / Özellik..."
                 className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-xs"
                 required
               />
@@ -336,7 +465,110 @@ export default function TaskTypeModal({
             )}
           </div>
 
-          {/* Transition Rules Section */}
+          {/* ── Section 2: Dynamic Workflow Columns ── */}
+          <div className="pt-5 border-t border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <span>İş Akışı Kolonları (Workflow Columns)</span>
+                  <span className="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded-full font-semibold border border-slate-200">
+                    {columns.length} Kolon
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Bu görev tipine ait özel aşamaları ve panodaki kolon sırasını tanımlayın.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddColumn}
+                className="btn-secondary text-xs py-1.5 px-3 gap-1.5 font-semibold text-slate-700 hover:text-blue-600 hover:border-blue-300"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                <span>+ Yeni Kolon Ekle</span>
+              </button>
+            </div>
+
+            {/* Columns List */}
+            <div className="space-y-2.5">
+              {columns.map((col, idx) => (
+                <div
+                  key={col.key}
+                  className="flex items-center gap-2.5 p-3 bg-slate-50/80 border border-slate-200 rounded-xl transition-all hover:border-slate-300 shadow-xs"
+                >
+                  {/* Position Badge & Reorder Buttons */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-200/80 text-slate-700 text-[11px] font-bold">
+                      {idx + 1}
+                    </span>
+                    <div className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveColumn(idx, 'up')}
+                        disabled={idx === 0}
+                        className="text-slate-400 hover:text-slate-700 disabled:opacity-30 p-0.5 leading-none"
+                        title="Yukarı Taşı"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3">
+                          <polyline points="18 15 12 9 6 15" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveColumn(idx, 'down')}
+                        disabled={idx === columns.length - 1}
+                        className="text-slate-400 hover:text-slate-700 disabled:opacity-30 p-0.5 leading-none"
+                        title="Aşağı Taşı"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3">
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Column Title Input */}
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={col.title}
+                      onChange={(e) => handleColumnChange(idx, 'title', e.target.value)}
+                      placeholder="Kolon Adı (Örn: Analiz, Kodlama, QA Test, Canlıya Alındı)"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                      required
+                    />
+                  </div>
+
+                  {/* Column Color Picker */}
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-2xs shrink-0">
+                    <input
+                      type="color"
+                      value={col.colorHex}
+                      onChange={(e) => handleColumnChange(idx, 'colorHex', e.target.value)}
+                      className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
+                      title="Kolon Rengi"
+                    />
+                    <span className="text-[10px] font-mono text-slate-500 font-semibold uppercase">
+                      {col.colorHex}
+                    </span>
+                  </div>
+
+                  {/* Delete Column Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveColumn(idx)}
+                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors shrink-0"
+                    title="Kolonu Sil"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Section 3: Transition Rules (Workflow Guards) ── */}
           <div className="pt-5 border-t border-slate-100 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -347,7 +579,7 @@ export default function TaskTypeModal({
                   </span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Kartlar belirli bir kolona taşınırken zorunlu tutulacak doğrulama kurallarını belirleyin.
+                  Yukarıda tanımladığınız kolonlar arasında kart taşınırken zorunlu tutulacak doğrulama şartlarını belirleyin.
                 </p>
               </div>
 
@@ -357,36 +589,15 @@ export default function TaskTypeModal({
                 className="btn-primary text-xs py-1.5 px-3 gap-1.5 font-semibold"
               >
                 <PlusIcon className="w-3.5 h-3.5" />
-                <span>Kural Ekle</span>
+                <span>+ Kural Ekle</span>
               </button>
             </div>
-
-            {/* Board Selector for Column Options */}
-            {boards.length > 1 && (
-              <div className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
-                <span className="font-semibold text-slate-600 shrink-0">Referans Pano:</span>
-                <select
-                  value={selectedBoardId || ''}
-                  onChange={(e) => setSelectedBoardId(Number(e.target.value))}
-                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {boards.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} {b.organizationName ? `(${b.organizationName})` : ''}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-slate-400 text-[11px] ml-auto">
-                  Kurallar için bu panodaki kolonlar listelenir.
-                </span>
-              </div>
-            )}
 
             {/* Rules List */}
             {rules.length === 0 ? (
               <div className="text-center py-6 px-4 bg-slate-50/70 border border-dashed border-slate-200 rounded-xl">
                 <p className="text-xs text-slate-500">
-                  Henüz bir geçiş kuralı tanımlanmadı. Kartların tamamlanmadan veya dosya yüklenmeden taşınmasını engellemek için <strong className="text-slate-700 font-semibold">+ Kural Ekle</strong> butonunu kullanabilirsiniz.
+                  Henüz bir geçiş kuralı tanımlanmadı. Kartların test edilmeden veya dosya yüklenmeden hedef aşamaya geçmesini engellemek için <strong className="text-slate-700 font-semibold">+ Kural Ekle</strong> butonunu kullanabilirsiniz.
                 </p>
               </div>
             ) : (
@@ -411,40 +622,40 @@ export default function TaskTypeModal({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {/* Source Column */}
+                      {/* Source Column Dropdown (connected to dynamic columns above) */}
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                           Kaynak Kolon
                         </label>
                         <select
-                          value={rule.sourceColumnId || ''}
-                          onChange={(e) => handleRuleChange(idx, 'sourceColumnId', e.target.value ? Number(e.target.value) : null)}
+                          value={rule.sourceColumnTitle}
+                          onChange={(e) => handleRuleChange(idx, 'sourceColumnTitle', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         >
                           <option value="">Tüm Kolonlar (Herhangi biri)</option>
-                          {availableColumns.map((col) => (
-                            <option key={col.id} value={col.id}>
-                              {col.title}
+                          {columns.map((col, colIdx) => (
+                            <option key={col.key} value={col.title}>
+                              {colIdx + 1}. {col.title}
                             </option>
                           ))}
                         </select>
                       </div>
 
-                      {/* Target Column */}
+                      {/* Target Column Dropdown (connected to dynamic columns above) */}
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                           Hedef Kolon <span className="text-rose-500">*</span>
                         </label>
                         <select
-                          value={rule.targetColumnId || ''}
-                          onChange={(e) => handleRuleChange(idx, 'targetColumnId', Number(e.target.value))}
+                          value={rule.targetColumnTitle}
+                          onChange={(e) => handleRuleChange(idx, 'targetColumnTitle', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                           required
                         >
                           <option value="" disabled>Hedef Kolon Seçin</option>
-                          {availableColumns.map((col) => (
-                            <option key={col.id} value={col.id}>
-                              {col.title}
+                          {columns.map((col, colIdx) => (
+                            <option key={col.key} value={col.title}>
+                              {colIdx + 1}. {col.title}
                             </option>
                           ))}
                         </select>
@@ -488,7 +699,7 @@ export default function TaskTypeModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -508,7 +719,7 @@ export default function TaskTypeModal({
                   <span>Kaydediliyor…</span>
                 </>
               ) : (
-                <span>{isEditing ? 'Değişiklikleri Kaydet' : 'Görev Tipini Oluştur'}</span>
+                <span>{isEditing ? 'Değişiklikleri Kaydet' : 'Görev Tipini ve İş Akışını Oluştur'}</span>
               )}
             </button>
           </div>

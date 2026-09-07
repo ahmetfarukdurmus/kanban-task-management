@@ -32,11 +32,31 @@ public class TaskTypeTransitionRule {
                 foreignKey = @ForeignKey(name = "fk_transition_rules_source_column"))
     private BoardColumn sourceColumn;
 
-    /** Target board column where this rule is enforced. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "target_column_id", nullable = false,
+    /** Optional target board column where this rule is enforced. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_column_id",
                 foreignKey = @ForeignKey(name = "fk_transition_rules_target_column"))
     private BoardColumn targetColumn;
+
+    /** Optional source dynamic workflow column. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_task_type_column_id",
+                foreignKey = @ForeignKey(name = "fk_transition_rules_src_tt_column"))
+    private TaskTypeColumn sourceTaskTypeColumn;
+
+    /** Optional target dynamic workflow column. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_task_type_column_id",
+                foreignKey = @ForeignKey(name = "fk_transition_rules_dst_tt_column"))
+    private TaskTypeColumn targetTaskTypeColumn;
+
+    /** Source column title cache / fallback (e.g. "Kodlama"). */
+    @Column(length = 100)
+    private String sourceColumnTitle;
+
+    /** Target column title cache / fallback (e.g. "QA Test"). */
+    @Column(length = 100)
+    private String targetColumnTitle;
 
     /** Rule type constraint (CHECKLIST_REQUIRED or ATTACHMENT_REQUIRED). */
     @Enumerated(EnumType.STRING)

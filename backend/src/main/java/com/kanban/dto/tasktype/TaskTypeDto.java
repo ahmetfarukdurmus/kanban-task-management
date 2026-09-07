@@ -12,10 +12,15 @@ public record TaskTypeDto(
         String colorHex,
         Long organizationId,
         String organizationName,
+        List<TaskTypeColumnDto> columns,
         List<TaskTypeTransitionRuleDto> rules,
         Instant createdAt
 ) {
+    public TaskTypeDto(Long id, String name, String colorHex, Long organizationId, String organizationName, List<TaskTypeColumnDto> columns, List<TaskTypeTransitionRuleDto> rules) {
+        this(id, name, colorHex, organizationId, organizationName, columns, rules, null);
+    }
+
     public TaskTypeDto(Long id, String name, String colorHex, Long organizationId, String organizationName, List<TaskTypeTransitionRuleDto> rules) {
-        this(id, name, colorHex, organizationId, organizationName, rules, null);
+        this(id, name, colorHex, organizationId, organizationName, List.of(), rules, null);
     }
 }

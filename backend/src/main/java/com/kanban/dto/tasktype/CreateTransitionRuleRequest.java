@@ -9,9 +9,10 @@ import jakarta.validation.constraints.Size;
  */
 public record CreateTransitionRuleRequest(
         Long sourceColumnId,
+        String sourceColumnTitle,
 
-        @NotNull(message = "Target column ID is required")
         Long targetColumnId,
+        String targetColumnTitle,
 
         @NotNull(message = "Rule type is required")
         TransitionRuleType ruleType,
@@ -20,6 +21,10 @@ public record CreateTransitionRuleRequest(
         String description
 ) {
     public CreateTransitionRuleRequest(Long targetColumnId, TransitionRuleType ruleType, String description) {
-        this(null, targetColumnId, ruleType, description);
+        this(null, null, targetColumnId, null, ruleType, description);
+    }
+
+    public CreateTransitionRuleRequest(Long sourceColumnId, Long targetColumnId, TransitionRuleType ruleType, String description) {
+        this(sourceColumnId, null, targetColumnId, null, ruleType, description);
     }
 }

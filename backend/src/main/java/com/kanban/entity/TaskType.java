@@ -36,6 +36,14 @@ public class TaskType {
                 foreignKey = @ForeignKey(name = "fk_task_types_organization"))
     private Organization organization;
 
+    /** Dynamic workflow columns (stages) configured for this task type. */
+    @OneToMany(mappedBy = "taskType",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    @OrderBy("position ASC")
+    @Builder.Default
+    private List<TaskTypeColumn> columns = new ArrayList<>();
+
     /** Transition rules enforced for tasks of this type. */
     @OneToMany(mappedBy = "taskType",
                cascade = CascadeType.ALL,
