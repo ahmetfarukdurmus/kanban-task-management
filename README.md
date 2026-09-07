@@ -1,22 +1,22 @@
-# Multi-Tenant Kanban ve Dinamik Is Akisi Yonetim Sistemi
+# Multi-Tenant Kanban ve Dinamik İş Akışı Yönetim Sistemi
 
-Kurumsal ekipler ve organizasyonlar icin gelistirilmis; mantiksal cok kiracili mimari (Logical Multi-tenancy), dinamik gorev sablonlari, kural bazli kolon gecis mekanizmalari (Workflow Transition Guards) ve rol tabanli erisim kontrolu (RBAC) sunan gorev yonetim platformu.
-
----
-
-## 1. Proje Ozeti
-
-Bu platform, birden fazla departman veya ekibin ayni sistem uzerinde izole sekilde calisabilecegi kurumsal olcekte bir Kanban ve is akisi yonetim sistemidir. Temel ozellikleri sunlardir:
-
-- **Dinamik Gorev Tipleri:** Sistem yoneticileri, "Bug", "Tasarim Gorevi" veya "Story" gibi ozel gorev tiplerini renk, kolon yapisi ve gecis kurallariyla birlikte sifirdan tanimlayabilir.
-- **Kural Bazli Workflow Guards:** Bir gorev belirli bir kolona tasinmadan once checklist tamamlanmasi veya dosya/ek yuklenmesi gibi on kosullar zorunlu kilinabilir.
-- **Mantiksal Cok Kiracililik:** Her organizasyon, pano ve gorev verisi birbirinden izole calisir; bir kullanici birden fazla organizasyona uye olabilir.
-- **Coklu Atama Destegi:** Bir goreve birden fazla kullanici atanabilir (Set<User> assignees).
-- **Gercek Zamanli Sirali Kolon Yonetimi:** Pano kolonlari pozisyon bazli siralama motoruyla yonetilir.
+Kurumsal ekipler ve organizasyonlar için geliştirilmiş; mantıksal çok kiracılı mimari (Logical Multi-tenancy), dinamik görev şablonları, kural bazlı kolon geçiş mekanizmaları (Workflow Transition Guards) ve rol tabanlı erişim kontrolü (RBAC) sunan görev yönetim platformu.
 
 ---
 
-## 2. Mimari ve Teknoloji Yigini
+## 1. Proje Özeti
+
+Bu platform, birden fazla departman veya ekibin aynı sistem üzerinde izole şekilde çalışabildiği kurumsal ölçekte bir Kanban ve iş akışı yönetim sistemidir. Temel özellikleri şunlardır:
+
+- **Dinamik Görev Tipleri:** Sistem yöneticileri, "Bug", "Tasarım Görevi" veya "Story" gibi özel görev tiplerini renk, kolon yapısı ve geçiş kurallarıyla birlikte sıfırdan tanımlayabilir.
+- **Kural Bazlı Workflow Guards:** Bir görev belirli bir kolona taşınmadan önce checklist tamamlanması veya dosya/ek yüklenmesi gibi ön koşullar zorunlu kılınabilir.
+- **Mantıksal Çok Kiracılılık:** Her organizasyon, pano ve görev verisi birbirinden izole çalışır; bir kullanıcı birden fazla organizasyona üye olabilir.
+- **Çoklu Atama Desteği:** Bir göreve birden fazla kullanıcı atanabilir (Set<User> assignees).
+- **Gerçek Zamanlı Sıralı Kolon Yönetimi:** Pano kolonları pozisyon bazlı sıralama motoruyla yönetilir.
+
+---
+
+## 2. Mimari ve Teknoloji Yığını
 
 ```
 +---------------------------+       +---------------------------+
@@ -33,21 +33,21 @@ Bu platform, birden fazla departman veya ekibin ayni sistem uzerinde izole sekil
 
 | Katman              | Teknoloji                         | Fonksiyon                                              |
 |---------------------|-----------------------------------|--------------------------------------------------------|
-| Sunum (Frontend)    | React 18, TypeScript, Vite        | Tek sayfa uygulamasi (SPA), dinamik bilesenler         |
-| Stil                | TailwindCSS                       | Utility-first CSS cercevesi                            |
-| Durum Yonetimi      | React Context API                 | Kimlik dogrulama ve global uygulama durumu             |
-| API Katmani         | Spring Boot 3.3.2, Java 21        | RESTful servis katmani, is mantigi                     |
-| Guvenlik            | Spring Security, JWT (Stateless)  | BCrypt sifreleme, Bearer token dogrulama, RBAC         |
-| Kalici Depolama     | Spring Data JPA, Hibernate        | ORM katmani, entity iliskileri                         |
-| Veritabani          | PostgreSQL 16                     | Iliskisel veritabani, Docker named volume ile kalicilik |
-| Konteynerlestirme   | Docker, Docker Compose            | Servis orkestrasyon, ag izolasyonu                     |
-| Dosya Depolama      | Yerel dosya sistemi (/uploads)    | Gorev eklerinin (attachment) sunucu tarafinda saklanmasi|
+| Sunum (Frontend)    | React 18, TypeScript, Vite        | Tek sayfa uygulaması (SPA), dinamik bileşenler         |
+| Stil                | TailwindCSS                       | Utility-first CSS çerçevesi                            |
+| Durum Yönetimi      | React Context API                 | Kimlik doğrulama ve global uygulama durumu             |
+| API Katmanı         | Spring Boot 3.3.2, Java 21        | RESTful servis katmanı, iş mantığı                     |
+| Güvenlik            | Spring Security, JWT (Stateless)  | BCrypt şifreleme, Bearer token doğrulama, RBAC         |
+| Kalıcı Depolama     | Spring Data JPA, Hibernate        | ORM katmanı, entity ilişkileri                         |
+| Veritabanı          | PostgreSQL 16                     | İlişkisel veritabanı, Docker named volume ile kalıcılık |
+| Konteynerleştirme   | Docker, Docker Compose            | Servis orkestrasyon, ağ izolasyonu                     |
+| Dosya Depolama      | Yerel dosya sistemi (/uploads)    | Görev eklerinin (attachment) sunucu tarafında saklanması|
 
 ---
 
-## 3. Veritabani ve Iliski Modeli
+## 3. Veritabanı ve İlişki Modeli
 
-### 3.1 Temel Entity'ler ve Iliskiler
+### 3.1 Temel Entity'ler ve İlişkiler
 
 ```
 User (N) <---[user_organizations]---> (N) Organization
@@ -63,108 +63,108 @@ Task (1) <---> (N) TaskChecklistItem
 Task (1) <---> (N) Attachment
 Task (1) <---> (N) Comment
 
-TaskType (1) <---> (N) TaskTypeColumn      [Dinamik kolon sablonu]
+TaskType (1) <---> (N) TaskTypeColumn      [Dinamik kolon şablonu]
 TaskType (1) <---> (N) TaskTypeTransitionRule
 TaskTypeTransitionRule (N) <---> (1) TaskTypeColumn [kaynak / hedef]
 ```
 
-### 3.2 Entity Tanimlari
+### 3.2 Entity Tanımları
 
 | Entity                   | Tablo Adi                     | Aciklama                                                      |
 |--------------------------|-------------------------------|---------------------------------------------------------------|
-| User                     | users                         | Kimlik dogrulama, rol ve organizasyon iliskileri              |
-| Organization             | organizations                 | Departman / sirket birimi; multi-tenant yalitim siniri        |
-| Board                    | boards                        | Pano; bir organizasyona bagli                                 |
-| BoardColumn              | board_columns                 | Panoya bagli kolonlar, position alanli siralama               |
-| Task                     | tasks                         | Gorev kartlari; kolon, tip ve coklu atama iliskileri          |
-| TaskChecklistItem        | task_checklist_items          | Goreve bagli yapilacaklar listesi ogeleri                     |
-| Attachment               | attachments                   | Goreve yuklenen dosyalar (yol, tip, boyut)                    |
-| Comment                  | comments                      | Goreve eklenen zaman damgali yorumlar                         |
-| TaskType                 | task_types                    | Admin tarafindan tanimlanan dinamik gorev sablonu             |
-| TaskTypeColumn           | task_type_columns             | TaskType'a ait is akisi kolon sablonu (position bazli)        |
-| TaskTypeTransitionRule   | task_type_transition_rules    | Kolon gecisi on kosul kurallari (Guard)                       |
+| User                     | users                         | Kimlik doğrulama, rol ve organizasyon ilişkileri              |
+| Organization             | organizations                 | Departman / şirket birimi; multi-tenant yalıtım sınırı        |
+| Board                    | boards                        | Pano; bir organizasyona bağlı                                 |
+| BoardColumn              | board_columns                 | Panoya bağlı kolonlar, position alanlı sıralama               |
+| Task                     | tasks                         | Görev kartları; kolon, tip ve çoklu atama ilişkileri          |
+| TaskChecklistItem        | task_checklist_items          | Göreve bağlı yapılacaklar listesi öğeleri                     |
+| Attachment               | attachments                   | Göreve yüklenen dosyalar (yol, tip, boyut)                    |
+| Comment                  | comments                      | Göreve eklenen zaman damgalı yorumlar                         |
+| TaskType                 | task_types                    | Admin tarafından tanımlanan dinamik görev şablonu             |
+| TaskTypeColumn           | task_type_columns             | TaskType'a ait iş akışı kolon şablonu (position bazlı)        |
+| TaskTypeTransitionRule   | task_type_transition_rules    | Kolon geçişi ön koşul kuralları (Guard)                       |
 
-### 3.3 Workflow Transition Guard Mekanizmasi
+### 3.3 Workflow Transition Guard Mekanizması
 
-`TaskTypeTransitionRule`, bir gorev belirli bir kaynak kolondan hedef kolona tasinmadan once hangi kosulun saglanmasi gerektigini tanimlar.
+`TaskTypeTransitionRule`, bir görev belirli bir kaynak kolondan hedef kolona taşınmadan önce hangi koşulun sağlanması gerektiğini tanımlar.
 
 | Alan               | Tip                                  | Aciklama                                        |
 |--------------------|--------------------------------------|-------------------------------------------------|
-| ruleType           | Enum: CHECKLIST_REQUIRED             | Tum checklist ogeleri tamamlanmali              |
-| ruleType           | Enum: ATTACHMENT_REQUIRED            | En az bir dosya eki yuklenmis olmali            |
-| sourceColumnTitle  | String                               | Kaynak kolon adi (title bazli eslestirme)       |
-| targetColumnTitle  | String                               | Hedef kolon adi (title bazli eslestirme)        |
+| ruleType           | Enum: CHECKLIST_REQUIRED             | Tüm checklist öğeleri tamamlanmalı              |
+| ruleType           | Enum: ATTACHMENT_REQUIRED            | En az bir dosya eki yüklenmiş olmalı            |
+| sourceColumnTitle  | String                               | Kaynak kolon adı (title bazlı eşleştirme)       |
+| targetColumnTitle  | String                               | Hedef kolon adı (title bazlı eşleştirme)        |
 
-Kural ihlali durumunda `TaskService.moveTask()` metodu `400 Bad Request` yaniti dondurur.
+Kural ihlali durumunda `TaskService.moveTask()` metodu `400 Bad Request` yanıtı döndürür.
 
 ---
 
-## 4. Kurumsal Is Mantigi ve Guvenlik
+## 4. Kurumsal İş Mantığı ve Güvenlik
 
-### 4.1 Mantiksal Cok Kiracililik
+### 4.1 Mantıksal Çok Kiracılılık
 
-Veritabani duzeyinde fiziksel ayrim yapilmamistir; yalitim, servis katmaninda uygulanir:
+Veritabanı düzeyinde fiziksel ayrım yapılmamıştır; yalıtım, servis katmanında uygulanır:
 
-- Her `Board`, bir `Organization`'a baglidir.
-- `BoardService.getAllBoards()`, `ROLE_SUPER_ADMIN` icin tum panolari; diger roller icin yalnizca kullanicinin uye oldugu organizasyonlara ait panolari dondurur.
-- `TaskTypeService.getTaskTypes()`, organizasyon filtresi ile calisir (`?organizationId=` parametresi).
+- Her `Board`, bir `Organization`'a bağlıdır.
+- `BoardService.getAllBoards()`, `ROLE_SUPER_ADMIN` için tüm panoları; diğer roller için yalnızca kullanıcının üye olduğu organizasyonlara ait panoları döndürür.
+- `TaskTypeService.getTaskTypes()`, organizasyon filtresi ile çalışır (`?organizationId=` parametresi).
 
-### 4.2 Rol Tabanli Erisim Kontrolu (RBAC)
+### 4.2 Rol Tabanlı Erişim Kontrolü (RBAC)
 
 | Rol              | Yetkiler                                                                                  |
 |------------------|-------------------------------------------------------------------------------------------|
-| ROLE_USER        | Pano goruntuleme, gorev olusturma/duzenleme, yorum ve ek yukleme                         |
-| ROLE_ADMIN       | ROLE_USER yetkilerine ek olarak pano silme, gorev tipi olusturma/duzenleme/silme         |
-| ROLE_SUPER_ADMIN | Tum sistem yetkisi; organizasyon olusturma/silme, uye yonetimi, tum panolara erisim      |
+| ROLE_USER        | Pano görüntüleme, görev oluşturma/düzenleme, yorum ve ek yükleme                         |
+| ROLE_ADMIN       | ROLE_USER yetkilerine ek olarak pano silme, görev tipi oluşturma/düzenleme/silme         |
+| ROLE_SUPER_ADMIN | Tüm sistem yetkisi; organizasyon oluşturma/silme, üye yönetimi, tüm panolara erişim      |
 
-Erisim kontrolu Spring Security'nin `@PreAuthorize` anotasyonu ile metot duzeyinde uygulanir.
+Erişim kontrolü Spring Security'nin `@PreAuthorize` anotasyonu ile metot düzeyinde uygulanır.
 
-### 4.3 Kimlik Dogrulama Akisi
+### 4.3 Kimlik Doğrulama Akışı
 
-1. `POST /api/auth/login` veya `POST /api/auth/register` ile JWT alinir.
-2. Sonraki tum isteklerde `Authorization: Bearer <token>` basligi gonderilir.
-3. `JwtAuthenticationFilter`, her istekte tokeni dogrular ve `SecurityContext`'i doldurur.
-4. Token gecerlilik suresi `JWT_EXPIRATION_MS` ortam degiskeniyle yapilandirilir (varsayilan: 24 saat).
+1. `POST /api/auth/login` veya `POST /api/auth/register` ile JWT alınır.
+2. Sonraki tüm isteklerde `Authorization: Bearer <token>` başlığı gönderilir.
+3. `JwtAuthenticationFilter`, her istekte tokeni doğrular ve `SecurityContext`'i doldurur.
+4. Token geçerlilik süresi `JWT_EXPIRATION_MS` ortam değişkeniyle yapılandırılır (varsayılan: 24 saat).
 
-### 4.4 Dinamik Kolon Siralama Motoru
+### 4.4 Dinamik Kolon Sıralama Motoru
 
-`BoardColumnService.reorderColumn()` metodu, bir kolonun yeni pozisyona tasinmasiyla birlikte ayni panonun diger kolonlarinin `position` degerlerini yeniden hesaplar. Pozisyon degerleri 0'dan baslayan tamsayi dizisidir.
+`BoardColumnService.reorderColumn()` metodu, bir kolonun yeni pozisyona taşınmasıyla birlikte aynı panonun diğer kolonlarının `position` değerlerini yeniden hesaplar. Pozisyon değerleri 0'dan başlayan tamsayı dizisidir.
 
 ---
 
-## 5. Kurulum ve Calistirma Kilavuzu
+## 5. Kurulum ve Çalıştırma Kılavuzu
 
-### 5.1 Onkosullar
+### 5.1 Önkoşullar
 
 | Arac          | Surumu  | Amac                                     |
 |---------------|---------|------------------------------------------|
-| Docker        | 24+     | Konteyner calistirma altyapisi           |
-| Docker Compose| 2.x     | Coklu servis orkestrasyon                |
-| Java          | 21      | Yerel gelistirme (opsiyonel)             |
+| Docker        | 24+     | Konteyner çalıştırma altyapısı           |
+| Docker Compose| 2.x     | Çoklu servis orkestrasyon                |
+| Java          | 21      | Yerel geliştirme (opsiyonel)             |
 | Maven         | 3.9+    | Yerel derleme (opsiyonel)                |
-| Node.js       | 20+     | Frontend yerel gelistirme (opsiyonel)    |
+| Node.js       | 20+     | Frontend yerel geliştirme (opsiyonel)    |
 
-### 5.2 Docker Compose ile Baslangic
+### 5.2 Docker Compose ile Başlangıç
 
 ```bash
 # Depoyu klonla
 git clone <repo-url>
 cd kanban-task-management
 
-# Ortam degiskenlerini yapilandir (opsiyonel)
+# Ortam değişkenlerini yapılandır (opsiyonel)
 cp .env.example .env
 
-# Tum servisleri arka planda baslat (ilk calistirmada image'lar derlenir)
+# Tüm servisleri arka planda başlat (ilk çalıştırmada image'lar derlenir)
 docker compose up -d --build
 
-# Servis loglarini canli izle
+# Servis loglarını canlı izle
 docker compose logs -f
 
-# Yalnizca backend loglarini izle
+# Yalnızca backend loglarını izle
 docker compose logs -f backend
 ```
 
-Basarili baslatma sonrasinda:
+Başarılı başlatma sonrasında:
 
 | Servis   | URL                        |
 |----------|----------------------------|
@@ -172,22 +172,22 @@ Basarili baslatma sonrasinda:
 | Backend  | http://localhost:8080/api  |
 | Postgres | localhost:5432 / kanban_db |
 
-**Onemli:** `docker compose down -v` komutu Postgres named volume'unu silerek tum veriyi kalici olarak kaybettirir. Volume'u korumak icin yalnizca `docker compose down` kullanin.
+**Önemli:** `docker compose down -v` komutu Postgres named volume'unu silerek tüm veriyi kalıcı olarak kaybettirir. Volume'u korumak için yalnızca `docker compose down` kullanın.
 
-### 5.3 Konteyner Durdurma ve Yeniden Baslama
+### 5.3 Konteyner Durdurma ve Yeniden Başlama
 
 ```bash
-# Servisleri durdur, konteynerleri kaldir (volume korunur)
+# Servisleri durdur, konteynerleri kaldır (volume korunur)
 docker compose down
 
-# Yeniden baslat (volume verisi korunur)
+# Yeniden başlat (volume verisi korunur)
 docker compose up -d
 
-# Sadece backend'i yeniden olustur ve baslat
+# Sadece backend'i yeniden oluştur ve başlat
 docker compose up -d --build backend
 ```
 
-### 5.4 Yerel Gelistirme Ortami
+### 5.4 Yerel Geliştirme Ortamı
 
 **Backend:**
 ```bash
@@ -200,155 +200,155 @@ mvn spring-boot:run -DskipTests
 ```bash
 cd frontend
 npm install
-npm run dev      # Gelistirme sunucusu: http://localhost:5173
-npm run build    # Uretim derlemesi dogrulamasi
+npm run dev      # Geliştirme sunucusu: http://localhost:5173
+npm run build    # Üretim derlemesi doğrulaması
 ```
 
 ---
 
 ## 6. REST API Referans Tablosu
 
-Tum endpoint'ler `/api` on eki ile erisilebilir (ornek: `http://localhost:8080/api/auth/login`).
+Tüm endpoint'ler `/api` ön eki ile erişilebilir (örnek: `http://localhost:8080/api/auth/login`).
 
-### Kimlik Dogrulama
+### Kimlik Doğrulama
 
 | HTTP Metodu | Endpoint           | Aciklama                             | Yetki Seviyesi  |
 |-------------|--------------------|--------------------------------------|-----------------|
-| POST        | /auth/register     | Yeni kullanici kaydi ve JWT donus    | Herkese Acik    |
-| POST        | /auth/login        | Kimlik dogrulama ve JWT donus        | Herkese Acik    |
+| POST        | /auth/register     | Yeni kullanıcı kaydı ve JWT dönüş    | Herkese Açık    |
+| POST        | /auth/login        | Kimlik doğrulama ve JWT dönüş        | Herkese Açık    |
 
-### Kullanicilar
+### Kullanıcılar
 
 | HTTP Metodu | Endpoint | Aciklama                                            | Yetki Seviyesi   |
 |-------------|----------|-----------------------------------------------------|------------------|
-| GET         | /users   | Tum kullanicilari listele (atama ve ekip yonetimi)  | Giris Yapilmis   |
+| GET         | /users   | Tüm kullanıcıları listele (atama ve ekip yönetimi)  | Giriş Yapılmış   |
 
 ### Organizasyonlar
 
 | HTTP Metodu | Endpoint                                  | Aciklama                                        | Yetki Seviyesi  |
 |-------------|-------------------------------------------|-------------------------------------------------|-----------------|
-| GET         | /organizations                            | Tum organizasyonlari listele                    | Giris Yapilmis  |
-| POST        | /organizations                            | Yeni organizasyon olustur                       | SUPER_ADMIN     |
-| DELETE      | /organizations/{id}                       | Organizasyonu sil (pano ve baglantilar silinir) | SUPER_ADMIN     |
-| GET         | /organizations/{orgId}/members            | Organizasyon uyelerini listele                  | Giris Yapilmis  |
-| POST        | /organizations/{orgId}/members            | Mevcut kullanicilari organizasyona ekle         | SUPER_ADMIN     |
-| POST        | /organizations/{orgId}/members/new        | Yeni kullanici olustur ve organizasyona ekle    | SUPER_ADMIN     |
-| DELETE      | /organizations/{orgId}/members/{userId}   | Kullanicinin organizasyon uyeligini kaldir      | SUPER_ADMIN     |
+| GET         | /organizations                            | Tüm organizasyonları listele                    | Giriş Yapılmış  |
+| POST        | /organizations                            | Yeni organizasyon oluştur                       | SUPER_ADMIN     |
+| DELETE      | /organizations/{id}                       | Organizasyonu sil (pano ve bağlantılar silinir) | SUPER_ADMIN     |
+| GET         | /organizations/{orgId}/members            | Organizasyon üyelerini listele                  | Giriş Yapılmış  |
+| POST        | /organizations/{orgId}/members            | Mevcut kullanıcıları organizasyona ekle         | SUPER_ADMIN     |
+| POST        | /organizations/{orgId}/members/new        | Yeni kullanıcı oluştur ve organizasyona ekle    | SUPER_ADMIN     |
+| DELETE      | /organizations/{orgId}/members/{userId}   | Kullanıcının organizasyon üyeliğini kaldır      | SUPER_ADMIN     |
 
 ### Panolar
 
 | HTTP Metodu | Endpoint       | Aciklama                                          | Yetki Seviyesi     |
 |-------------|----------------|---------------------------------------------------|--------------------|
-| GET         | /boards        | Mevcut kullanicinin erisebilecegi panolari listele| Giris Yapilmis     |
-| POST        | /boards        | Yeni pano olustur (opsiyonel: taskTypeId ile)     | Giris Yapilmis     |
-| GET         | /boards/{id}   | Panonun kolon ve gorev detaylarini getir          | Giris Yapilmis     |
-| PUT         | /boards/{id}   | Pano ad ve aciklamasini guncelle                  | Giris Yapilmis     |
-| DELETE      | /boards/{id}   | Panoyu ve tum alt ogelerini sil                   | ADMIN / SUPER_ADMIN|
+| GET         | /boards        | Mevcut kullanıcının erişebileceği panoları listele| Giriş Yapılmış     |
+| POST        | /boards        | Yeni pano oluştur (opsiyonel: taskTypeId ile)     | Giriş Yapılmış     |
+| GET         | /boards/{id}   | Panonun kolon ve görev detaylarını getir          | Giriş Yapılmış     |
+| PUT         | /boards/{id}   | Pano ad ve açıklamasını güncelle                  | Giriş Yapılmış     |
+| DELETE      | /boards/{id}   | Panoyu ve tüm alt öğelerini sil                   | ADMIN / SUPER_ADMIN|
 
-### Pano Kolonlari
+### Pano Kolonları
 
 | HTTP Metodu | Endpoint                                        | Aciklama                                  | Yetki Seviyesi  |
 |-------------|-------------------------------------------------|-------------------------------------------|-----------------|
-| GET         | /boards/{boardId}/columns                       | Kolonlari gorev listesiyle birlikte getir | Giris Yapilmis  |
-| POST        | /boards/{boardId}/columns                       | Panoya yeni kolon ekle                    | Giris Yapilmis  |
-| GET         | /boards/{boardId}/columns/{columnId}            | Tek kolon detayini getir                  | Giris Yapilmis  |
-| PUT         | /boards/{boardId}/columns/{columnId}            | Kolon adini guncelle                      | Giris Yapilmis  |
-| DELETE      | /boards/{boardId}/columns/{columnId}            | Kolonu ve gorevlerini sil                 | Giris Yapilmis  |
-| PATCH       | /boards/{boardId}/columns/{columnId}/reorder    | Kolon sirasini degistir                   | Giris Yapilmis  |
+| GET         | /boards/{boardId}/columns                       | Kolonları görev listesiyle birlikte getir | Giriş Yapılmış  |
+| POST        | /boards/{boardId}/columns                       | Panoya yeni kolon ekle                    | Giriş Yapılmış  |
+| GET         | /boards/{boardId}/columns/{columnId}            | Tek kolon detayını getir                  | Giriş Yapılmış  |
+| PUT         | /boards/{boardId}/columns/{columnId}            | Kolon adını güncelle                      | Giriş Yapılmış  |
+| DELETE      | /boards/{boardId}/columns/{columnId}            | Kolonu ve görevlerini sil                 | Giriş Yapılmış  |
+| PATCH       | /boards/{boardId}/columns/{columnId}/reorder    | Kolon sırasını değiştir                   | Giriş Yapılmış  |
 
-### Gorevler
+### Görevler
 
 | HTTP Metodu | Endpoint                                                | Aciklama                                             | Yetki Seviyesi  |
 |-------------|---------------------------------------------------------|------------------------------------------------------|-----------------|
-| GET         | /boards/{boardId}/columns/{columnId}/tasks              | Kolondaki gorevleri listele                          | Giris Yapilmis  |
-| POST        | /boards/{boardId}/columns/{columnId}/tasks              | Yeni gorev olustur (assigneeIds, taskTypeId destegi) | Giris Yapilmis  |
-| GET         | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Gorev detayini getir                                 | Giris Yapilmis  |
-| PUT         | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Gorevi guncelle (kolon yolu ile)                     | Giris Yapilmis  |
-| PUT         | /tasks/{taskId}                                         | Gorevi dogrudan guncelle (kolon yolu olmadan)        | Giris Yapilmis  |
-| DELETE      | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Gorevi sil                                           | Giris Yapilmis  |
-| PATCH       | /tasks/{taskId}/move                                    | Gorevi baska kolona tasi (Transition Guard calisir)  | Giris Yapilmis  |
+| GET         | /boards/{boardId}/columns/{columnId}/tasks              | Kolondaki görevleri listele                          | Giriş Yapılmış  |
+| POST        | /boards/{boardId}/columns/{columnId}/tasks              | Yeni görev oluştur (assigneeIds, taskTypeId desteği) | Giriş Yapılmış  |
+| GET         | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Görev detayını getir                                 | Giriş Yapılmış  |
+| PUT         | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Görevi güncelle (kolon yolu ile)                     | Giriş Yapılmış  |
+| PUT         | /tasks/{taskId}                                         | Görevi doğrudan güncelle (kolon yolu olmadan)        | Giriş Yapılmış  |
+| DELETE      | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Görevi sil                                           | Giriş Yapılmış  |
+| PATCH       | /tasks/{taskId}/move                                    | Görevi başka kolona taşı (Transition Guard çalışır)  | Giriş Yapılmış  |
 
-### Checklist (Yapilacaklar Listesi)
+### Checklist (Yapılacaklar Listesi)
 
 | HTTP Metodu | Endpoint                                       | Aciklama                          | Yetki Seviyesi  |
 |-------------|------------------------------------------------|-----------------------------------|-----------------|
-| POST        | /tasks/{taskId}/checklists                     | Goreve checklist ogesi ekle       | Giris Yapilmis  |
-| PATCH       | /tasks/{taskId}/checklists/{itemId}/toggle     | Checklist ogesini tamamla/geri al | Giris Yapilmis  |
-| PUT         | /tasks/{taskId}/checklists/{itemId}            | Checklist ogesi metnini guncelle  | Giris Yapilmis  |
-| DELETE      | /tasks/{taskId}/checklists/{itemId}            | Checklist ogesini sil             | Giris Yapilmis  |
+| POST        | /tasks/{taskId}/checklists                     | Göreve checklist öğesi ekle       | Giriş Yapılmış  |
+| PATCH       | /tasks/{taskId}/checklists/{itemId}/toggle     | Checklist öğesini tamamla/geri al | Giriş Yapılmış  |
+| PUT         | /tasks/{taskId}/checklists/{itemId}            | Checklist öğesi metnini güncelle  | Giriş Yapılmış  |
+| DELETE      | /tasks/{taskId}/checklists/{itemId}            | Checklist öğesini sil             | Giriş Yapılmış  |
 
 ### Ekler (Attachments)
 
 | HTTP Metodu | Endpoint                                             | Aciklama                              | Yetki Seviyesi  |
 |-------------|------------------------------------------------------|---------------------------------------|-----------------|
-| GET         | /tasks/{taskId}/attachments                          | Goreve ait dosya eklerini listele     | Giris Yapilmis  |
-| POST        | /tasks/{taskId}/attachments                          | Dosya yukle (multipart/form-data)     | Giris Yapilmis  |
-| GET         | /tasks/{taskId}/attachments/{attachmentId}/download  | Dosyayi indir veya aktar              | Giris Yapilmis  |
-| DELETE      | /tasks/{taskId}/attachments/{attachmentId}           | Dosya ekini sil                       | Giris Yapilmis  |
+| GET         | /tasks/{taskId}/attachments                          | Göreve ait dosya eklerini listele     | Giriş Yapılmış  |
+| POST        | /tasks/{taskId}/attachments                          | Dosya yükle (multipart/form-data)     | Giriş Yapılmış  |
+| GET         | /tasks/{taskId}/attachments/{attachmentId}/download  | Dosyayı indir veya aktar              | Giriş Yapılmış  |
+| DELETE      | /tasks/{taskId}/attachments/{attachmentId}           | Dosya ekini sil                       | Giriş Yapılmış  |
 
 ### Yorumlar
 
 | HTTP Metodu | Endpoint                               | Aciklama                                   | Yetki Seviyesi  |
 |-------------|----------------------------------------|--------------------------------------------|-----------------|
-| GET         | /tasks/{taskId}/comments               | Goreve ait yorumlari kronolojik listele    | Giris Yapilmis  |
-| POST        | /tasks/{taskId}/comments               | Yorum ekle (yazar: giris yapan kullanici) | Giris Yapilmis  |
-| DELETE      | /tasks/{taskId}/comments/{commentId}   | Yorumu sil                                 | Giris Yapilmis  |
+| GET         | /tasks/{taskId}/comments               | Göreve ait yorumları kronolojik listele    | Giriş Yapılmış  |
+| POST        | /tasks/{taskId}/comments               | Yorum ekle (yazar: giriş yapan kullanıcı) | Giriş Yapılmış  |
+| DELETE      | /tasks/{taskId}/comments/{commentId}   | Yorumu sil                                 | Giriş Yapılmış  |
 
-### Gorev Tipleri (Task Types)
+### Görev Tipleri (Task Types)
 
 | HTTP Metodu | Endpoint                         | Aciklama                                                        | Yetki Seviyesi     |
 |-------------|----------------------------------|-----------------------------------------------------------------|--------------------|
-| GET         | /task-types                      | Gorev tiplerini listele (opsiyonel: ?organizationId=)           | Giris Yapilmis     |
-| GET         | /task-types/{id}                 | Tek gorev tipi detayini getir (kolonlar ve kurallar dahil)      | Giris Yapilmis     |
-| POST        | /task-types                      | Yeni gorev tipi olustur (kolonlar ve kurallar birlikte)         | ADMIN / SUPER_ADMIN|
-| PUT         | /task-types/{id}                 | Gorev tipini guncelle                                           | ADMIN / SUPER_ADMIN|
-| DELETE      | /task-types/{id}                 | Gorev tipini sil                                                | ADMIN / SUPER_ADMIN|
-| POST        | /task-types/{id}/rules           | Gorev tipine gecis kurali ekle                                  | ADMIN / SUPER_ADMIN|
-| DELETE      | /task-types/{id}/rules/{ruleId}  | Gecis kurali sil                                                | ADMIN / SUPER_ADMIN|
+| GET         | /task-types                      | Görev tiplerini listele (opsiyonel: ?organizationId=)           | Giriş Yapılmış     |
+| GET         | /task-types/{id}                 | Tek görev tipi detayını getir (kolonlar ve kurallar dahil)      | Giriş Yapılmış     |
+| POST        | /task-types                      | Yeni görev tipi oluştur (kolonlar ve kurallar birlikte)         | ADMIN / SUPER_ADMIN|
+| PUT         | /task-types/{id}                 | Görev tipini güncelle                                           | ADMIN / SUPER_ADMIN|
+| DELETE      | /task-types/{id}                 | Görev tipini sil                                                | ADMIN / SUPER_ADMIN|
+| POST        | /task-types/{id}/rules           | Görev tipine geçiş kuralı ekle                                  | ADMIN / SUPER_ADMIN|
+| DELETE      | /task-types/{id}/rules/{ruleId}  | Geçiş kuralı sil                                                | ADMIN / SUPER_ADMIN|
 
 ---
 
-## 7. Ortam Degiskenleri
+## 7. Ortam Değişkenleri
 
-| Degisken           | Varsayilan Deger  | Aciklama                                         |
+| Değişken           | Varsayılan Değer  | Açıklama                                         |
 |--------------------|-------------------|--------------------------------------------------|
-| DB_HOST            | postgres          | Veritabani sunucusu adresi                       |
-| DB_PORT            | 5432              | Veritabani portu                                 |
-| DB_NAME            | kanban_db         | Veritabani adi                                   |
-| DB_USER            | kanban_user       | Veritabani kullanici adi                         |
-| DB_PASS            | kanban_pass       | Veritabani sifresi                               |
-| JWT_SECRET         | (zorunlu)         | JWT imzalama anahtari; uretim icin degistirilmeli|
-| JWT_EXPIRATION_MS  | 86400000          | Token gecerlilik suresi (ms); varsayilan 24 saat |
-| CORS_ORIGINS       | http://localhost  | Izin verilen kaynak adresler (CORS)              |
+| DB_HOST            | postgres          | Veritabanı sunucusu adresi                       |
+| DB_PORT            | 5432              | Veritabanı portu                                 |
+| DB_NAME            | kanban_db         | Veritabanı adı                                   |
+| DB_USER            | kanban_user       | Veritabanı kullanıcı adı                         |
+| DB_PASS            | kanban_pass       | Veritabanı şifresi                               |
+| JWT_SECRET         | (zorunlu)         | JWT imzalama anahtarı; üretim için değiştirilmeli|
+| JWT_EXPIRATION_MS  | 86400000          | Token geçerlilik süresi (ms); varsayılan 24 saat |
+| CORS_ORIGINS       | http://localhost  | İzin verilen kaynak adresler (CORS)              |
 | SERVER_PORT        | 8080              | Spring Boot dinleme portu                        |
 
-Uretim ortamina gecis oncesinde `JWT_SECRET` mutlaka guclu ve rastgele bir deger ile degistirilmelidir.
-Ornek uretim: `openssl rand -base64 64`
+Üretim ortamına geçiş öncesinde `JWT_SECRET` mutlaka güçlü ve rastgele bir değer ile değiştirilmelidir.
+Örnek üretim: `openssl rand -base64 64`
 
 ---
 
-## 8. Proje Dizin Yapisi
+## 8. Proje Dizin Yapısı
 
 ```
 kanban-task-management/
 +-- backend/
 |   +-- src/main/java/com/kanban/
-|   |   +-- controller/        # REST katmani (AuthController, BoardController, ...)
-|   |   +-- service/           # Is mantigi (BoardService, TaskService, TaskTypeService, ...)
-|   |   +-- repository/        # Spring Data JPA arayuzleri
-|   |   +-- entity/            # JPA entity siniflari (User, Board, Task, TaskType, ...)
+|   |   +-- controller/        # REST katmanı (AuthController, BoardController, ...)
+|   |   +-- service/           # İş mantığı (BoardService, TaskService, TaskTypeService, ...)
+|   |   +-- repository/        # Spring Data JPA arayüzleri
+|   |   +-- entity/            # JPA entity sınıfları (User, Board, Task, TaskType, ...)
 |   |   +-- dto/               # Veri transfer nesneleri (Request / Response / Dto Records)
 |   |   +-- security/          # JWT filtresi, SecurityConfig, UserDetailsService
-|   |   +-- config/            # Uygulama yapilandirmasi (DataInitializer, CorsConfig, ...)
+|   |   +-- config/            # Uygulama yapılandırması (DataInitializer, CorsConfig, ...)
 |   +-- Dockerfile
 |   +-- pom.xml
 +-- frontend/
 |   +-- src/
-|   |   +-- components/        # Yeniden kullanilabilir React bilesenler
-|   |   +-- pages/             # Sayfa duzeyindeki bilesenler (BoardPage, AdminTaskTypesPage, ...)
-|   |   +-- context/           # AuthContext (JWT, kullanici durumu)
-|   |   +-- types/             # TypeScript tip tanimlari (index.ts)
-|   |   +-- App.tsx            # Rota tanimlari
+|   |   +-- components/        # Yeniden kullanılabilir React bileşenler
+|   |   +-- pages/             # Sayfa düzeyindeki bileşenler (BoardPage, AdminTaskTypesPage, ...)
+|   |   +-- context/           # AuthContext (JWT, kullanıcı durumu)
+|   |   +-- types/             # TypeScript tip tanımları (index.ts)
+|   |   +-- App.tsx            # Rota tanımları
 |   +-- Dockerfile
 |   +-- vite.config.ts
 +-- docker-compose.yml
@@ -358,11 +358,11 @@ kanban-task-management/
 
 ---
 
-## 9. Test Kullanicilari (DataInitializer)
+## 9. Test Kullanıcıları (DataInitializer)
 
-Sistem ilk calistirildiginda asagidaki kullanicilar otomatik olarak olusturulur.
+Sistem ilk çalıştırıldığında aşağıdaki kullanıcılar otomatik olarak oluşturulur.
 
-| Kullanici Adi  | E-posta               | Sifre    | Rol              |
+| Kullanıcı Adı  | E-posta               | Şifre    | Rol              |
 |----------------|-----------------------|----------|------------------|
 | superadmin     | -                     | admin123 | ROLE_SUPER_ADMIN |
 | ali_yilmaz     | ali@kanban.local      | user123  | ROLE_USER        |
@@ -375,4 +375,4 @@ Sistem ilk calistirildiginda asagidaki kullanicilar otomatik olarak olusturulur.
 
 ## 10. Lisans
 
-Bu proje kurumsal ic kullanim amacli gelistirilmistir. Ac kaynak lisans uygulanmamaktadir.
+Bu proje kurumsal iç kullanım amaçlı geliştirilmiştir. Açık kaynak lisans uygulanmamaktadır.
