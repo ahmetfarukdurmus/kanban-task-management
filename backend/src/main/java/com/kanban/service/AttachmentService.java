@@ -125,6 +125,25 @@ public class AttachmentService {
         return toDto(saved);
     }
 
+    /**
+     * Deletes an attachment record and removes the file from disk.
+     */
+    public void deleteAttachment(Long taskId, Long attachmentId) {
+        Attachment attachment = getAttachmentEntity(taskId, attachmentId);
+        try {
+            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+            String fileName = attachment.getFileUrl()
+                    .replace("/api/uploads/", "")
+                    .replace("/uploads/", "")
+                    .replace("uploads/", "");
+            Path filePath = uploadPath.resolve(fileName).normalize();
+            Files.deleteIfExists(filePath);
+        } catch (IOException ex) {
+            log.warn("Could not delete file from disk: {}", ex.getMessage());
+        }
+        attachmentRepository.delete(attachment);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Task requireTask(Long taskId) {

@@ -1,5 +1,12 @@
 import api from './axiosClient';
-import type { MoveTaskRequest, TaskRequest, TaskResponse } from '@/types';
+import type {
+  CreateChecklistItemRequest,
+  MoveTaskRequest,
+  TaskChecklistItemDto,
+  TaskRequest,
+  TaskResponse,
+  UpdateChecklistItemRequest,
+} from '@/types';
 
 const base = (boardId: number, columnId: number) =>
   `/boards/${boardId}/columns/${columnId}/tasks`;
@@ -33,6 +40,19 @@ export const taskApi = {
    */
   move: (taskId: number, data: MoveTaskRequest): Promise<TaskResponse> =>
     api.patch<TaskResponse>(`/tasks/${taskId}/move`, data).then((r) => r.data),
+
+  // ── Checklist methods ──────────────────────────────────────────────────────
+  addChecklist: (taskId: number, data: CreateChecklistItemRequest): Promise<TaskChecklistItemDto> =>
+    api.post<TaskChecklistItemDto>(`/tasks/${taskId}/checklists`, data).then((r) => r.data),
+
+  toggleChecklist: (taskId: number, itemId: number): Promise<TaskChecklistItemDto> =>
+    api.patch<TaskChecklistItemDto>(`/tasks/${taskId}/checklists/${itemId}/toggle`).then((r) => r.data),
+
+  updateChecklist: (taskId: number, itemId: number, data: UpdateChecklistItemRequest): Promise<TaskChecklistItemDto> =>
+    api.put<TaskChecklistItemDto>(`/tasks/${taskId}/checklists/${itemId}`, data).then((r) => r.data),
+
+  deleteChecklist: (taskId: number, itemId: number): Promise<void> =>
+    api.delete(`/tasks/${taskId}/checklists/${itemId}`).then(() => undefined),
 };
 
 export default taskApi;

@@ -1,86 +1,77 @@
 import { useEffect, useRef, useState } from 'react';
-import { format, formatDistanceToNow, parseISO } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 import type {
   AttachmentDto,
-  ColumnResponse,
   CommentDto,
   CustomFieldDto,
   CustomFieldType,
   Priority,
+  TaskChecklistItemDto,
   TaskRequest,
   TaskResponse,
+  TaskTypeDto,
   UserSummary,
 } from '@/types';
 import { taskApi } from '@/api/taskApi';
-import { userService } from '@/services/userService';
 import { commentService } from '@/services/commentService';
 import { attachmentService } from '@/services/attachmentService';
+import { userService } from '@/services/userService';
+import { taskTypeService } from '@/services/taskTypeService';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   DownloadIcon,
-  FileIcon,
   MessageSquareIcon,
   PaperclipIcon,
   PlusIcon,
   TrashIcon,
   UploadCloudIcon,
+  UserIcon,
 } from './icons';
 
 interface Props {
-  task:        TaskResponse | null;
-  boardId:     number;
-  columns:     ColumnResponse[];
-  onClose:     () => void;
-  onUpdated:   (task: TaskResponse) => void;
-  onDeleted:   (taskId: number, columnId: number) => void;
+  task:       TaskResponse | null;
+  boardId:    number;
+  columns:    { id: number; title: string }[];
+  isOpen?:    boolean;
+  onClose:    () => void;
+  onUpdated:  (task: TaskResponse) => void;
+  onDeleted:  (taskId: number, columnId: number) => void;
 }
 
 const PRIORITIES: Priority[] = ['LOW', 'MEDIUM', 'HIGH'];
 
-const priorityBadge: Record<string, { label: string; className: string }> = {
+const priorityBadge: Record<Priority, { label: string; className: string }> = {
   HIGH:   { label: 'Yüksek', className: 'badge-high' },
   MEDIUM: { label: 'Orta',   className: 'badge-medium' },
   LOW:    { label: 'Düşük',  className: 'badge-low' },
 };
 
-function getAvatarColor(name: string): { bg: string; text: string } {
-  const colors = [
-    { bg: 'bg-blue-100', text: 'text-blue-700' },
-    { bg: 'bg-indigo-100', text: 'text-indigo-700' },
-    { bg: 'bg-violet-100', text: 'text-violet-700' },
-    { bg: 'bg-emerald-100', text: 'text-emerald-700' },
-    { bg: 'bg-amber-100', text: 'text-amber-700' },
-    { bg: 'bg-rose-100', text: 'text-rose-700' },
-    { bg: 'bg-teal-100', text: 'text-teal-700' },
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
-}
-
 export default function TaskDetailModal({
   task,
   boardId,
   columns,
+  isOpen = true,
   onClose,
   onUpdated,
   onDeleted,
 }: Props) {
-  const { user, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
 
   /* ── Form State ─────────────────────────────────────────────────── */
-  const [title, setTitle]             = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority]       = useState<Priority>('MEDIUM');
-  const [dueDate, setDueDate]         = useState('');
-  const [assignee, setAssignee]       = useState('');
-  const [columnId, setColumnId]       = useState<number>(0);
-  const [customFields, setCustomFields] = useState<CustomFieldDto[]>([]);
+  const [title, setTitle]                 = useState('');
+  const [description, setDescription]     = useState('');
+  const [priority, setPriority]           = useState<Priority>('MEDIUM');
+  const [dueDate, setDueDate]             = useState('');
+  const [columnId, setColumnId]           = useState<number>(0);
+  const [selectedTaskTypeId, setSelectedTaskTypeId] = useState<number | null>(null);
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<number[]>([]);
+  const [customFields, setCustomFields]   = useState<CustomFieldDto[]>([]);
+
+  /* ── Checklist Items ────────────────────────────────────────────── */
+  const [checklistItems, setChecklistItems] = useState<TaskChecklistItemDto[]>([]);
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
+  const [addingChecklist, setAddingChecklist] = useState(false);
 
   /* ── Custom Field Addition Form State ───────────────────────────── */
   const [showAddField, setShowAddField]   = useState(false);
@@ -90,6 +81,7 @@ export default function TaskDetailModal({
 
   /* ── Data & Async State ─────────────────────────────────────────── */
   const [users, setUsers]                         = useState<UserSummary[]>([]);
+  const [taskTypes, setTaskTypes]                 = useState<TaskTypeDto[]>([]);
   const [comments, setComments]                   = useState<CommentDto[]>([]);
   const [attachments, setAttachments]             = useState<AttachmentDto[]>([]);
   const [newComment, setNewComment]               = useState('');
@@ -100,7 +92,12 @@ export default function TaskDetailModal({
   const [saving, setSaving]                       = useState(false);
   const [deleting, setDeleting]                   = useState(false);
 
+  // Assignee dropdown toggle
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const assigneeBoxRef = useRef<HTMLDivElement>(null);
 
   /* ── Synchronize with selected task & load fresh data from backend ── */
   useEffect(() => {
@@ -109,19 +106,28 @@ export default function TaskDetailModal({
       setDescription(task.description ?? '');
       setPriority(task.priority);
       setDueDate(task.dueDate ?? '');
-      setAssignee(task.assignee ?? '');
       setColumnId(task.columnId);
+      setSelectedTaskTypeId(task.taskTypeId ?? null);
+      setSelectedAssigneeIds(task.assigneeIds || (task.assignee ? [] : []));
+      setChecklistItems(task.checklistItems || []);
       setCustomFields(task.customFields || []);
       setNewComment('');
       setShowAddField(false);
+      setAssigneeDropdownOpen(false);
 
-      // 1. Fetch fresh users list every time modal opens
+      // 1. Fetch fresh users list
       userService
         .getAll()
         .then((data) => setUsers(data))
         .catch(() => { /* fallback */ });
 
-      // 2. Fetch latest task details from backend
+      // 2. Fetch task types
+      taskTypeService
+        .getAll()
+        .then((data) => setTaskTypes(data))
+        .catch(() => { /* fallback */ });
+
+      // 3. Fetch latest task details from backend
       taskApi
         .getTask(boardId, task.columnId, task.id)
         .then((freshTask) => {
@@ -129,13 +135,15 @@ export default function TaskDetailModal({
           setDescription(freshTask.description ?? '');
           setPriority(freshTask.priority);
           setDueDate(freshTask.dueDate ?? '');
-          setAssignee(freshTask.assignee ?? '');
           setColumnId(freshTask.columnId);
+          setSelectedTaskTypeId(freshTask.taskTypeId ?? null);
+          setSelectedAssigneeIds(freshTask.assigneeIds || []);
+          setChecklistItems(freshTask.checklistItems || []);
           setCustomFields(freshTask.customFields || []);
         })
         .catch(() => { /* use prop task as fallback */ });
 
-      // 3. Load comments fresh
+      // 4. Load comments fresh
       setLoadingComments(true);
       commentService
         .getComments(task.id)
@@ -143,7 +151,7 @@ export default function TaskDetailModal({
         .catch(() => toast.error('Yorumlar yüklenemedi.'))
         .finally(() => setLoadingComments(false));
 
-      // 4. Load attachments fresh
+      // 5. Load attachments fresh
       setLoadingAttachments(true);
       attachmentService
         .getAttachments(task.id)
@@ -153,14 +161,69 @@ export default function TaskDetailModal({
     }
   }, [task, boardId]);
 
-  if (!task) return null;
+  // Close assignee dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (assigneeBoxRef.current && !assigneeBoxRef.current.contains(e.target as Node)) {
+        setAssigneeDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  if (!task || !isOpen) return null;
+
+  const handleToggleAssignee = (userId: number) => {
+    setSelectedAssigneeIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  /* ── Checklist Actions ──────────────────────────────────────────── */
+  const handleToggleChecklistItem = async (itemId: number) => {
+    try {
+      const updated = await taskApi.toggleChecklist(task.id, itemId);
+      setChecklistItems((prev) =>
+        prev.map((item) => (item.id === itemId ? updated : item))
+      );
+    } catch {
+      toast.error('Kontrol maddesi güncellenemedi.');
+    }
+  };
+
+  const handleAddChecklistItem = async () => {
+    const trimmed = newChecklistTitle.trim();
+    if (!trimmed) return;
+    setAddingChecklist(true);
+    try {
+      const created = await taskApi.addChecklist(task.id, { title: trimmed });
+      setChecklistItems((prev) => [...prev, created]);
+      setNewChecklistTitle('');
+      toast.success('Kontrol maddesi eklendi.');
+    } catch {
+      toast.error('Kontrol maddesi eklenemedi.');
+    } finally {
+      setAddingChecklist(false);
+    }
+  };
+
+  const handleDeleteChecklistItem = async (itemId: number) => {
+    try {
+      await taskApi.deleteChecklist(task.id, itemId);
+      setChecklistItems((prev) => prev.filter((item) => item.id !== itemId));
+      toast.success('Kontrol maddesi silindi.');
+    } catch {
+      toast.error('Kontrol maddesi silinemedi.');
+    }
+  };
 
   /* ── Custom Field Handlers ──────────────────────────────────────── */
   const handleCustomFieldValueChange = (index: number, value: string) => {
     setCustomFields((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], fieldValue: value };
-      return copy;
+      const next = [...prev];
+      next[index] = { ...next[index], fieldValue: value };
+      return next;
     });
   };
 
@@ -171,11 +234,15 @@ export default function TaskDetailModal({
   const handleAddCustomField = () => {
     const trimmed = newFieldName.trim();
     if (!trimmed) {
-      toast.error('Lütfen alan adı girin.');
+      toast.error('Alan adı zorunludur.');
       return;
     }
-    setCustomFields((prev) => [
-      ...prev,
+    if (customFields.some((f) => f.fieldName.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error('Bu isimde bir özel alan zaten var.');
+      return;
+    }
+    setCustomFields([
+      ...customFields,
       {
         fieldName: trimmed,
         fieldType: newFieldType,
@@ -200,7 +267,7 @@ export default function TaskDetailModal({
     try {
       let currentColId = task.columnId;
 
-      // Handle column move if changed
+      // Handle column move if changed (with transition rule check)
       if (columnId !== task.columnId) {
         await taskApi.move(task.id, {
           targetColumnId: columnId,
@@ -210,11 +277,12 @@ export default function TaskDetailModal({
       }
 
       const payload: TaskRequest = {
-        title:       title.trim(),
-        description: description.trim() || undefined,
+        title:        title.trim(),
+        description:  description.trim() || undefined,
         priority,
-        dueDate:     dueDate || undefined,
-        assignee:    assignee.trim() || undefined,
+        dueDate:      dueDate || undefined,
+        taskTypeId:   selectedTaskTypeId,
+        assigneeIds:  selectedAssigneeIds,
         customFields,
       };
 
@@ -222,8 +290,11 @@ export default function TaskDetailModal({
       onUpdated({ ...updated, columnId: currentColId });
       toast.success('Görev başarıyla güncellendi.');
       onClose();
-    } catch {
-      toast.error('Görev güncellenirken bir hata oluştu.');
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Görev güncellenirken bir hata oluştu.';
+      toast.error(errorMsg, { duration: 5000 });
     } finally {
       setSaving(false);
     }
@@ -258,25 +329,13 @@ export default function TaskDetailModal({
       setNewComment('');
       toast.success('Yorum eklendi.');
     } catch {
-      toast.error('Yorum eklenirken hata oluştu.');
+      toast.error('Yorum eklenemedi.');
     } finally {
       setSubmittingComment(false);
     }
   };
 
-  /* ── Delete Comment ─────────────────────────────────────────────── */
-  const handleDeleteComment = async (commentId: number) => {
-    if (!confirm('Bu yorumu silmek istediğinize emin misiniz?')) return;
-    try {
-      await commentService.deleteComment(task.id, commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-      toast.success('Yorum silindi.');
-    } catch {
-      toast.error('Yorum silinemedi.');
-    }
-  };
-
-  /* ── File Upload ────────────────────────────────────────────────── */
+  /* ── File Upload ─────────────────────────────────────────────────── */
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -288,14 +347,26 @@ export default function TaskDetailModal({
 
     setUploadingFile(true);
     try {
-      const added = await attachmentService.uploadAttachment(task.id, file);
-      setAttachments((prev) => [added, ...prev]);
-      toast.success('Dosya başarıyla yüklendi.');
+      const uploaded = await attachmentService.upload(task.id, file);
+      setAttachments((prev) => [uploaded, ...prev]);
+      toast.success('Dosya yüklendi.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
     } catch {
-      toast.error('Dosya yüklenirken hata oluştu.');
+      toast.error('Dosya yüklenemedi.');
     } finally {
       setUploadingFile(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  /* ── File Delete ─────────────────────────────────────────────────── */
+  const handleDeleteAttachment = async (attachmentId: number) => {
+    if (!confirm('Bu dosyayı silmek istediğinizden emin misiniz?')) return;
+    try {
+      await attachmentService.deleteAttachment(task.id, attachmentId);
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+      toast.success('Dosya silindi.');
+    } catch {
+      toast.error('Dosya silinemedi.');
     }
   };
 
@@ -303,199 +374,218 @@ export default function TaskDetailModal({
     return fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileName);
   };
 
-  const currentColumn = columns.find((c) => c.id === columnId);
-  const currentAvatar = assignee ? getAvatarColor(assignee) : null;
+  const filteredUsers = users.filter((u) => {
+    const term = assigneeSearch.toLowerCase();
+    return (
+      u.username.toLowerCase().includes(term) ||
+      (u.organizationName && u.organizationName.toLowerCase().includes(term))
+    );
+  });
+
+  const selectedType = taskTypes.find((t) => t.id === selectedTaskTypeId);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      className="modal-overlay"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-5xl min-h-[600px] bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-6 flex flex-col my-8 animate-scale-in max-h-[90vh] overflow-y-auto">
+      <div className="modal-box max-w-4xl p-0 overflow-hidden flex flex-col max-h-[92vh]">
 
-        {/* ── Top Bar / Header ──────────────────────────────────────── */}
-        <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+        {/* ── Modal Header ───────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/80 bg-slate-50/50">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-200 shadow-xs">
-              <FileIcon className="w-4.5 h-4.5" />
+            <span className="text-xs font-mono font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md border border-slate-200/60">
+              #{task.id}
             </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Görev #{task.id}
-                </span>
-                <span className="text-slate-300">&bull;</span>
-                <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                  {currentColumn?.title ?? 'Pano'}
-                </span>
-              </div>
-              <h2 className="text-lg font-bold text-slate-800 tracking-tight mt-0.5">
-                Görev Detayları
-              </h2>
-            </div>
+            {selectedType && (
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold border"
+                style={{
+                  backgroundColor: selectedType.colorHex ? `${selectedType.colorHex}15` : '#EFF6FF',
+                  color: selectedType.colorHex || '#2563EB',
+                  borderColor: selectedType.colorHex ? `${selectedType.colorHex}35` : '#BFDBFE',
+                }}
+              >
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: selectedType.colorHex || '#2563EB' }}
+                />
+                {selectedType.name}
+              </span>
+            )}
           </div>
 
-          <button
-            onClick={onClose}
-            className="btn-ghost p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
-            aria-label="Kapat"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              aria-label="Kapat"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {/* ── 2-Column Main Layout ──────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 items-start">
+        {/* ── Modal Body (2-Column Layout) ───────────────────────────── */}
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* ══════════════════════════════════════════════════════════
               SOL BÖLÜM (~%70 / 8 Kolon):
-              Başlık, Açıklama, Özel Alanlar, Medya/Ekler, Aktivite & Yorumlar
+              Başlık, Açıklama, Kontrol Listesi, Özel Alanlar, Ekler, Yorumlar
              ══════════════════════════════════════════════════════════ */}
           <div className="lg:col-span-8 space-y-6">
 
-            {/* Başlık Alanı */}
+            {/* Başlık */}
             <div>
               <label htmlFor="detail-task-title" className="field-label">
-                Başlık <span className="text-rose-500">*</span>
+                Görev Başlığı <span className="text-rose-500">*</span>
               </label>
               <input
                 id="detail-task-title"
+                type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Görev başlığı girin..."
-                className="field text-base font-semibold text-slate-800 py-2.5"
                 maxLength={200}
+                className="field text-base font-bold text-slate-800"
+                placeholder="Görev başlığı girin..."
               />
             </div>
 
-            {/* Açıklama Alanı */}
+            {/* Açıklama */}
             <div>
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <FileIcon className="w-3.5 h-3.5 text-slate-400" />
-                <label htmlFor="detail-task-desc" className="field-label mb-0">
-                  Açıklama
-                </label>
-              </div>
+              <label htmlFor="detail-task-description" className="field-label">
+                Açıklama
+              </label>
               <textarea
-                id="detail-task-desc"
+                id="detail-task-description"
                 rows={4}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Bu göreve dair detaylı açıklama, yapılacaklar veya hedefler ekleyin..."
-                className="field resize-none text-sm text-slate-700 leading-relaxed"
+                className="field leading-relaxed text-sm resize-none"
+                placeholder="Görevin detaylı açıklaması, hedefleri ve yapılacaklar..."
               />
             </div>
 
-            {/* ── Özel Alanlar (Custom Fields) Bölümü ──────────────────── */}
-            <div className="pt-4 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-3.5">
+            {/* ── Kontrol Listesi (Checklist) ──────────────────────── */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-slate-500">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <path d="M3 9h18" />
-                    <path d="M9 21V9" />
-                  </svg>
-                  <h3 className="text-sm font-bold text-slate-800">Özel Alanlar</h3>
+                  <h3 className="text-sm font-bold text-slate-800">Kontrol Listesi (Checklist)</h3>
                   <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-semibold border border-slate-200/60">
-                    {customFields.length}
+                    {checklistItems.filter((i) => i.isCompleted).length}/{checklistItems.length}
                   </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddField(!showAddField)}
-                  className="btn-secondary py-1.5 px-3 text-xs gap-1.5 font-medium text-slate-700 hover:text-blue-600"
-                >
-                  <PlusIcon className="w-3.5 h-3.5" />
-                  <span>Yeni Alan Ekle</span>
-                </button>
               </div>
 
-              {/* Add new custom field inline form */}
-              {showAddField && (
-                <div className="mb-4 p-3.5 rounded-xl bg-blue-50/50 border border-blue-200/80 space-y-3 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">Yeni Özel Alan Tanımla</span>
+              {/* Checklist Items List */}
+              <div className="space-y-1.5">
+                {checklistItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/80 hover:bg-white transition-all group"
+                  >
+                    <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={item.isCompleted}
+                        onChange={() => handleToggleChecklistItem(item.id)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span className={`text-xs ${item.isCompleted ? 'line-through text-slate-400' : 'text-slate-700 font-medium'}`}>
+                        {item.title}
+                      </span>
+                    </label>
                     <button
                       type="button"
-                      onClick={() => setShowAddField(false)}
-                      className="text-slate-400 hover:text-slate-600 text-xs"
+                      onClick={() => handleDeleteChecklistItem(item.id)}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded"
+                      title="Maddeyi Sil"
                     >
-                      ✕
+                      <TrashIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                ))}
+              </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        Alan Adı <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        autoFocus
-                        type="text"
-                        placeholder="örn: Jira Kodu, Test Tarihi"
-                        value={newFieldName}
-                        onChange={(e) => setNewFieldName(e.target.value)}
-                        className="field w-full text-xs bg-white"
-                      />
-                    </div>
+              {/* Add checklist input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Yeni kontrol maddesi ekle…"
+                  value={newChecklistTitle}
+                  onChange={(e) => setNewChecklistTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddChecklistItem();
+                    }
+                  }}
+                  className="field text-xs py-1.5 flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddChecklistItem}
+                  disabled={addingChecklist || !newChecklistTitle.trim()}
+                  className="btn-secondary px-3 py-1.5 text-xs font-semibold"
+                >
+                  + Ekle
+                </button>
+              </div>
+            </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        Alan Tipi
-                      </label>
-                      <select
-                        value={newFieldType}
-                        onChange={(e) => setNewFieldType(e.target.value as CustomFieldType)}
-                        className="field w-full text-xs bg-white font-medium"
-                      >
-                        <option value="TEXT">Metin (Text)</option>
-                        <option value="NUMBER">Sayı (Number)</option>
-                        <option value="DATE">Tarih (Date)</option>
-                      </select>
-                    </div>
+            {/* ── Özel Alanlar (Custom Fields) ──────────────────────── */}
+            <div className="pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-slate-800">Özel Alanlar</h3>
+                {!showAddField && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddField(true)}
+                    className="btn-ghost text-xs text-blue-600 hover:text-blue-700 font-semibold gap-1"
+                  >
+                    <PlusIcon className="w-3.5 h-3.5" />
+                    Özel Alan Ekle
+                  </button>
+                )}
+              </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        Değer
-                      </label>
-                      {newFieldType === 'DATE' ? (
-                        <input
-                          type="date"
-                          value={newFieldValue}
-                          onChange={(e) => setNewFieldValue(e.target.value)}
-                          className="field w-full text-xs bg-white"
-                        />
-                      ) : newFieldType === 'NUMBER' ? (
-                        <input
-                          type="number"
-                          placeholder="örn: 42"
-                          value={newFieldValue}
-                          onChange={(e) => setNewFieldValue(e.target.value)}
-                          className="field w-full text-xs bg-white"
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          placeholder="örn: KAN-104"
-                          value={newFieldValue}
-                          onChange={(e) => setNewFieldValue(e.target.value)}
-                          className="field w-full text-xs bg-white"
-                        />
-                      )}
-                    </div>
+              {/* Add Field Inline Form */}
+              {showAddField && (
+                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/40 mb-3 space-y-3 animate-scale-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Alan Adı (Örn: Bütçe, Sürüm)"
+                      value={newFieldName}
+                      onChange={(e) => setNewFieldName(e.target.value)}
+                      className="field bg-white text-xs"
+                      autoFocus
+                    />
+                    <select
+                      value={newFieldType}
+                      onChange={(e) => setNewFieldType(e.target.value as CustomFieldType)}
+                      className="field bg-white text-xs"
+                    >
+                      <option value="TEXT">Metin</option>
+                      <option value="NUMBER">Sayı</option>
+                      <option value="DATE">Tarih</option>
+                    </select>
+                    <input
+                      type={newFieldType === 'DATE' ? 'date' : newFieldType === 'NUMBER' ? 'number' : 'text'}
+                      placeholder="Değer..."
+                      value={newFieldValue}
+                      onChange={(e) => setNewFieldValue(e.target.value)}
+                      className="field bg-white text-xs"
+                    />
                   </div>
-
-                  <div className="flex justify-end gap-2 pt-1">
+                  <div className="flex justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setShowAddField(false)}
-                      className="btn-ghost py-1 px-3 text-xs"
+                      className="btn-ghost py-1 px-2.5 text-xs"
                     >
                       İptal
                     </button>
@@ -504,25 +594,14 @@ export default function TaskDetailModal({
                       onClick={handleAddCustomField}
                       className="btn-primary py-1 px-3 text-xs font-semibold"
                     >
-                      Alanı Ekle
+                      Alanı Kaydet
                     </button>
                   </div>
                 </div>
               )}
 
               {/* Custom Fields List */}
-              {customFields.length === 0 && !showAddField ? (
-                <div className="p-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/40 text-center">
-                  <p className="text-xs text-slate-400 font-medium">Özel alan eklenmemiş.</p>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddField(true)}
-                    className="mt-1 text-xs text-blue-600 hover:text-blue-700 font-semibold"
-                  >
-                    + Yeni Özel Alan Ekle
-                  </button>
-                </div>
-              ) : (
+              {customFields.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {customFields.map((cf, index) => {
                     const typeLabel = cf.fieldType === 'DATE' ? 'Tarih' : cf.fieldType === 'NUMBER' ? 'Sayı' : 'Metin';
@@ -542,7 +621,6 @@ export default function TaskDetailModal({
                               {typeLabel}
                             </span>
                           </div>
-
                           <button
                             type="button"
                             onClick={() => handleDeleteCustomField(index)}
@@ -553,7 +631,6 @@ export default function TaskDetailModal({
                           </button>
                         </div>
 
-                        {/* Input according to field type */}
                         {cf.fieldType === 'DATE' ? (
                           <input
                             type="date"
@@ -596,7 +673,6 @@ export default function TaskDetailModal({
                   </span>
                 </div>
 
-                {/* Dosya Yükle Butonu */}
                 <div>
                   <input
                     type="file"
@@ -650,54 +726,51 @@ export default function TaskDetailModal({
                     return (
                       <div
                         key={att.id}
-                        className="group flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-sm transition-all"
+                        className="group flex flex-col justify-between p-3 rounded-xl border border-slate-200/90 bg-white hover:border-blue-300 hover:shadow-xs transition-all"
                       >
-                        {/* Thumbnail / File Icon */}
-                        <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-xs">
+                        <div className="flex items-start gap-3">
                           {isImg ? (
                             <img
                               src={att.fileUrl}
                               alt={att.fileName}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
+                              className="w-12 h-12 object-cover rounded-lg border border-slate-100 bg-slate-50 flex-shrink-0"
                             />
                           ) : (
-                            <FileIcon className="w-5 h-5 text-slate-400" />
+                            <div className="w-12 h-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
+                              <PaperclipIcon className="w-5 h-5" />
+                            </div>
                           )}
-                        </div>
 
-                        {/* File Metadata */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors" title={att.fileName}>
-                            {att.fileName}
-                          </p>
-                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-400">
-                            <span>{att.uploadedByName || 'Kullanıcı'}</span>
-                            <span>&bull;</span>
-                            <span>{format(parseISO(att.uploadedAt), 'd MMM yyyy')}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-800 truncate" title={att.fileName}>
+                              {att.fileName}
+                            </p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {att.uploadedByName} • {format(parseISO(att.uploadedAt), 'dd.MM.yyyy HH:mm')}
+                            </p>
                           </div>
                         </div>
 
-                        {/* Download / Open Action */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            toast.promise(
-                              attachmentService.downloadAttachment(task.id, att.id, att.fileName),
-                              {
-                                loading: 'İndiriliyor…',
-                                success: 'Dosya indirildi!',
-                                error: 'Dosya indirilemedi.',
-                              }
-                            );
-                          }}
-                          className="btn-ghost p-1.5 text-slate-400 hover:text-blue-600 rounded-lg cursor-pointer"
-                          title="İndir"
-                        >
-                          <DownloadIcon className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-slate-100">
+                          <a
+                            href={att.fileUrl}
+                            download={att.fileName}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700"
+                          >
+                            <DownloadIcon className="w-3.5 h-3.5" />
+                            İndir
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAttachment(att.id)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors"
+                            title="Dosyayı Sil"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -705,91 +778,54 @@ export default function TaskDetailModal({
               )}
             </div>
 
-            {/* Aktivite & Yorumlar Bölümü */}
+            {/* Yorumlar Bölümü */}
             <div className="pt-4 border-t border-slate-100 space-y-4">
               <div className="flex items-center gap-2">
                 <MessageSquareIcon className="w-4 h-4 text-slate-500" />
-                <h3 className="text-sm font-bold text-slate-800">Aktivite ve Yorumlar</h3>
+                <h3 className="text-sm font-bold text-slate-800">Yorumlar ve Aktivite</h3>
                 <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-semibold border border-slate-200/60">
                   {comments.length}
                 </span>
               </div>
 
-              {/* Yorum Ekleme Formu */}
-              <form onSubmit={handleAddComment} className="flex gap-2">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    placeholder="Bu göreve bir yorum veya not ekleyin..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    className="field w-full text-xs"
-                    disabled={submittingComment}
-                  />
+              <form onSubmit={handleAddComment} className="space-y-2">
+                <textarea
+                  rows={2}
+                  placeholder="Bir yorum yazın…"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  className="field text-xs py-2 resize-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={submittingComment || !newComment.trim()}
+                    className="btn-primary py-1.5 px-3 text-xs font-semibold"
+                  >
+                    {submittingComment ? 'Gönderiliyor…' : 'Yorum Yap'}
+                  </button>
                 </div>
-                <button
-                  type="submit"
-                  disabled={submittingComment || !newComment.trim()}
-                  className="btn-primary py-1.5 px-3 text-xs font-semibold shrink-0"
-                >
-                  {submittingComment ? 'Gönderiliyor…' : 'Yorum Yaz'}
-                </button>
               </form>
 
-              {/* Yorumlar Listesi */}
               {loadingComments ? (
                 <div className="py-4 flex justify-center">
                   <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : comments.length === 0 ? (
-                <p className="text-xs text-slate-400 py-2 italic">Henüz yorum yapılmamış.</p>
+                <p className="text-xs text-slate-400 italic">Henüz yorum yapılmamış.</p>
               ) : (
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                  {comments.map((comment) => {
-                    const avatar = getAvatarColor(comment.authorName);
-                    const canDelete = isAdmin || (user && user.id === comment.authorId);
-
-                    return (
-                      <div
-                        key={comment.id}
-                        className="group flex items-start gap-2.5 p-3 rounded-xl bg-slate-50/70 border border-slate-200/70 text-xs hover:bg-slate-50 transition-colors"
-                      >
-                        <span
-                          className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold shrink-0 ${avatar.bg} ${avatar.text}`}
-                        >
-                          {comment.authorName.charAt(0).toUpperCase()}
+                <div className="space-y-2.5">
+                  {comments.map((c) => (
+                    <div key={c.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700">{c.authorName}</span>
+                        <span className="text-[11px] text-slate-400">
+                          {format(parseISO(c.createdAt), 'dd.MM.yyyy HH:mm')}
                         </span>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-800">{comment.authorName}</span>
-                              <span className="text-[11px] text-slate-400">
-                                {formatDistanceToNow(parseISO(comment.createdAt), {
-                                  addSuffix: true,
-                                  locale: tr,
-                                })}
-                              </span>
-                            </div>
-
-                            {canDelete && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteComment(comment.id)}
-                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded transition-opacity"
-                                title="Yorumu Sil"
-                              >
-                                <TrashIcon className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">
-                            {comment.content}
-                          </p>
-                        </div>
                       </div>
-                    );
-                  })}
+                      <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{c.content}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -798,7 +834,7 @@ export default function TaskDetailModal({
 
           {/* ══════════════════════════════════════════════════════════
               SAĞ BÖLÜM (~%30 / 4 Kolon):
-              Durum (Kolon), Atanan Kişi, Öncelik, Tarihler & İşlemler
+              Durum (Kolon), Görev Tipi, Atanan Kişiler, Öncelik, Tarihler
              ══════════════════════════════════════════════════════════ */}
           <div className="lg:col-span-4 bg-slate-50/90 rounded-2xl border border-slate-200/90 p-4.5 space-y-4.5 shadow-xs">
 
@@ -821,47 +857,114 @@ export default function TaskDetailModal({
               </select>
             </div>
 
-            {/* Atanan Kişi (Assignee) */}
+            {/* Görev Tipi (Task Type) */}
             <div>
-              <label htmlFor="detail-task-assignee" className="field-label">
-                Atanan Kişi
+              <label htmlFor="detail-task-type" className="field-label">
+                Görev Tipi (Task Type)
               </label>
-              <div className="space-y-2">
-                <select
-                  id="detail-task-assignee"
-                  value={assignee}
-                  onChange={(e) => setAssignee(e.target.value)}
-                  className="field text-sm font-medium text-slate-700"
-                >
-                  <option value="">Seçiniz / Atanmamış</option>
-                  {users.map((u) => {
-                    const orgLabel =
-                      u.organizationNames && u.organizationNames.length > 0
-                        ? u.organizationNames.join(', ')
-                        : u.organizationName || '';
-                    return (
-                      <option key={u.id} value={u.username}>
-                        {u.username} {orgLabel ? `(${orgLabel})` : ''}
-                      </option>
-                    );
-                  })}
-                  {assignee && !users.some((u) => u.username === assignee) && (
-                    <option value={assignee}>{assignee}</option>
-                  )}
-                </select>
+              <select
+                id="detail-task-type"
+                value={selectedTaskTypeId ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedTaskTypeId(val ? Number(val) : null);
+                }}
+                className="field text-sm font-medium text-slate-700"
+              >
+                <option value="">-- Görev Tipi Seçiniz --</option>
+                {taskTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Selected Assignee Badge */}
-                {assignee ? (
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200/90 shadow-xs">
-                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${currentAvatar?.bg} ${currentAvatar?.text}`}>
-                      {assignee.charAt(0).toUpperCase()}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-700 truncate">{assignee}</span>
-                  </div>
+            {/* Atanan Kişiler (Multi-Select) */}
+            <div ref={assigneeBoxRef} className="relative">
+              <label className="field-label">
+                Atanan Kişiler <span className="text-slate-400 font-normal text-xs">(Çoklu Seçim)</span>
+              </label>
+
+              <div
+                onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
+                className="field min-h-[42px] cursor-pointer flex flex-wrap items-center gap-1.5 p-1.5"
+              >
+                {selectedAssigneeIds.length === 0 ? (
+                  <span className="text-slate-400 text-xs font-normal px-1 flex items-center gap-1.5">
+                    <UserIcon className="w-3.5 h-3.5" />
+                    Kişi seçiniz…
+                  </span>
                 ) : (
-                  <p className="text-[11px] text-slate-400 italic">Kimseye atanmadı</p>
+                  selectedAssigneeIds.map((userId) => {
+                    const u = users.find((item) => item.id === userId);
+                    if (!u) return null;
+                    return (
+                      <span
+                        key={u.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200"
+                      >
+                        <span className="w-3.5 h-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[8px] font-bold">
+                          {u.username.charAt(0).toUpperCase()}
+                        </span>
+                        {u.username}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleAssignee(u.id);
+                          }}
+                          className="hover:text-rose-600 text-blue-400 ml-0.5 font-bold"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })
                 )}
               </div>
+
+              {/* Multi-Select Dropdown */}
+              {assigneeDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl max-h-52 overflow-y-auto p-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Kullanıcı ara…"
+                    value={assigneeSearch}
+                    onChange={(e) => setAssigneeSearch(e.target.value)}
+                    className="field text-xs py-1.5 mb-2 w-full"
+                  />
+                  {filteredUsers.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-2">Kullanıcı bulunamadı.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {filteredUsers.map((u) => {
+                        const isSelected = selectedAssigneeIds.includes(u.id);
+                        return (
+                          <div
+                            key={u.id}
+                            onClick={() => handleToggleAssignee(u.id)}
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
+                              isSelected ? 'bg-blue-50 text-blue-900 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span>{u.username}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Öncelik (Priority) */}
@@ -881,11 +984,6 @@ export default function TaskDetailModal({
                   </option>
                 ))}
               </select>
-              <div className="mt-2">
-                <span className={priorityBadge[priority]?.className || 'badge-low'}>
-                  {priorityBadge[priority]?.label || priority} Öncelik
-                </span>
-              </div>
             </div>
 
             {/* Bitiş Tarihi (Due Date) */}
@@ -928,7 +1026,6 @@ export default function TaskDetailModal({
                 Kapat
               </button>
 
-              {/* Admin Silme Butonu */}
               {isAdmin && (
                 <div className="pt-2">
                   <button

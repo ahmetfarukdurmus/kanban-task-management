@@ -64,9 +64,14 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
       // ── API call ──────────────────────────────────────────────────
       taskApi
         .move(taskId, { targetColumnId: dstColId, targetPosition: destination.index })
-        .catch(() => {
+        .catch((err: unknown) => {
           onColumns(previousColumns);
-          toast.error('Görev taşınamadı. Lütfen tekrar deneyin.');
+          const errorMsg =
+            (err as { response?: { data?: { detail?: string; title?: string } } })?.response?.data?.detail ||
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+            (err as { message?: string })?.message ||
+            'Görev taşınamadı. Lütfen geçiş şartlarını kontrol edin.';
+          toast.error(errorMsg, { duration: 6000 });
         });
     },
     [columns, onColumns],

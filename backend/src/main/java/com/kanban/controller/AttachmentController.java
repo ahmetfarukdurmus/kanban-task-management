@@ -71,4 +71,12 @@ public class AttachmentController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + attachment.getFileName() + "\"")
                 .body(resource);
     }
+
+    @DeleteMapping("/{attachmentId}")
+    public ResponseEntity<Void> deleteAttachment(
+            @PathVariable Long taskId,
+            @PathVariable Long attachmentId) {
+        attachmentService.deleteAttachment(taskId, attachmentId);
+        return ResponseEntity.noContent().build();
+    }
 }

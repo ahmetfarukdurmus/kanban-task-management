@@ -24,6 +24,12 @@ export const attachmentService = {
       .then((r) => r.data);
   },
 
+  upload: (taskId: number, file: File): Promise<AttachmentDto> =>
+    attachmentService.uploadAttachment(taskId, file),
+
+  deleteAttachment: (taskId: number, attachmentId: number): Promise<void> =>
+    api.delete(`/tasks/${taskId}/attachments/${attachmentId}`).then(() => undefined),
+
   /**
    * Securely downloads an attachment with JWT Authentication and triggers file download.
    */

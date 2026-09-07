@@ -8,8 +8,14 @@ import com.kanban.entity.TransitionRuleType;
 public record TaskTypeTransitionRuleDto(
         Long id,
         Long taskTypeId,
+        Long sourceColumnId,
+        String sourceColumnTitle,
         Long targetColumnId,
         String targetColumnTitle,
         TransitionRuleType ruleType,
         String description
-) {}
+) {
+    public TaskTypeTransitionRuleDto(Long id, Long taskTypeId, Long targetColumnId, String targetColumnTitle, TransitionRuleType ruleType, String description) {
+        this(id, taskTypeId, null, null, targetColumnId, targetColumnTitle, ruleType, description);
+    }
+}

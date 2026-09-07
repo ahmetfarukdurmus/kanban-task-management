@@ -96,6 +96,7 @@ export interface BoardResponse {
 /* ── Column ────────────────────────────────────────────────────────── */
 export interface ColumnRequest {
   title: string;
+  colorHex?: string;
 }
 
 export interface ColumnReorderRequest {
@@ -107,6 +108,7 @@ export interface ColumnResponse {
   title: string;
   position: number;
   boardId: number;
+  colorHex?: string | null;
   tasks: TaskResponse[];
 }
 
@@ -120,7 +122,72 @@ export interface CustomFieldDto {
   fieldValue: string;
 }
 
-/* ── Task ──────────────────────────────────────────────────── */
+/* ── Dynamic Task Types & Transition Rules ────────────────────────── */
+export type TransitionRuleType = 'CHECKLIST_REQUIRED' | 'ATTACHMENT_REQUIRED';
+
+export interface TaskTypeTransitionRuleDto {
+  id: number;
+  taskTypeId: number;
+  sourceColumnId?: number | null;
+  sourceColumnTitle?: string | null;
+  targetColumnId: number;
+  targetColumnTitle: string;
+  ruleType: TransitionRuleType;
+  description?: string | null;
+}
+
+export interface CreateTransitionRuleRequest {
+  sourceColumnId?: number | null;
+  targetColumnId: number;
+  ruleType: TransitionRuleType;
+  description?: string;
+}
+
+export interface TaskTypeDto {
+  id: number;
+  name: string;
+  colorHex?: string | null;
+  organizationId?: number | null;
+  organizationName?: string | null;
+  rules: TaskTypeTransitionRuleDto[];
+  createdAt?: string;
+}
+
+export interface CreateTaskTypeRequest {
+  name: string;
+  colorHex?: string;
+  organizationId?: number | null;
+  rules?: CreateTransitionRuleRequest[];
+}
+
+export interface UpdateTaskTypeRequest {
+  name: string;
+  colorHex?: string;
+  rules?: CreateTransitionRuleRequest[];
+}
+
+/* ── Task Checklist Items ─────────────────────────────────────────── */
+export interface TaskChecklistItemDto {
+  id: number;
+  taskId: number;
+  title: string;
+  isCompleted: boolean;
+  requiredForColumnId?: number | null;
+  createdAt?: string;
+}
+
+export interface CreateChecklistItemRequest {
+  title: string;
+  requiredForColumnId?: number | null;
+}
+
+export interface UpdateChecklistItemRequest {
+  title?: string;
+  isCompleted?: boolean;
+  requiredForColumnId?: number | null;
+}
+
+/* ── Task ──────────────────────────────────────────────────────────── */
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface TaskRequest {
@@ -129,7 +196,10 @@ export interface TaskRequest {
   priority?: Priority;
   dueDate?: string;   // ISO-8601 date string (YYYY-MM-DD)
   assignee?: string;
+  assigneeIds?: number[];
+  taskTypeId?: number | null;
   customFields?: CustomFieldDto[];
+  checklistItems?: CreateChecklistItemRequest[];
 }
 
 export interface MoveTaskRequest {
@@ -147,6 +217,12 @@ export interface TaskResponse {
   position: number;
   columnId: number;
   customFields?: CustomFieldDto[];
+  taskTypeId?: number | null;
+  taskTypeName?: string | null;
+  taskTypeColor?: string | null;
+  assigneeIds?: number[];
+  assignees?: UserSummary[];
+  checklistItems?: TaskChecklistItemDto[];
 }
 
 /* ── User ──────────────────────────────────────────────────────────── */

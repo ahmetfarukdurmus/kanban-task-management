@@ -26,6 +26,12 @@ public class TaskTypeTransitionRule {
                 foreignKey = @ForeignKey(name = "fk_transition_rules_task_type"))
     private TaskType taskType;
 
+    /** Optional source board column. If null, rule applies to transition from any column. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_column_id",
+                foreignKey = @ForeignKey(name = "fk_transition_rules_source_column"))
+    private BoardColumn sourceColumn;
+
     /** Target board column where this rule is enforced. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "target_column_id", nullable = false,

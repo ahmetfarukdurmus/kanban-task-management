@@ -242,11 +242,12 @@ public class TaskService {
 
         } else {
             // ── Case B: cross-column move with Transition Guard ────────────
+            BoardColumn sourceColumn = task.getColumn();
             BoardColumn targetColumn = columnRepository.findById(dstColId)
                     .orElseThrow(() -> ResourceNotFoundException.of("Column", dstColId));
 
             // Validate transition rules for this task type on the target column
-            validateTransitionRules(task, targetColumn);
+            validateTransitionRules(task, sourceColumn, targetColumn);
 
             // 1. Close gap in source column
             taskRepository.shiftPositionsLeft(srcColId, srcPos, Integer.MAX_VALUE);
@@ -267,7 +268,7 @@ public class TaskService {
      * Validates column transition rules for the task's TaskType.
      * Throws {@link IllegalStateException} (mapped to 400 Bad Request) if any rule is violated.
      */
-    private void validateTransitionRules(Task task, BoardColumn targetColumn) {
+    private void validateTransitionRules(Task task, BoardColumn sourceColumn, BoardColumn targetColumn) {
         if (task.getTaskType() == null) {
             return;
         }
@@ -276,29 +277,34 @@ public class TaskService {
                 .findAllByTaskTypeIdAndTargetColumnId(task.getTaskType().getId(), targetColumn.getId());
 
         for (TaskTypeTransitionRule rule : rules) {
-            if (rule.getRuleType() == TransitionRuleType.CHECKLIST_REQUIRED) {
+            // If rule specifies a source column and does not match, skip
+            if (rule.getSourceColumn() != null && !rule.getSourceColumn().getId().equals(sourceColumn.getId())) {
+                continue;
+            }
+
+            if (rule.getRuleType() == TransitionRuleType.ATTACHMENT_REQUIRED) {
+                if (task.getAttachments() == null || task.getAttachments().isEmpty()) {
+                    String extra = (rule.getDescription() != null && !rule.getDescription().isBlank())
+                            ? " (" + rule.getDescription() + ")"
+                            : "";
+                    throw new IllegalStateException("Bu aşamaya geçmek için dosya/görsel yüklenmelidir." + extra);
+                }
+            } else if (rule.getRuleType() == TransitionRuleType.CHECKLIST_REQUIRED) {
                 List<TaskChecklistItem> items = task.getChecklistItems();
                 if (items == null || items.isEmpty()) {
-                    throw new IllegalStateException(
-                            String.format("'%s' kolonuna geçiş yapabilmek için görev kontrol listesi (checklist) tamamlanmalıdır.%s",
-                                    targetColumn.getTitle(),
-                                    rule.getDescription() != null && !rule.getDescription().isBlank() ? " (" + rule.getDescription() + ")" : ""));
+                    String extra = (rule.getDescription() != null && !rule.getDescription().isBlank())
+                            ? " (" + rule.getDescription() + ")"
+                            : "";
+                    throw new IllegalStateException("Zorunlu kontrol listesi maddeleri tamamlanmadan bu kolona geçilemez." + extra);
                 }
                 boolean hasUncompleted = items.stream().anyMatch(item ->
                         !item.isCompleted() && (item.getRequiredForColumnId() == null || item.getRequiredForColumnId().equals(targetColumn.getId()))
                 );
                 if (hasUncompleted) {
-                    throw new IllegalStateException(
-                            String.format("'%s' kolonuna geçiş yapabilmek için görev kontrol listesindeki tüm maddelerin tamamlanmış olması gerekmektedir.%s",
-                                    targetColumn.getTitle(),
-                                    rule.getDescription() != null && !rule.getDescription().isBlank() ? " (" + rule.getDescription() + ")" : ""));
-                }
-            } else if (rule.getRuleType() == TransitionRuleType.ATTACHMENT_REQUIRED) {
-                if (task.getAttachments() == null || task.getAttachments().isEmpty()) {
-                    throw new IllegalStateException(
-                            String.format("'%s' kolonuna geçiş yapabilmek için göreve en az bir dosya veya medya eki yüklenmiş olmalıdır.%s",
-                                    targetColumn.getTitle(),
-                                    rule.getDescription() != null && !rule.getDescription().isBlank() ? " (" + rule.getDescription() + ")" : ""));
+                    String extra = (rule.getDescription() != null && !rule.getDescription().isBlank())
+                            ? " (" + rule.getDescription() + ")"
+                            : "";
+                    throw new IllegalStateException("Zorunlu kontrol listesi maddeleri tamamlanmadan bu kolona geçilemez." + extra);
                 }
             }
         }

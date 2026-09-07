@@ -8,6 +8,7 @@ import LoginPage       from '@/pages/LoginPage';
 import RegisterPage    from '@/pages/RegisterPage';
 import BoardsPage      from '@/pages/BoardsPage';
 import BoardDetailPage from '@/pages/BoardDetailPage';
+import AdminTaskTypesPage from '@/pages/AdminTaskTypesPage';
 
 export default function App() {
   return (
@@ -25,6 +26,9 @@ export default function App() {
             } />
             <Route path="/boards/:id" element={
               <ProtectedRoute><BoardDetailPage /></ProtectedRoute>
+            } />
+            <Route path="/admin/task-types" element={
+              <ProtectedRoute><AdminTaskTypesPage /></ProtectedRoute>
             } />
 
             {/* Fallback */}

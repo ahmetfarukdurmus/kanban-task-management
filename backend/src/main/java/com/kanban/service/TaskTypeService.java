@@ -105,8 +105,15 @@ public class TaskTypeService {
                 BoardColumn targetColumn = columnRepository.findById(ruleReq.targetColumnId())
                         .orElseThrow(() -> new ResourceNotFoundException("Hedef kolon bulunamadı: ID " + ruleReq.targetColumnId()));
 
+                BoardColumn sourceColumn = null;
+                if (ruleReq.sourceColumnId() != null) {
+                    sourceColumn = columnRepository.findById(ruleReq.sourceColumnId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Kaynak kolon bulunamadı: ID " + ruleReq.sourceColumnId()));
+                }
+
                 TaskTypeTransitionRule rule = TaskTypeTransitionRule.builder()
                         .taskType(taskType)
+                        .sourceColumn(sourceColumn)
                         .targetColumn(targetColumn)
                         .ruleType(ruleReq.ruleType())
                         .description(ruleReq.description() != null ? ruleReq.description().trim() : null)
@@ -145,8 +152,15 @@ public class TaskTypeService {
                 BoardColumn targetColumn = columnRepository.findById(ruleReq.targetColumnId())
                         .orElseThrow(() -> new ResourceNotFoundException("Hedef kolon bulunamadı: ID " + ruleReq.targetColumnId()));
 
+                BoardColumn sourceColumn = null;
+                if (ruleReq.sourceColumnId() != null) {
+                    sourceColumn = columnRepository.findById(ruleReq.sourceColumnId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Kaynak kolon bulunamadı: ID " + ruleReq.sourceColumnId()));
+                }
+
                 TaskTypeTransitionRule rule = TaskTypeTransitionRule.builder()
                         .taskType(taskType)
+                        .sourceColumn(sourceColumn)
                         .targetColumn(targetColumn)
                         .ruleType(ruleReq.ruleType())
                         .description(ruleReq.description() != null ? ruleReq.description().trim() : null)
@@ -199,8 +213,15 @@ public class TaskTypeService {
         BoardColumn targetColumn = columnRepository.findById(request.targetColumnId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hedef kolon bulunamadı: ID " + request.targetColumnId()));
 
+        BoardColumn sourceColumn = null;
+        if (request.sourceColumnId() != null) {
+            sourceColumn = columnRepository.findById(request.sourceColumnId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Kaynak kolon bulunamadı: ID " + request.sourceColumnId()));
+        }
+
         TaskTypeTransitionRule rule = TaskTypeTransitionRule.builder()
                 .taskType(taskType)
+                .sourceColumn(sourceColumn)
                 .targetColumn(targetColumn)
                 .ruleType(request.ruleType())
                 .description(request.description() != null ? request.description().trim() : null)
@@ -210,6 +231,8 @@ public class TaskTypeService {
         return new TaskTypeTransitionRuleDto(
                 saved.getId(),
                 taskType.getId(),
+                sourceColumn != null ? sourceColumn.getId() : null,
+                sourceColumn != null ? sourceColumn.getTitle() : null,
                 targetColumn.getId(),
                 targetColumn.getTitle(),
                 saved.getRuleType(),
@@ -268,6 +291,8 @@ public class TaskTypeService {
                         .map(r -> new TaskTypeTransitionRuleDto(
                                 r.getId(),
                                 type.getId(),
+                                r.getSourceColumn() != null ? r.getSourceColumn().getId() : null,
+                                r.getSourceColumn() != null ? r.getSourceColumn().getTitle() : null,
                                 r.getTargetColumn().getId(),
                                 r.getTargetColumn().getTitle(),
                                 r.getRuleType(),
