@@ -6,16 +6,20 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Request body for creating or updating a {@link com.kanban.entity.Task}.
  *
- * @param title        card title (required)
- * @param description  long-form description (optional)
- * @param priority     card priority enum: {@code LOW}, {@code MEDIUM}, {@code HIGH}.
- * @param dueDate      ISO-8601 date string for the due date (optional)
- * @param assignee     free-text assignee name (optional)
- * @param customFields list of dynamic custom fields (optional)
+ * @param title          card title (required)
+ * @param description    long-form description (optional)
+ * @param priority       card priority enum: {@code LOW}, {@code MEDIUM}, {@code HIGH}.
+ * @param dueDate        ISO-8601 date string for the due date (optional)
+ * @param assignee       free-text assignee name (optional, backward compatible)
+ * @param assigneeIds    set of user IDs assigned to this task (multi-assignee)
+ * @param taskTypeId     dynamic task type / template ID (optional)
+ * @param customFields   list of dynamic custom fields (optional)
+ * @param checklistItems list of checklist items (optional)
  */
 public record TaskRequest(
         @NotBlank(message = "Task title must not be blank")
@@ -31,9 +35,19 @@ public record TaskRequest(
         @Size(max = 100, message = "Assignee name must not exceed 100 characters")
         String assignee,
 
-        List<CustomFieldDto> customFields
+        Set<Long> assigneeIds,
+
+        Long taskTypeId,
+
+        List<CustomFieldDto> customFields,
+
+        List<CreateChecklistItemRequest> checklistItems
 ) {
+    public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee, List<CustomFieldDto> customFields) {
+        this(title, description, priority, dueDate, assignee, null, null, customFields, null);
+    }
+
     public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee) {
-        this(title, description, priority, dueDate, assignee, null);
+        this(title, description, priority, dueDate, assignee, null, null, null, null);
     }
 }

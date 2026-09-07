@@ -24,7 +24,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
      */
     @Query("SELECT DISTINCT b FROM Board b " +
            "WHERE (b.organization.id IN :userOrgIds) " +
-           "   OR EXISTS (SELECT t FROM Task t WHERE t.column.board.id = b.id AND (t.assignedUser.id = :userId OR t.assignee = :username)) " +
+           "   OR EXISTS (SELECT t FROM Task t JOIN t.assignees a WHERE t.column.board.id = b.id AND (a.id = :userId OR a.username = :username)) " +
            "ORDER BY b.createdAt DESC")
     List<Board> findAccessibleBoardsForUser(
             @Param("userOrgIds") Collection<Long> userOrgIds,

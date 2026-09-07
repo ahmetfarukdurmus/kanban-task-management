@@ -37,6 +37,14 @@ public class GlobalExceptionHandler {
         return pd;
     }
 
+    /** Business / transition rule violations. */
+    @ExceptionHandler(IllegalStateException.class)
+    public ProblemDetail handleIllegalState(IllegalStateException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Rule Violation");
+        return pd;
+    }
+
     /** Wrong username or password during login. */
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentials(BadCredentialsException ex) {

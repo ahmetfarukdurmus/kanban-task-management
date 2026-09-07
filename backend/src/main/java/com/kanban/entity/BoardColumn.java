@@ -1,5 +1,6 @@
 package com.kanban.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,6 +15,7 @@ import java.util.List;
 @Table(name = "board_columns")
 @Getter @Setter @Builder
 @NoArgsConstructor @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class BoardColumn {
 
     @Id
@@ -22,6 +24,10 @@ public class BoardColumn {
 
     @Column(nullable = false, length = 80)
     private String title;
+
+    /** Hex color code for the column header or accent bar (e.g. "#3B82F6"). */
+    @Column(length = 20)
+    private String colorHex;
 
     /**
      * Zero-based display order within its board.

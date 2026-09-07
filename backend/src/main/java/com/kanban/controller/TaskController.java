@@ -1,8 +1,6 @@
 package com.kanban.controller;
 
-import com.kanban.dto.task.MoveTaskRequest;
-import com.kanban.dto.task.TaskRequest;
-import com.kanban.dto.task.TaskResponse;
+import com.kanban.dto.task.*;
 import com.kanban.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,22 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * REST controller for Task resources.
- *
- * <p>Standard CRUD is nested under board → column for clear ownership semantics.
- * The move/reorder endpoint lives at the top-level {@code /tasks} prefix because
- * it can change the owning column and does not naturally belong to either the
- * source or destination column path.</p>
- *
- * <pre>
- * GET    /api/boards/{boardId}/columns/{columnId}/tasks              – list tasks
- * POST   /api/boards/{boardId}/columns/{columnId}/tasks              – create task
- * GET    /api/boards/{boardId}/columns/{columnId}/tasks/{taskId}     – get task
- * PUT    /api/boards/{boardId}/columns/{columnId}/tasks/{taskId}     – update task
- * DELETE /api/boards/{boardId}/columns/{columnId}/tasks/{taskId}     – delete task
- *
- * PATCH  /api/tasks/{taskId}/move   – reorder within column OR move across columns
- * </pre>
+ * REST controller for Task resources, move transitions, and checklist items.
  */
 @RestController
 @RequiredArgsConstructor
@@ -85,23 +68,44 @@ public class TaskController {
 
     /**
      * Moves or reorders a task.
-     *
-     * <p>If {@code targetColumnId} equals the task's current column, this is an
-     * in-column reorder.  Otherwise it is a cross-column move.  Both cases are
-     * handled atomically with the position-shift algorithm in
-     * {@link TaskService#moveTask}.</p>
-     *
-     * <p>Request body example:</p>
-     * <pre>{@code
-     * {
-     *   "targetColumnId": 3,
-     *   "targetPosition": 1
-     * }
-     * }</pre>
+     * Enforces transition rules (checklist completion & required attachments) on cross-column moves.
      */
     @PatchMapping("/tasks/{taskId}/move")
     public ResponseEntity<TaskResponse> moveTask(@PathVariable Long taskId,
                                                  @Valid @RequestBody MoveTaskRequest request) {
         return ResponseEntity.ok(taskService.moveTask(taskId, request));
+    }
+
+    // ── Checklist Items ───────────────────────────────────────────────────────
+
+    @PostMapping("/tasks/{taskId}/checklists")
+    public ResponseEntity<TaskChecklistItemDto> addChecklistItem(
+            @PathVariable Long taskId,
+            @Valid @RequestBody CreateChecklistItemRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(taskService.addChecklistItem(taskId, request));
+    }
+
+    @PatchMapping("/tasks/{taskId}/checklists/{itemId}/toggle")
+    public ResponseEntity<TaskChecklistItemDto> toggleChecklistItem(
+            @PathVariable Long taskId,
+            @PathVariable Long itemId) {
+        return ResponseEntity.ok(taskService.toggleChecklistItem(taskId, itemId));
+    }
+
+    @PutMapping("/tasks/{taskId}/checklists/{itemId}")
+    public ResponseEntity<TaskChecklistItemDto> updateChecklistItem(
+            @PathVariable Long taskId,
+            @PathVariable Long itemId,
+            @Valid @RequestBody UpdateChecklistItemRequest request) {
+        return ResponseEntity.ok(taskService.updateChecklistItem(taskId, itemId, request));
+    }
+
+    @DeleteMapping("/tasks/{taskId}/checklists/{itemId}")
+    public ResponseEntity<Void> deleteChecklistItem(
+            @PathVariable Long taskId,
+            @PathVariable Long itemId) {
+        taskService.deleteChecklistItem(taskId, itemId);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -1,14 +1,18 @@
 package com.kanban.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A task card inside a {@link BoardColumn}.
+ * Supports dynamic task types, multi-assignees, checklist items, attachments, comments, and custom fields.
  *
  * <p><b>Position algorithm</b>: {@code position} is a zero-based integer.
  * When a task is moved or reordered, only the tasks in the affected range
@@ -18,6 +22,7 @@ import java.util.List;
 @Table(name = "tasks")
 @Getter @Setter @Builder
 @NoArgsConstructor @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Task {
 
     @Id
@@ -35,20 +40,27 @@ public class Task {
     @Builder.Default
     private Priority priority = Priority.MEDIUM;
 
+    /** Dynamic task type / template (e.g. Bug, Story, Task, Design). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "task_type_id",
+                foreignKey = @ForeignKey(name = "fk_tasks_task_type"))
+    private TaskType taskType;
+
     /** Optional due date displayed on the card. */
     private LocalDate dueDate;
 
     /**
-     * Free-text assignee username (e.g. "ahmet_muhasebe").
+     * Multi-user assignment for this task (ManyToMany).
+     * Join table: {@code task_assignees}.
      */
-    @Column(length = 100)
-    private String assignee;
-
-    /** User assigned to this task (nullable, can belong to any department). */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_user_id",
-                foreignKey = @ForeignKey(name = "fk_tasks_assigned_user"))
-    private User assignedUser;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "task_assignees",
+        joinColumns = @JoinColumn(name = "task_id", foreignKey = @ForeignKey(name = "fk_task_assignees_task")),
+        inverseJoinColumns = @JoinColumn(name = "user_id", foreignKey = @ForeignKey(name = "fk_task_assignees_user"))
+    )
+    @Builder.Default
+    private Set<User> assignees = new HashSet<>();
 
     /**
      * Zero-based order within its {@link BoardColumn}.
@@ -61,6 +73,14 @@ public class Task {
     @JoinColumn(name = "column_id", nullable = false,
                 foreignKey = @ForeignKey(name = "fk_tasks_column"))
     private BoardColumn column;
+
+    /** Checklist items on this task – cascaded on delete */
+    @OneToMany(mappedBy = "task",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    @OrderBy("id ASC")
+    @Builder.Default
+    private List<TaskChecklistItem> checklistItems = new ArrayList<>();
 
     /** Comments on this task – cascaded on delete */
     @OneToMany(mappedBy = "task",
@@ -85,6 +105,38 @@ public class Task {
     @OrderBy("id ASC")
     @Builder.Default
     private List<TaskCustomField> customFields = new ArrayList<>();
+
+    // ─── Assignee helper methods for single/multi compatibility ──────────
+
+    public String getAssignee() {
+        if (assignees == null || assignees.isEmpty()) {
+            return null;
+        }
+        return assignees.iterator().next().getUsername();
+    }
+
+    public void setAssignee(String username) {
+        // Helper retained for backward compatibility
+    }
+
+    public User getAssignedUser() {
+        if (assignees == null || assignees.isEmpty()) {
+            return null;
+        }
+        return assignees.iterator().next();
+    }
+
+    public void setAssignedUser(User user) {
+        if (this.assignees == null) {
+            this.assignees = new HashSet<>();
+        }
+        if (user != null) {
+            this.assignees.clear();
+            this.assignees.add(user);
+        } else {
+            this.assignees.clear();
+        }
+    }
 
     // ─── Priority enum ───────────────────────────────────────────────────
 
