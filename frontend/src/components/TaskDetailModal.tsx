@@ -121,10 +121,16 @@ export default function TaskDetailModal({
         .then((data) => setUsers(data))
         .catch(() => { /* fallback */ });
 
-      // 2. Fetch task types
+      // 2. Fetch task types and auto-populate rules if needed
       taskTypeService
         .getAll()
-        .then((data) => setTaskTypes(data))
+        .then((data) => {
+          setTaskTypes(data);
+          const typeId = task.taskTypeId;
+          if (typeId) {
+            populateChecklistFromTaskType(typeId, task.checklistItems || [], data);
+          }
+        })
         .catch(() => { /* fallback */ });
 
       // 3. Fetch latest task details from backend
@@ -140,6 +146,10 @@ export default function TaskDetailModal({
           setSelectedAssigneeIds(freshTask.assigneeIds || []);
           setChecklistItems(freshTask.checklistItems || []);
           setCustomFields(freshTask.customFields || []);
+
+          if (freshTask.taskTypeId) {
+            populateChecklistFromTaskType(freshTask.taskTypeId, freshTask.checklistItems || []);
+          }
         })
         .catch(() => { /* use prop task as fallback */ });
 
@@ -160,6 +170,47 @@ export default function TaskDetailModal({
         .finally(() => setLoadingAttachments(false));
     }
   }, [task, boardId]);
+
+  // Helper to auto-populate checklist items based on task type transition rules
+  const populateChecklistFromTaskType = async (
+    typeId: number,
+    currentList: TaskChecklistItemDto[],
+    typesList: TaskTypeDto[] = taskTypes
+  ) => {
+    const type = typesList.find((t) => t.id === typeId);
+    if (!type || !type.rules || !task) return;
+
+    const checklistRules = type.rules.filter((r) => r.ruleType === 'CHECKLIST_REQUIRED');
+    if (checklistRules.length === 0) return;
+
+    for (const rule of checklistRules) {
+      const ruleTitle = rule.description?.trim() || `${rule.targetColumnTitle} Kontrolü`;
+      const exists = currentList.some(
+        (item) => item.title.trim().toLowerCase() === ruleTitle.toLowerCase()
+      );
+      if (!exists) {
+        const targetCol = columns.find(
+          (c) =>
+            (rule.targetColumnId && c.id === rule.targetColumnId) ||
+            (rule.targetColumnTitle && c.title.toLowerCase() === rule.targetColumnTitle.toLowerCase())
+        );
+        try {
+          const created = await taskApi.addChecklist(task.id, {
+            title: ruleTitle,
+            requiredForColumnId: targetCol?.id,
+          });
+          setChecklistItems((prev) => {
+            if (prev.some((p) => p.id === created.id || p.title.toLowerCase() === created.title.toLowerCase())) {
+              return prev;
+            }
+            return [...prev, created];
+          });
+        } catch {
+          // ignore / fallback
+        }
+      }
+    }
+  };
 
   // Close assignee dropdown on outside click
   useEffect(() => {
@@ -269,6 +320,66 @@ export default function TaskDetailModal({
 
       // Handle column move if changed (with transition rule check)
       if (columnId !== task.columnId) {
+        // Pre-validate transition rules on client-side
+        if (selectedTaskTypeId) {
+          const currentType = taskTypes.find((t) => t.id === selectedTaskTypeId);
+          const targetCol = columns.find((c) => c.id === columnId);
+          const sourceCol = columns.find((c) => c.id === task.columnId);
+
+          if (currentType?.rules && targetCol) {
+            for (const rule of currentType.rules) {
+              const targetMatches =
+                (rule.targetColumnId && rule.targetColumnId === columnId) ||
+                (rule.targetColumnTitle && rule.targetColumnTitle.toLowerCase() === targetCol.title.toLowerCase());
+
+              if (!targetMatches) continue;
+
+              const hasSource = rule.sourceColumnId || (rule.sourceColumnTitle && rule.sourceColumnTitle.trim() !== '');
+              if (hasSource && sourceCol) {
+                const sourceMatches =
+                  (rule.sourceColumnId && rule.sourceColumnId === sourceCol.id) ||
+                  (rule.sourceColumnTitle && rule.sourceColumnTitle.toLowerCase() === sourceCol.title.toLowerCase());
+                if (!sourceMatches) continue;
+              }
+
+              if (rule.ruleType === 'CHECKLIST_REQUIRED') {
+                const uncompleted = checklistItems.filter(
+                  (item) => !item.isCompleted && (!item.requiredForColumnId || item.requiredForColumnId === columnId)
+                );
+                if (checklistItems.length === 0 || uncompleted.length > 0) {
+                  toast.error('Bu aşamaya geçebilmek için zorunlu kontrol listesi maddeleri tamamlanmalıdır.', {
+                    duration: 5000,
+                    style: {
+                      border: '1px solid #EF4444',
+                      padding: '12px',
+                      color: '#991B1B',
+                      backgroundColor: '#FEF2F2',
+                    },
+                  });
+                  setColumnId(task.columnId);
+                  setSaving(false);
+                  return;
+                }
+              } else if (rule.ruleType === 'ATTACHMENT_REQUIRED') {
+                if (attachments.length === 0) {
+                  toast.error('Bu aşamaya geçebilmek için dosya/görsel eki yüklenmelidir.', {
+                    duration: 5000,
+                    style: {
+                      border: '1px solid #EF4444',
+                      padding: '12px',
+                      color: '#991B1B',
+                      backgroundColor: '#FEF2F2',
+                    },
+                  });
+                  setColumnId(task.columnId);
+                  setSaving(false);
+                  return;
+                }
+              }
+            }
+          }
+        }
+
         await taskApi.move(task.id, {
           targetColumnId: columnId,
           targetPosition: 0,
@@ -291,10 +402,20 @@ export default function TaskDetailModal({
       toast.success('Görev başarıyla güncellendi.');
       onClose();
     } catch (err: unknown) {
+      setColumnId(task.columnId); // Reset back to original column on error
       const errorMsg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Görev güncellenirken bir hata oluştu.';
-      toast.error(errorMsg, { duration: 5000 });
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Bu aşamaya geçebilmek için zorunlu kontrol listesi maddeleri tamamlanmalıdır.';
+      toast.error(errorMsg, {
+        duration: 5000,
+        style: {
+          border: '1px solid #EF4444',
+          padding: '12px',
+          color: '#991B1B',
+          backgroundColor: '#FEF2F2',
+        },
+      });
     } finally {
       setSaving(false);
     }
@@ -430,29 +551,113 @@ export default function TaskDetailModal({
         </div>
 
         {/* ── Modal Body (2-Column Layout) ───────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
-          {/* ══════════════════════════════════════════════════════════
-              SOL BÖLÜM (~%70 / 8 Kolon):
-              Başlık, Açıklama, Kontrol Listesi, Özel Alanlar, Ekler, Yorumlar
-             ══════════════════════════════════════════════════════════ */}
-          <div className="lg:col-span-8 space-y-6">
+          {/* ── Workflow Transition Rules Info Banner (Gereken Kurallar Bilgi Kutusu) ── */}
+          {selectedType && selectedType.rules && selectedType.rules.length > 0 && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-amber-50/70 border border-blue-200/90 shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-white shadow-2xs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                  </span>
+                  <h4 className="text-xs font-bold text-slate-900 tracking-tight">
+                    Bu görevin bir sonraki aşamaya geçebilmesi için gereken kurallar (Workflow Guards)
+                  </h4>
+                </div>
+                <span className="text-[11px] font-bold text-blue-700 bg-white px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs">
+                  {selectedType.rules.length} Kural Tanımlı
+                </span>
+              </div>
 
-            {/* Başlık */}
-            <div>
-              <label htmlFor="detail-task-title" className="field-label">
-                Görev Başlığı <span className="text-rose-500">*</span>
-              </label>
-              <input
-                id="detail-task-title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={200}
-                className="field text-base font-bold text-slate-800"
-                placeholder="Görev başlığı girin..."
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {selectedType.rules.map((rule) => {
+                  const isChecklist = rule.ruleType === 'CHECKLIST_REQUIRED';
+                  const isSatisfied = isChecklist
+                    ? (checklistItems.length > 0 && checklistItems.every((i) => i.isCompleted))
+                    : attachments.length > 0;
+
+                  return (
+                    <div
+                      key={rule.id}
+                      className={`p-2.5 rounded-xl border text-xs flex items-start gap-2.5 transition-all ${
+                        isSatisfied
+                          ? 'bg-emerald-50/90 border-emerald-300/80 text-emerald-900 shadow-2xs'
+                          : 'bg-white border-amber-200/90 text-slate-800 shadow-2xs'
+                      }`}
+                    >
+                      <span
+                        className={`flex items-center justify-center w-4 h-4 rounded-full mt-0.5 shrink-0 text-[10px] font-bold ${
+                          isSatisfied
+                            ? 'bg-emerald-600 text-white shadow-2xs'
+                            : 'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}
+                      >
+                        {isSatisfied ? '✓' : '!'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-[11px] text-slate-900">
+                            Hedef: {rule.targetColumnTitle}
+                          </span>
+                          {rule.sourceColumnTitle && (
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              ({rule.sourceColumnTitle} aşamasından)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                          {isChecklist ? (
+                            <>
+                              <strong className="font-semibold text-slate-800">Kontrol Listesi:</strong>{' '}
+                              {rule.description ? rule.description : 'Tüm kontrol listesi maddeleri tamamlanmalı'}{' '}
+                              <span className={`font-semibold ${checklistItems.length > 0 && checklistItems.every((i) => i.isCompleted) ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                ({checklistItems.filter((i) => i.isCompleted).length}/{checklistItems.length} tamamlandı)
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <strong className="font-semibold text-slate-800">Medya/Ek:</strong>{' '}
+                              {rule.description ? rule.description : 'En az bir görsel veya dosya yüklenmeli'}{' '}
+                              <span className={`font-semibold ${attachments.length > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                ({attachments.length} dosya yüklü)
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            {/* ══════════════════════════════════════════════════════════
+                SOL BÖLÜM (~%70 / 8 Kolon):
+                Başlık, Açıklama, Kontrol Listesi, Özel Alanlar, Ekler, Yorumlar
+               ══════════════════════════════════════════════════════════ */}
+            <div className="lg:col-span-8 space-y-6">
+
+              {/* Başlık */}
+              <div>
+                <label htmlFor="detail-task-title" className="field-label">
+                  Görev Başlığı <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  id="detail-task-title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={200}
+                  className="field text-base font-bold text-slate-800"
+                  placeholder="Görev başlığı girin..."
+                />
+              </div>
 
             {/* Açıklama */}
             <div>
@@ -480,34 +685,79 @@ export default function TaskDetailModal({
                 </div>
               </div>
 
+              {/* Checklist Transition Rules Pills (if task type has checklist rules) */}
+              {selectedType && selectedType.rules?.some((r) => r.ruleType === 'CHECKLIST_REQUIRED') && (
+                <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-lg bg-amber-50/60 border border-amber-200/70 text-xs">
+                  <span className="text-amber-900 font-semibold flex items-center gap-1 text-[11px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Zorunlu Geçiş Kuralları:
+                  </span>
+                  {selectedType.rules
+                    .filter((r) => r.ruleType === 'CHECKLIST_REQUIRED')
+                    .map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-white text-amber-900 border border-amber-200/90 shadow-2xs"
+                      >
+                        [{r.targetColumnTitle} için Zorunlu]
+                        {r.description ? ` (${r.description})` : ''}
+                      </span>
+                    ))}
+                </div>
+              )}
+
               {/* Checklist Items List */}
               <div className="space-y-1.5">
-                {checklistItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/80 hover:bg-white transition-all group"
-                  >
-                    <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={item.isCompleted}
-                        onChange={() => handleToggleChecklistItem(item.id)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                      />
-                      <span className={`text-xs ${item.isCompleted ? 'line-through text-slate-400' : 'text-slate-700 font-medium'}`}>
-                        {item.title}
-                      </span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteChecklistItem(item.id)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded"
-                      title="Maddeyi Sil"
+                {checklistItems.map((item) => {
+                  // Determine required column name for this item
+                  let targetColTitle: string | null = null;
+                  if (item.requiredForColumnId) {
+                    const col = columns.find((c) => c.id === item.requiredForColumnId);
+                    if (col) targetColTitle = col.title;
+                  }
+                  if (!targetColTitle && selectedType?.rules) {
+                    const matchedRule = selectedType.rules.find(
+                      (r) =>
+                        r.ruleType === 'CHECKLIST_REQUIRED' &&
+                        (r.description?.trim().toLowerCase() === item.title.trim().toLowerCase() ||
+                          item.title.toLowerCase().includes(r.targetColumnTitle.toLowerCase()))
+                    );
+                    if (matchedRule) targetColTitle = matchedRule.targetColumnTitle;
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/80 hover:bg-white transition-all group"
                     >
-                      <TrashIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={item.isCompleted}
+                          onChange={() => handleToggleChecklistItem(item.id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer shrink-0"
+                        />
+                        <span className={`text-xs truncate ${item.isCompleted ? 'line-through text-slate-400' : 'text-slate-700 font-medium'}`}>
+                          {item.title}
+                        </span>
+                        {targetColTitle && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0 ml-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            [{targetColTitle} için Zorunlu]
+                          </span>
+                        )}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteChecklistItem(item.id)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded shrink-0 ml-2"
+                        title="Maddeyi Sil"
+                      >
+                        <TrashIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Add checklist input */}
@@ -665,12 +915,18 @@ export default function TaskDetailModal({
             {/* Medya & Ekler Bölümü */}
             <div className="pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between mb-3.5">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <PaperclipIcon className="w-4 h-4 text-slate-500" />
                   <h3 className="text-sm font-bold text-slate-800">Medya ve Ekler</h3>
                   <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-semibold border border-slate-200/60">
                     {attachments.length}
                   </span>
+                  {selectedType?.rules?.some((r) => r.ruleType === 'ATTACHMENT_REQUIRED') && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      [Bu aşama için Dosya/Görsel Yüklemek Zorunludur]
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -867,7 +1123,11 @@ export default function TaskDetailModal({
                 value={selectedTaskTypeId ?? ''}
                 onChange={(e) => {
                   const val = e.target.value;
-                  setSelectedTaskTypeId(val ? Number(val) : null);
+                  const newTypeId = val ? Number(val) : null;
+                  setSelectedTaskTypeId(newTypeId);
+                  if (newTypeId) {
+                    populateChecklistFromTaskType(newTypeId, checklistItems);
+                  }
                 }}
                 className="field text-sm font-medium text-slate-700"
               >
@@ -1046,6 +1306,7 @@ export default function TaskDetailModal({
         </div>
 
       </div>
+    </div>
     </div>
   );
 }

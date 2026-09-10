@@ -38,10 +38,18 @@ public class GlobalExceptionHandler {
     }
 
     /** Business / transition rule violations. */
+    @ExceptionHandler(BusinessException.class)
+    public ProblemDetail handleBusiness(BusinessException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("İş Kuralı İhlali");
+        return pd;
+    }
+
+    /** Business / transition rule violations fallback. */
     @ExceptionHandler(IllegalStateException.class)
     public ProblemDetail handleIllegalState(IllegalStateException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        pd.setTitle("Rule Violation");
+        pd.setTitle("Kural İhlali");
         return pd;
     }
 

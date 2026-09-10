@@ -107,6 +107,39 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
   const selectedType = taskTypes.find((t) => t.id === selectedTaskTypeId);
 
+  const handleTaskTypeChange = (typeId: number | null) => {
+    setSelectedTaskTypeId(typeId);
+    if (!typeId) return;
+
+    const selected = taskTypes.find((t) => t.id === typeId);
+    if (!selected || !selected.rules) return;
+
+    const checklistRules = selected.rules.filter((r) => r.ruleType === 'CHECKLIST_REQUIRED');
+    if (checklistRules.length > 0) {
+      setChecklistItems((prev) => {
+        const newItems = [...prev];
+        checklistRules.forEach((rule) => {
+          const ruleTitle = rule.description?.trim() || `${rule.targetColumnTitle} Kontrolü`;
+          const alreadyExists = newItems.some(
+            (item) => item.title.trim().toLowerCase() === ruleTitle.toLowerCase()
+          );
+          if (!alreadyExists) {
+            const targetCol = columns.find(
+              (c) =>
+                (rule.targetColumnId && c.id === rule.targetColumnId) ||
+                (rule.targetColumnTitle && c.title.toLowerCase() === rule.targetColumnTitle.toLowerCase())
+            );
+            newItems.push({
+              title: ruleTitle,
+              requiredForColumnId: targetCol?.id,
+            });
+          }
+        });
+        return newItems;
+      });
+    }
+  };
+
   const handleToggleAssignee = (userId: number) => {
     setSelectedAssigneeIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
@@ -228,7 +261,7 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
               value={selectedTaskTypeId ?? ''}
               onChange={(e) => {
                 const val = e.target.value;
-                setSelectedTaskTypeId(val ? Number(val) : null);
+                handleTaskTypeChange(val ? Number(val) : null);
               }}
               disabled={loadingTypes}
               className="field font-medium text-slate-800"
@@ -422,32 +455,84 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
           {/* 7. Checklist Items Section */}
           <div className="space-y-2 pt-1 border-t border-slate-100">
-            <label className="field-label">
-              Kontrol Listesi (Checklist) <span className="text-slate-400 font-normal text-xs">(Opsiyonel)</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="field-label mb-0">
+                Kontrol Listesi (Checklist) <span className="text-slate-400 font-normal text-xs">(Opsiyonel)</span>
+              </label>
+              {checklistItems.length > 0 && (
+                <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-semibold border border-slate-200/60">
+                  {checklistItems.length} madde
+                </span>
+              )}
+            </div>
+
+            {/* Checklist Transition Rules Pills (if task type has checklist rules) */}
+            {selectedType && selectedType.rules?.some((r) => r.ruleType === 'CHECKLIST_REQUIRED') && (
+              <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-lg bg-amber-50/60 border border-amber-200/70 text-xs">
+                <span className="text-amber-900 font-semibold flex items-center gap-1 text-[11px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Zorunlu Geçiş Kuralları:
+                </span>
+                {selectedType.rules
+                  .filter((r) => r.ruleType === 'CHECKLIST_REQUIRED')
+                  .map((r) => (
+                    <span
+                      key={r.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-white text-amber-900 border border-amber-200/90 shadow-2xs"
+                    >
+                      [{r.targetColumnTitle} için Zorunlu]
+                      {r.description ? ` (${r.description})` : ''}
+                    </span>
+                  ))}
+              </div>
+            )}
 
             {/* Checklist Items List */}
             {checklistItems.length > 0 && (
               <div className="space-y-1.5 mb-2">
-                {checklistItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs text-slate-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                      <span>{item.title}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveChecklistItem(index)}
-                      className="text-slate-400 hover:text-rose-600 p-0.5 rounded"
-                      title="Maddeyi Sil"
+                {checklistItems.map((item, index) => {
+                  // Determine required column name for this item
+                  let targetColTitle: string | null = null;
+                  if (item.requiredForColumnId) {
+                    const col = columns.find((c) => c.id === item.requiredForColumnId);
+                    if (col) targetColTitle = col.title;
+                  }
+                  if (!targetColTitle && selectedType?.rules) {
+                    const matchedRule = selectedType.rules.find(
+                      (r) =>
+                        r.ruleType === 'CHECKLIST_REQUIRED' &&
+                        (r.description?.trim().toLowerCase() === item.title.trim().toLowerCase() ||
+                          item.title.toLowerCase().includes(r.targetColumnTitle.toLowerCase()))
+                    );
+                    if (matchedRule) targetColTitle = matchedRule.targetColumnTitle;
+                  }
+
+                  return (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs text-slate-700"
                     >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                        <span className="truncate">{item.title}</span>
+                        {targetColTitle && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            [{targetColTitle} için Zorunlu]
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveChecklistItem(index)}
+                        className="text-slate-400 hover:text-rose-600 p-0.5 rounded shrink-0 ml-2"
+                        title="Maddeyi Sil"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -478,9 +563,17 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
           {/* 8. Attachment Upload (Optional) */}
           <div className="space-y-1.5 pt-1 border-t border-slate-100">
-            <label className="field-label">
-              Dosya / Medya Eki <span className="text-slate-400 font-normal text-xs">(Opsiyonel)</span>
-            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="field-label mb-0">
+                Dosya / Medya Eki <span className="text-slate-400 font-normal text-xs">(Opsiyonel)</span>
+              </label>
+              {selectedType?.rules?.some((r) => r.ruleType === 'ATTACHMENT_REQUIRED') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  [Bu aşama için Dosya/Görsel Yüklemek Zorunludur]
+                </span>
+              )}
+            </div>
             <input
               type="file"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}

@@ -2,10 +2,15 @@ package com.kanban.service;
 
 import com.kanban.dto.column.ColumnRequest;
 import com.kanban.dto.column.ColumnResponse;
+import com.kanban.dto.task.CustomFieldDto;
+import com.kanban.dto.task.TaskChecklistItemDto;
 import com.kanban.dto.task.TaskResponse;
+import com.kanban.dto.user.UserSummaryDto;
 import com.kanban.entity.Board;
 import com.kanban.entity.BoardColumn;
+import com.kanban.entity.Organization;
 import com.kanban.entity.Task;
+import com.kanban.entity.User;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.BoardColumnRepository;
 import com.kanban.repository.BoardRepository;
@@ -15,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Business logic for BoardColumn CRUD and column reordering.
@@ -164,6 +171,47 @@ public class BoardColumnService {
     }
 
     private TaskResponse toTaskResponse(Task task) {
+        List<CustomFieldDto> fields = task.getCustomFields() != null
+                ? task.getCustomFields().stream()
+                        .map(f -> new CustomFieldDto(f.getId(), f.getFieldName(), f.getFieldType().name(), f.getFieldValue()))
+                        .toList()
+                : List.of();
+
+        List<TaskChecklistItemDto> checklistDtos = task.getChecklistItems() != null
+                ? task.getChecklistItems().stream()
+                        .map(item -> new TaskChecklistItemDto(
+                                item.getId(),
+                                item.getTask().getId(),
+                                item.getTitle(),
+                                item.isCompleted(),
+                                item.getRequiredForColumnId(),
+                                item.getCreatedAt()))
+                        .toList()
+                : List.of();
+
+        Set<Long> assigneeIds = task.getAssignees() != null
+                ? task.getAssignees().stream().map(User::getId).collect(Collectors.toSet())
+                : Set.of();
+
+        List<UserSummaryDto> assigneeDtos = task.getAssignees() != null
+                ? task.getAssignees().stream()
+                        .map(u -> new UserSummaryDto(
+                                u.getId(),
+                                u.getUsername(),
+                                u.getEmail(),
+                                u.getRole() != null ? u.getRole().name() : "ROLE_USER",
+                                u.getPrimaryOrganizationId(),
+                                u.getPrimaryOrganizationName(),
+                                u.getOrganizations() != null ? u.getOrganizations().stream().map(Organization::getId).toList() : List.of(),
+                                u.getOrganizations() != null ? u.getOrganizations().stream().map(Organization::getName).toList() : List.of(),
+                                u.getCreatedAt()))
+                        .toList()
+                : List.of();
+
+        Long taskTypeId = task.getTaskType() != null ? task.getTaskType().getId() : null;
+        String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
+        String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
+
         return new TaskResponse(
                 task.getId(),
                 task.getTitle(),
@@ -172,6 +220,13 @@ public class BoardColumnService {
                 task.getDueDate(),
                 task.getAssignee(),
                 task.getPosition(),
-                task.getColumn().getId());
+                task.getColumn().getId(),
+                fields,
+                taskTypeId,
+                taskTypeName,
+                taskTypeColor,
+                assigneeIds,
+                assigneeDtos,
+                checklistDtos);
     }
 }

@@ -317,6 +317,41 @@ public class BoardService {
                         .toList()
                 : List.of();
 
+        List<com.kanban.dto.task.TaskChecklistItemDto> checklistDtos = task.getChecklistItems() != null
+                ? task.getChecklistItems().stream()
+                        .map(item -> new com.kanban.dto.task.TaskChecklistItemDto(
+                                item.getId(),
+                                item.getTask().getId(),
+                                item.getTitle(),
+                                item.isCompleted(),
+                                item.getRequiredForColumnId(),
+                                item.getCreatedAt()))
+                        .toList()
+                : List.of();
+
+        Set<Long> assigneeIds = task.getAssignees() != null
+                ? task.getAssignees().stream().map(User::getId).collect(Collectors.toSet())
+                : Set.of();
+
+        List<com.kanban.dto.user.UserSummaryDto> assigneeDtos = task.getAssignees() != null
+                ? task.getAssignees().stream()
+                        .map(u -> new com.kanban.dto.user.UserSummaryDto(
+                                u.getId(),
+                                u.getUsername(),
+                                u.getEmail(),
+                                u.getRole() != null ? u.getRole().name() : "ROLE_USER",
+                                u.getPrimaryOrganizationId(),
+                                u.getPrimaryOrganizationName(),
+                                u.getOrganizations() != null ? u.getOrganizations().stream().map(Organization::getId).toList() : List.of(),
+                                u.getOrganizations() != null ? u.getOrganizations().stream().map(Organization::getName).toList() : List.of(),
+                                u.getCreatedAt()))
+                        .toList()
+                : List.of();
+
+        Long taskTypeId = task.getTaskType() != null ? task.getTaskType().getId() : null;
+        String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
+        String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
+
         return new TaskResponse(
                 task.getId(),
                 task.getTitle(),
@@ -326,6 +361,12 @@ public class BoardService {
                 task.getAssignee(),
                 task.getPosition(),
                 task.getColumn().getId(),
-                fields);
+                fields,
+                taskTypeId,
+                taskTypeName,
+                taskTypeColor,
+                assigneeIds,
+                assigneeDtos,
+                checklistDtos);
     }
 }

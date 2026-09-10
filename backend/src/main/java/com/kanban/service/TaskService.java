@@ -5,6 +5,7 @@ import com.kanban.dto.user.UserSummaryDto;
 import com.kanban.entity.*;
 import com.kanban.entity.Task.Priority;
 import com.kanban.entity.TaskCustomField.FieldType;
+import com.kanban.exception.BusinessException;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -161,6 +162,8 @@ public class TaskService {
         if (request.taskTypeId() != null) {
             TaskType taskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
             task.setTaskType(taskType);
+        } else {
+            task.setTaskType(null);
         }
 
         // Update assignees
@@ -266,7 +269,7 @@ public class TaskService {
 
     /**
      * Validates column transition rules for the task's TaskType.
-     * Throws {@link IllegalStateException} (mapped to 400 Bad Request) if any rule is violated.
+     * Throws {@link BusinessException} (mapped to 400 Bad Request) if any rule is violated.
      */
     private void validateTransitionRules(Task task, BoardColumn sourceColumn, BoardColumn targetColumn) {
         if (task.getTaskType() == null) {
@@ -276,15 +279,25 @@ public class TaskService {
         List<TaskTypeTransitionRule> rules = transitionRuleRepository
                 .findAllByTaskTypeId(task.getTaskType().getId());
 
+        if (rules == null || rules.isEmpty()) {
+            return;
+        }
+
         for (TaskTypeTransitionRule rule : rules) {
-            // 1. Check target column match (by ID or Title)
+            // 1. Check target column match (by ID or Title trimmed)
             boolean targetMatches = false;
             if (rule.getTargetColumn() != null && rule.getTargetColumn().getId().equals(targetColumn.getId())) {
                 targetMatches = true;
-            } else if (rule.getTargetTaskTypeColumn() != null && rule.getTargetTaskTypeColumn().getTitle().equalsIgnoreCase(targetColumn.getTitle())) {
-                targetMatches = true;
-            } else if (rule.getTargetColumnTitle() != null && rule.getTargetColumnTitle().equalsIgnoreCase(targetColumn.getTitle())) {
-                targetMatches = true;
+            }
+            if (!targetMatches && rule.getTargetTaskTypeColumn() != null && targetColumn.getTitle() != null) {
+                if (rule.getTargetTaskTypeColumn().getTitle().trim().equalsIgnoreCase(targetColumn.getTitle().trim())) {
+                    targetMatches = true;
+                }
+            }
+            if (!targetMatches && rule.getTargetColumnTitle() != null && targetColumn.getTitle() != null) {
+                if (rule.getTargetColumnTitle().trim().equalsIgnoreCase(targetColumn.getTitle().trim())) {
+                    targetMatches = true;
+                }
             }
 
             if (!targetMatches) {
@@ -292,18 +305,24 @@ public class TaskService {
             }
 
             // 2. Check source column match (if source constraint is present)
-            boolean hasSourceConstraint = rule.getSourceColumn() != null
-                    || rule.getSourceTaskTypeColumn() != null
-                    || (rule.getSourceColumnTitle() != null && !rule.getSourceColumnTitle().isBlank());
+            boolean hasSourceConstraint = (rule.getSourceColumn() != null)
+                    || (rule.getSourceTaskTypeColumn() != null)
+                    || (rule.getSourceColumnTitle() != null && !rule.getSourceColumnTitle().trim().isEmpty());
 
             if (hasSourceConstraint) {
                 boolean sourceMatches = false;
                 if (rule.getSourceColumn() != null && rule.getSourceColumn().getId().equals(sourceColumn.getId())) {
                     sourceMatches = true;
-                } else if (rule.getSourceTaskTypeColumn() != null && rule.getSourceTaskTypeColumn().getTitle().equalsIgnoreCase(sourceColumn.getTitle())) {
-                    sourceMatches = true;
-                } else if (rule.getSourceColumnTitle() != null && rule.getSourceColumnTitle().equalsIgnoreCase(sourceColumn.getTitle())) {
-                    sourceMatches = true;
+                }
+                if (!sourceMatches && rule.getSourceTaskTypeColumn() != null && sourceColumn.getTitle() != null) {
+                    if (rule.getSourceTaskTypeColumn().getTitle().trim().equalsIgnoreCase(sourceColumn.getTitle().trim())) {
+                        sourceMatches = true;
+                    }
+                }
+                if (!sourceMatches && rule.getSourceColumnTitle() != null && sourceColumn.getTitle() != null) {
+                    if (rule.getSourceColumnTitle().trim().equalsIgnoreCase(sourceColumn.getTitle().trim())) {
+                        sourceMatches = true;
+                    }
                 }
 
                 if (!sourceMatches) {
@@ -314,27 +333,16 @@ public class TaskService {
             // 3. Enforce Rule Type Guard
             if (rule.getRuleType() == TransitionRuleType.ATTACHMENT_REQUIRED) {
                 if (task.getAttachments() == null || task.getAttachments().isEmpty()) {
-                    String extra = (rule.getDescription() != null && !rule.getDescription().isBlank())
-                            ? " (" + rule.getDescription() + ")"
-                            : "";
-                    throw new IllegalStateException("Bu aşamaya geçmek için dosya/görsel yüklenmelidir." + extra);
+                    throw new BusinessException("Bu aşamaya geçebilmek için görsel veya dosya eki yüklenmesi zorunludur.");
                 }
             } else if (rule.getRuleType() == TransitionRuleType.CHECKLIST_REQUIRED) {
                 List<TaskChecklistItem> items = task.getChecklistItems();
                 if (items == null || items.isEmpty()) {
-                    String extra = (rule.getDescription() != null && !rule.getDescription().isBlank())
-                            ? " (" + rule.getDescription() + ")"
-                            : "";
-                    throw new IllegalStateException("Zorunlu kontrol listesi maddeleri tamamlanmadan bu kolona geçilemez." + extra);
+                    throw new BusinessException("Bu aşamaya geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur.");
                 }
-                boolean hasUncompleted = items.stream().anyMatch(item ->
-                        !item.isCompleted() && (item.getRequiredForColumnId() == null || item.getRequiredForColumnId().equals(targetColumn.getId()))
-                );
-                if (hasUncompleted) {
-                    String extra = (rule.getDescription() != null && !rule.getDescription().isBlank())
-                            ? " (" + rule.getDescription() + ")"
-                            : "";
-                    throw new IllegalStateException("Zorunlu kontrol listesi maddeleri tamamlanmadan bu kolona geçilemez." + extra);
+                boolean anyUncompleted = items.stream().anyMatch(item -> !item.isCompleted());
+                if (anyUncompleted) {
+                    throw new BusinessException("Bu aşamaya geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur.");
                 }
             }
         }

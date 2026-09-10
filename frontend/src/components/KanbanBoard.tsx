@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import toast from 'react-hot-toast';
 import KanbanColumn from './KanbanColumn';
-import type { ColumnResponse, TaskResponse } from '@/types';
+import type { ColumnResponse, TaskResponse, TaskTypeDto } from '@/types';
 import { taskApi } from '@/api/taskApi';
 import { columnApi } from '@/api/columnApi';
+import { taskTypeService } from '@/services/taskTypeService';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
@@ -18,6 +19,11 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
   const { isAdmin } = useAuth();
   const [addingCol,   setAddingCol]   = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
+  const [taskTypes,   setTaskTypes]   = useState<TaskTypeDto[]>([]);
+
+  useEffect(() => {
+    taskTypeService.getAll().then(setTaskTypes).catch(() => {});
+  }, []);
 
   /* ── Drag-and-drop ─────────────────────────────────────────────── */
   const handleDragEnd = useCallback(
@@ -33,6 +39,53 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
 
       // No change
       if (srcColId === dstColId && source.index === destination.index) return;
+
+      // ── Transition Rules Guard (Client-side pre-validation) ────────
+      if (srcColId !== dstColId) {
+        const srcCol = columns.find((c) => c.id === srcColId);
+        const dstCol = columns.find((c) => c.id === dstColId);
+        const task = srcCol?.tasks.find((t) => t.id === taskId);
+
+        if (task && task.taskTypeId && dstCol) {
+          const currentType = taskTypes.find((t) => t.id === task.taskTypeId);
+          if (currentType?.rules && currentType.rules.length > 0) {
+            for (const rule of currentType.rules) {
+              const targetMatches =
+                (rule.targetColumnId && rule.targetColumnId === dstColId) ||
+                (rule.targetColumnTitle && rule.targetColumnTitle.toLowerCase() === dstCol.title.toLowerCase());
+
+              if (!targetMatches) continue;
+
+              const hasSource = rule.sourceColumnId || (rule.sourceColumnTitle && rule.sourceColumnTitle.trim() !== '');
+              if (hasSource && srcCol) {
+                const sourceMatches =
+                  (rule.sourceColumnId && rule.sourceColumnId === srcColId) ||
+                  (rule.sourceColumnTitle && rule.sourceColumnTitle.toLowerCase() === srcCol.title.toLowerCase());
+                if (!sourceMatches) continue;
+              }
+
+              if (rule.ruleType === 'CHECKLIST_REQUIRED') {
+                const items = task.checklistItems || [];
+                const uncompleted = items.filter(
+                  (item) => !item.isCompleted && (!item.requiredForColumnId || item.requiredForColumnId === dstColId)
+                );
+                if (items.length === 0 || uncompleted.length > 0) {
+                  toast.error('Bu aşamaya geçebilmek için zorunlu kontrol listesi maddeleri tamamlanmalıdır.', {
+                    duration: 5000,
+                    style: {
+                      border: '1px solid #EF4444',
+                      padding: '12px',
+                      color: '#991B1B',
+                      backgroundColor: '#FEF2F2',
+                    },
+                  });
+                  return; // Stop drag transition immediately, task stays in source column!
+                }
+              }
+            }
+          }
+        }
+      }
 
       // ── Optimistic update ──────────────────────────────────────────
       const previousColumns = columns;
@@ -69,12 +122,19 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
           const errorMsg =
             (err as { response?: { data?: { detail?: string; title?: string } } })?.response?.data?.detail ||
             (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-            (err as { message?: string })?.message ||
-            'Görev taşınamadı. Lütfen geçiş şartlarını kontrol edin.';
-          toast.error(errorMsg, { duration: 6000 });
+            'Bu aşamaya geçebilmek için zorunlu kontrol listesi maddeleri tamamlanmalıdır.';
+          toast.error(errorMsg, {
+            duration: 6000,
+            style: {
+              border: '1px solid #EF4444',
+              padding: '12px',
+              color: '#991B1B',
+              backgroundColor: '#FEF2F2',
+            },
+          });
         });
     },
-    [columns, onColumns],
+    [columns, onColumns, taskTypes],
   );
 
   /* ── Add column (admin only) ───────────────────────────────────── */
