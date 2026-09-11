@@ -159,10 +159,16 @@ public class BoardService {
 
         BoardType type = request.boardType() != null ? request.boardType() : BoardType.STANDARD;
 
+        com.kanban.entity.TaskType selectedTaskType = null;
+        if (request.taskTypeId() != null) {
+            selectedTaskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
+        }
+
         Board board = Board.builder()
                 .name(request.name())
                 .description(request.description())
                 .boardType(type)
+                .taskType(selectedTaskType)
                 .owner(currentUser)
                 .organization(targetOrg)
                 .columns(new ArrayList<>())
@@ -171,17 +177,17 @@ public class BoardService {
         Board savedBoard = boardRepository.save(board);
 
         // If a taskTypeId is specified and that TaskType has dynamic workflow columns, use them!
-        com.kanban.entity.TaskType customTaskType = null;
-        if (request.taskTypeId() != null) {
-            customTaskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
-        }
+        if (selectedTaskType != null && selectedTaskType.getColumns() != null && !selectedTaskType.getColumns().isEmpty()) {
+            List<com.kanban.entity.TaskTypeColumn> sortedCols = selectedTaskType.getColumns().stream()
+                    .sorted(java.util.Comparator.comparingInt(c -> c.getPosition() != null ? c.getPosition() : 0))
+                    .toList();
 
-        if (customTaskType != null && customTaskType.getColumns() != null && !customTaskType.getColumns().isEmpty()) {
-            for (com.kanban.entity.TaskTypeColumn ttCol : customTaskType.getColumns()) {
+            for (int i = 0; i < sortedCols.size(); i++) {
+                com.kanban.entity.TaskTypeColumn ttCol = sortedCols.get(i);
                 BoardColumn col = BoardColumn.builder()
                         .title(ttCol.getTitle())
                         .colorHex(ttCol.getColorHex())
-                        .position(ttCol.getPosition())
+                        .position(i)
                         .board(savedBoard)
                         .tasks(new ArrayList<>())
                         .build();
@@ -214,7 +220,7 @@ public class BoardService {
     }
 
     /**
-     * Updates name and/or description of an existing board.
+     * Updates name, description, and/or taskType of an existing board.
      */
     public BoardResponse updateBoard(Long id, BoardRequest request) {
         User currentUser = securityUtils.getCurrentUser();
@@ -234,6 +240,9 @@ public class BoardService {
 
         board.setName(request.name());
         board.setDescription(request.description());
+        if (request.taskTypeId() != null) {
+            board.setTaskType(taskTypeRepository.findById(request.taskTypeId()).orElse(null));
+        }
 
         Board saved = boardRepository.save(board);
         boardRepository.flush();
@@ -278,10 +287,18 @@ public class BoardService {
     private BoardResponse toResponse(Board board, boolean withColumns) {
         List<ColumnResponse> cols = withColumns && board.getColumns() != null
                 ? board.getColumns().stream()
-                        .sorted(java.util.Comparator.comparingInt(BoardColumn::getPosition))
+                        .sorted(java.util.Comparator.comparingInt(c -> c.getPosition() != null ? c.getPosition() : 0))
                         .map(this::toColumnResponse)
                         .toList()
                 : List.of();
+
+        Long taskTypeId = board.getTaskType() != null ? board.getTaskType().getId() : null;
+        String taskTypeName = board.getTaskType() != null ? board.getTaskType().getName() : null;
+        String taskTypeColor = board.getTaskType() != null ? board.getTaskType().getColorHex() : null;
+
+        Long orgId = board.getOrganization() != null ? board.getOrganization().getId() : null;
+        String orgName = board.getOrganization() != null ? board.getOrganization().getName() : null;
+        String boardType = board.getBoardType() != null ? board.getBoardType().name() : "STANDARD";
 
         return new BoardResponse(
                 board.getId(),
@@ -289,15 +306,18 @@ public class BoardService {
                 board.getDescription(),
                 board.getCreatedAt(),
                 cols,
-                board.getOrganization() != null ? board.getOrganization().getId() : null,
-                board.getOrganization() != null ? board.getOrganization().getName() : null,
-                board.getBoardType() != null ? board.getBoardType().name() : "STANDARD");
+                orgId,
+                orgName,
+                boardType,
+                taskTypeId,
+                taskTypeName,
+                taskTypeColor);
     }
 
     private ColumnResponse toColumnResponse(BoardColumn col) {
         List<TaskResponse> tasks = col.getTasks() != null
                 ? col.getTasks().stream()
-                        .sorted(java.util.Comparator.comparingInt(Task::getPosition))
+                        .sorted(java.util.Comparator.comparingInt(t -> t.getPosition() != null ? t.getPosition() : 0))
                         .map(this::toTaskResponse)
                         .toList()
                 : List.of();
@@ -305,15 +325,15 @@ public class BoardService {
         return new ColumnResponse(
                 col.getId(),
                 col.getTitle(),
-                col.getPosition(),
-                col.getBoard().getId(),
+                col.getPosition() != null ? col.getPosition() : 0,
+                col.getBoard() != null ? col.getBoard().getId() : null,
                 tasks);
     }
 
     private TaskResponse toTaskResponse(Task task) {
         List<CustomFieldDto> fields = task.getCustomFields() != null
                 ? task.getCustomFields().stream()
-                        .map(f -> new CustomFieldDto(f.getId(), f.getFieldName(), f.getFieldType().name(), f.getFieldValue()))
+                        .map(f -> new CustomFieldDto(f.getId(), f.getFieldName(), f.getFieldType() != null ? f.getFieldType().name() : "TEXT", f.getFieldValue()))
                         .toList()
                 : List.of();
 
@@ -321,7 +341,7 @@ public class BoardService {
                 ? task.getChecklistItems().stream()
                         .map(item -> new com.kanban.dto.task.TaskChecklistItemDto(
                                 item.getId(),
-                                item.getTask().getId(),
+                                item.getTask() != null ? item.getTask().getId() : task.getId(),
                                 item.getTitle(),
                                 item.isCompleted(),
                                 item.getRequiredForColumnId(),
@@ -352,15 +372,40 @@ public class BoardService {
         String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
         String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
 
+        com.kanban.dto.user.UserSummaryDto reporterDto = null;
+        Long reporterId = null;
+        String reporterName = null;
+        if (task.getReporter() != null) {
+            User r = task.getReporter();
+            reporterId = r.getId();
+            reporterName = r.getUsername();
+            reporterDto = new com.kanban.dto.user.UserSummaryDto(
+                    r.getId(),
+                    r.getUsername(),
+                    r.getEmail(),
+                    r.getRole() != null ? r.getRole().name() : "ROLE_USER",
+                    r.getPrimaryOrganizationId(),
+                    r.getPrimaryOrganizationName(),
+                    r.getOrganizations() != null ? r.getOrganizations().stream().map(Organization::getId).toList() : List.of(),
+                    r.getOrganizations() != null ? r.getOrganizations().stream().map(Organization::getName).toList() : List.of(),
+                    r.getCreatedAt());
+        }
+
         return new TaskResponse(
                 task.getId(),
                 task.getTitle(),
                 task.getDescription(),
-                task.getPriority().name(),
+                task.getPriority() != null ? task.getPriority().name() : "MEDIUM",
                 task.getDueDate(),
+                task.getTestDueDate(),
+                task.getTargetEnvironment(),
+                task.getEstimatedHours(),
+                reporterId,
+                reporterName,
+                reporterDto,
                 task.getAssignee(),
-                task.getPosition(),
-                task.getColumn().getId(),
+                task.getPosition() != null ? task.getPosition() : 0,
+                task.getColumn() != null ? task.getColumn().getId() : null,
                 fields,
                 taskTypeId,
                 taskTypeName,

@@ -62,7 +62,7 @@ export default function Navbar() {
           <Link
             to="/boards"
             className="flex items-center gap-2.5 group"
-            aria-label="Panolara git"
+            aria-label="Boards sayfasına git"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-xl
                              bg-blue-600 shadow-sm
@@ -104,7 +104,7 @@ export default function Navbar() {
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                Panolar
+                Boards
               </Link>
               {(isAdmin || isSuperAdmin) && (
                 <Link

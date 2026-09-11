@@ -3,6 +3,7 @@ import { Droppable } from '@hello-pangea/dnd';
 import TaskCard from './TaskCard';
 import type { ColumnResponse, TaskResponse } from '@/types';
 import { ColumnStatusIcon } from './icons';
+import { getColumnColor } from '@/utils/workflowUtils';
 
 interface Props {
   column:      ColumnResponse;
@@ -21,6 +22,8 @@ export default function KanbanColumn({
   const [title,    setTitle]    = useState(column.title);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const columnColor = getColumnColor(column.title, column.colorHex);
+
   const handleRename = () => {
     if (title.trim() && title.trim() !== column.title) {
       onRenameCol(column.id, title.trim());
@@ -29,10 +32,13 @@ export default function KanbanColumn({
   };
 
   return (
-    <div className="flex flex-col w-76 sm:w-80 flex-shrink-0 bg-slate-100/90 border border-slate-200/90 rounded-2xl p-3 shadow-xs">
+    <div
+      className="flex flex-col flex-1 min-w-[280px] max-w-[340px] shrink-0 bg-slate-100/80 border border-slate-200/90 rounded-2xl p-2.5 sm:p-3 shadow-2xs border-t-4"
+      style={{ borderTopColor: columnColor }}
+    >
 
       {/* ── Column Header ──────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-3 px-1">
+      <div className="flex items-center justify-between mb-2.5 px-1">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <ColumnStatusIcon title={column.title} />
 
@@ -46,24 +52,24 @@ export default function KanbanColumn({
                 if (e.key === 'Enter')  handleRename();
                 if (e.key === 'Escape') { setTitle(column.title); setEditing(false); }
               }}
-              className="field py-1 px-2 text-sm font-semibold flex-1"
+              className="field py-0.5 px-1.5 text-xs sm:text-sm font-semibold flex-1"
             />
           ) : (
             <span
-              className="text-sm font-bold text-slate-800 tracking-tight truncate max-w-[180px]"
+              className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight truncate"
               title={column.title}
             >
               {column.title}
             </span>
           )}
-        </div>
 
-        <div className="flex items-center gap-1.5 ml-2">
           {/* Pill counter badge */}
-          <span className="text-xs font-semibold text-slate-600 bg-white border border-slate-200/80 px-2 py-0.5 rounded-full shadow-xs">
+          <span className="text-[11px] font-semibold text-slate-600 bg-white/90 border border-slate-200/90 px-2 py-0.5 rounded-full shadow-2xs shrink-0">
             {column.tasks.length}
           </span>
+        </div>
 
+        <div className="flex items-center gap-1 ml-1 shrink-0">
           {/* Context menu – admin only */}
           {isAdmin && (
             <div className="relative">
@@ -72,7 +78,7 @@ export default function KanbanColumn({
                 className="btn-ghost p-1 text-slate-400 hover:text-slate-700 rounded-md"
                 aria-label="Kolon seçenekleri"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
                   <circle cx="12" cy="5"  r="1.5" />
                   <circle cx="12" cy="12" r="1.5" />
                   <circle cx="12" cy="19" r="1.5" />
@@ -117,7 +123,7 @@ export default function KanbanColumn({
             ref={provided.innerRef}
             {...provided.droppableProps}
             className={`
-              flex-1 min-h-[90px] rounded-xl p-1 space-y-2.5 overflow-y-auto
+              flex-1 min-h-[90px] rounded-xl p-0.5 space-y-2 overflow-y-auto
               border transition-all duration-150
               ${snapshot.isDraggingOver
                 ? 'col-drop-active'
@@ -137,9 +143,9 @@ export default function KanbanColumn({
 
             {/* Empty state */}
             {column.tasks.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-slate-200/80 bg-white/40">
+              <div className="flex flex-col items-center justify-center py-7 text-center rounded-xl border border-dashed border-slate-200/80 bg-white/40">
                 <p className="text-xs font-medium text-slate-400">Görev bulunmuyor</p>
-                <p className="text-[11px] text-slate-300 mt-0.5">Kartları buraya sürükleyin</p>
+                <p className="text-[10px] text-slate-300 mt-0.5">Kartları buraya sürükleyin</p>
               </div>
             )}
           </div>
@@ -148,3 +154,4 @@ export default function KanbanColumn({
     </div>
   );
 }
+

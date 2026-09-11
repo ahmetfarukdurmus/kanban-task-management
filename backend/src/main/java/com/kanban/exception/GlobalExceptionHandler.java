@@ -79,6 +79,15 @@ public class GlobalExceptionHandler {
         return pd;
     }
 
+    /** File upload size exceeded (413 Payload Too Large). */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ProblemDetail handleMaxUploadSize(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.PAYLOAD_TOO_LARGE, "Yüklenen dosya boyutu izin verilen sınırı (25MB) aşmaktadır.");
+        pd.setTitle("Dosya Boyutu Çok Büyük");
+        return pd;
+    }
+
     /** Catch-all for unexpected errors. */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGeneric(Exception ex) {

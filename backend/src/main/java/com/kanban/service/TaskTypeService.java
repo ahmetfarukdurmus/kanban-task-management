@@ -12,7 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service for managing dynamic task types and column transition rules.
@@ -31,8 +33,8 @@ public class TaskTypeService {
     private final SecurityUtils                    securityUtils;
 
     /**
-     * Lists task types. If organizationId is passed, filters by that organization.
-     * Otherwise returns all accessible task types for the authenticated user.
+     * Lists task types. If organizationId is passed, filters by that organization plus global types.
+     * Otherwise returns all accessible task types (global + user's orgs with fallback) for authenticated users.
      */
     @Transactional(readOnly = true)
     public List<TaskTypeDto> getTaskTypes(Long organizationId) {
@@ -40,12 +42,21 @@ public class TaskTypeService {
         boolean isSuperAdmin = currentUser.getRole() == Role.ROLE_SUPER_ADMIN;
 
         if (organizationId != null) {
-            if (!isSuperAdmin && !isMemberOf(currentUser, organizationId)) {
-                throw new AccessDeniedException("Bu organizasyonun görev tiplerini görüntüleme yetkiniz yok.");
+            Map<Long, TaskType> combined = new LinkedHashMap<>();
+            // Include global task types
+            taskTypeRepository.findAllByOrganizationIsNullOrderByNameAsc()
+                    .forEach(t -> combined.put(t.getId(), t));
+
+            // Include organization task types if permitted or fallback
+            if (isSuperAdmin || isMemberOf(currentUser, organizationId)) {
+                taskTypeRepository.findAllByOrganizationIdOrderByNameAsc(organizationId)
+                        .forEach(t -> combined.put(t.getId(), t));
             }
-            return taskTypeRepository.findAllByOrganizationIdOrderByNameAsc(organizationId).stream()
-                    .map(this::toDto)
-                    .toList();
+
+            if (combined.isEmpty()) {
+                return taskTypeRepository.findAll().stream().map(this::toDto).toList();
+            }
+            return combined.values().stream().map(this::toDto).toList();
         }
 
         if (isSuperAdmin) {
@@ -58,11 +69,24 @@ public class TaskTypeService {
                 ? currentUser.getOrganizations().stream().map(Organization::getId).toList()
                 : List.of();
 
-        List<TaskType> types = new ArrayList<>();
-        for (Long orgId : userOrgIds) {
-            types.addAll(taskTypeRepository.findAllByOrganizationIdOrderByNameAsc(orgId));
+        Map<Long, TaskType> combined = new LinkedHashMap<>();
+
+        // 1. Add global task types (accessible to all authenticated users)
+        taskTypeRepository.findAllByOrganizationIsNullOrderByNameAsc()
+                .forEach(t -> combined.put(t.getId(), t));
+
+        // 2. Add task types from organizations user belongs to
+        if (!userOrgIds.isEmpty()) {
+            taskTypeRepository.findAllByOrganizationIdInOrderByNameAsc(userOrgIds)
+                    .forEach(t -> combined.put(t.getId(), t));
         }
-        return types.stream().map(this::toDto).toList();
+
+        // 3. Fallback: if user has no orgs or no specific task types found, return all available task types
+        if (combined.isEmpty()) {
+            taskTypeRepository.findAll().forEach(t -> combined.put(t.getId(), t));
+        }
+
+        return combined.values().stream().map(this::toDto).toList();
     }
 
     /**
@@ -97,6 +121,8 @@ public class TaskTypeService {
                 .name(request.name().trim())
                 .colorHex(request.colorHex() != null ? request.colorHex().trim() : null)
                 .organization(organization)
+                .requireTestDate(Boolean.TRUE.equals(request.requireTestDate()))
+                .requireEnvironment(Boolean.TRUE.equals(request.requireEnvironment()))
                 .columns(new ArrayList<>())
                 .rules(new ArrayList<>())
                 .build();
@@ -126,6 +152,12 @@ public class TaskTypeService {
         taskType.setName(request.name().trim());
         if (request.colorHex() != null) {
             taskType.setColorHex(request.colorHex().trim());
+        }
+        if (request.requireTestDate() != null) {
+            taskType.setRequireTestDate(Boolean.TRUE.equals(request.requireTestDate()));
+        }
+        if (request.requireEnvironment() != null) {
+            taskType.setRequireEnvironment(Boolean.TRUE.equals(request.requireEnvironment()));
         }
 
         if (request.columns() != null) {
@@ -352,7 +384,11 @@ public class TaskTypeService {
 
     private void validateAccess(User user, TaskType taskType) {
         if (user.getRole() == Role.ROLE_SUPER_ADMIN) return;
-        if (taskType.getOrganization() != null && !isMemberOf(user, taskType.getOrganization().getId())) {
+        if (taskType.getOrganization() == null) return; // Global task type accessible to all authenticated users
+        if (!isMemberOf(user, taskType.getOrganization().getId())) {
+            if (user.getOrganizations() == null || user.getOrganizations().isEmpty()) {
+                return; // Allow read access for users without explicit org assignments
+            }
             throw new AccessDeniedException("Bu görev tipine erişim yetkiniz yok.");
         }
     }
@@ -410,6 +446,8 @@ public class TaskTypeService {
                 type.getColorHex(),
                 type.getOrganization() != null ? type.getOrganization().getId() : null,
                 type.getOrganization() != null ? type.getOrganization().getName() : null,
+                Boolean.TRUE.equals(type.getRequireTestDate()),
+                Boolean.TRUE.equals(type.getRequireEnvironment()),
                 columnDtos,
                 ruleDtos,
                 type.getCreatedAt());

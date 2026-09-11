@@ -1,5 +1,7 @@
 package com.kanban.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
@@ -11,6 +13,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Application user.
@@ -24,6 +27,7 @@ import java.util.Set;
 })
 @Getter @Setter @Builder
 @NoArgsConstructor @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "boards", "authorities"})
 public class User implements UserDetails {
 
     @Id
@@ -37,6 +41,7 @@ public class User implements UserDetails {
     private String email;
 
     /** Stored as BCrypt hash – never plaintext. */
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
@@ -69,6 +74,7 @@ public class User implements UserDetails {
     }
 
     // ── Boards owned by this user (cascade all lifecycle operations) ──
+    @JsonIgnore
     @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Board> boards;
 
@@ -80,8 +86,8 @@ public class User implements UserDetails {
         }
         return organizations.stream()
                 .map(Organization::getName)
-                .reduce((a, b) -> a + ", " + b)
-                .orElse(null);
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.joining(", "));
     }
 
     public Long getPrimaryOrganizationId() {

@@ -31,6 +31,12 @@ public record TaskResponse(
         String                     description,
         String                     priority,
         LocalDate                  dueDate,
+        LocalDate                  testDueDate,
+        String                     targetEnvironment,
+        Integer                    estimatedHours,
+        Long                       reporterId,
+        String                     reporterName,
+        UserSummaryDto             reporter,
         String                     assignee,
         int                        position,
         Long                       columnId,
@@ -42,11 +48,15 @@ public record TaskResponse(
         List<UserSummaryDto>       assignees,
         List<TaskChecklistItemDto> checklistItems
 ) {
+    public TaskResponse(Long id, String title, String description, String priority, LocalDate dueDate, String assignee, int position, Long columnId, List<CustomFieldDto> customFields, Long taskTypeId, String taskTypeName, String taskTypeColor, Set<Long> assigneeIds, List<UserSummaryDto> assignees, List<TaskChecklistItemDto> checklistItems) {
+        this(id, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, customFields, taskTypeId, taskTypeName, taskTypeColor, assigneeIds, assignees, checklistItems);
+    }
+
     public TaskResponse(Long id, String title, String description, String priority, LocalDate dueDate, String assignee, int position, Long columnId, List<CustomFieldDto> customFields) {
-        this(id, title, description, priority, dueDate, assignee, position, columnId, customFields, null, null, null, Set.of(), List.of(), List.of());
+        this(id, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, customFields, null, null, null, Set.of(), List.of(), List.of());
     }
 
     public TaskResponse(Long id, String title, String description, String priority, LocalDate dueDate, String assignee, int position, Long columnId) {
-        this(id, title, description, priority, dueDate, assignee, position, columnId, List.of(), null, null, null, Set.of(), List.of(), List.of());
+        this(id, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, List.of(), null, null, null, Set.of(), List.of(), List.of());
     }
 }

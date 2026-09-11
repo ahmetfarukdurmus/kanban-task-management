@@ -25,13 +25,16 @@ public record BoardResponse(
         List<ColumnResponse> columns,
         Long                 organizationId,
         String               organizationName,
-        String               boardType
+        String               boardType,
+        Long                 taskTypeId,
+        String               taskTypeName,
+        String               taskTypeColor
 ) {
     public BoardResponse(Long id, String name, String description, Instant createdAt, List<ColumnResponse> columns) {
-        this(id, name, description, createdAt, columns, null, null, "STANDARD");
+        this(id, name, description, createdAt, columns, null, null, "STANDARD", null, null, null);
     }
 
     public BoardResponse(Long id, String name, String description, Instant createdAt, List<ColumnResponse> columns, Long organizationId, String organizationName) {
-        this(id, name, description, createdAt, columns, organizationId, organizationName, "STANDARD");
+        this(id, name, description, createdAt, columns, organizationId, organizationName, "STANDARD", null, null, null);
     }
 }

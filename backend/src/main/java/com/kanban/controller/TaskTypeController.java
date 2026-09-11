@@ -22,12 +22,14 @@ public class TaskTypeController {
     private final TaskTypeService taskTypeService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<List<TaskTypeDto>> listTaskTypes(
             @RequestParam(required = false) Long organizationId) {
         return ResponseEntity.ok(taskTypeService.getTaskTypes(organizationId));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<TaskTypeDto> getTaskType(@PathVariable Long id) {
         return ResponseEntity.ok(taskTypeService.getTaskType(id));
     }

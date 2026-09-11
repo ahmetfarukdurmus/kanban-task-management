@@ -13,15 +13,18 @@ import { taskApi } from '@/api/taskApi';
 import { userService } from '@/services/userService';
 import { taskTypeService } from '@/services/taskTypeService';
 import { attachmentService } from '@/services/attachmentService';
+import { useAuth } from '@/contexts/AuthContext';
+import { isColumnMatching } from '@/utils/workflowUtils';
 import { PlusIcon, UserIcon } from './icons';
 
 interface Props {
-  isOpen:      boolean;
-  onClose:     () => void;
-  boardId:     number;
-  columnId:    number;              // default/pre-selected column
-  columns:     ColumnResponse[];    // all available columns for selector
-  onTaskAdded: (task: TaskResponse) => void;
+  isOpen:             boolean;
+  onClose:            () => void;
+  boardId:            number;
+  columnId:           number;              // default/pre-selected column
+  columns:            ColumnResponse[];    // all available columns for selector
+  defaultTaskTypeId?: number | null;       // default workflow / task type from Board
+  onTaskAdded:        (task: TaskResponse) => void;
 }
 
 const PRIORITIES: { value: Priority; label: string }[] = [
@@ -30,10 +33,17 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: 'HIGH',   label: 'Yüksek' },
 ];
 
-export default function AddTaskModal({ isOpen, onClose, boardId, columnId, columns, onTaskAdded }: Props) {
+const ENVIRONMENTS = ['DEV', 'TEST', 'STAGING', 'PROD'];
+
+export default function AddTaskModal({ isOpen, onClose, boardId, columnId, columns, defaultTaskTypeId, onTaskAdded }: Props) {
+  const { user } = useAuth();
   const [selectedColumnId, setSelectedColumnId]     = useState(columnId);
-  const [selectedTaskTypeId, setSelectedTaskTypeId] = useState<number | null>(null);
+  const [selectedTaskTypeId, setSelectedTaskTypeId] = useState<number | null>(defaultTaskTypeId || null);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<number[]>([]);
+  const [reporterId, setReporterId]                 = useState<number | null>(null);
+  const [testDueDate, setTestDueDate]               = useState('');
+  const [targetEnvironment, setTargetEnvironment]   = useState('');
+  const [estimatedHours, setEstimatedHours]         = useState<number | ''>('');
   const [users, setUsers]                           = useState<UserSummary[]>([]);
   const [taskTypes, setTaskTypes]                   = useState<TaskTypeDto[]>([]);
   const [loadingTypes, setLoadingTypes]             = useState(false);
@@ -70,19 +80,51 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
       setLoadingTypes(true);
       taskTypeService
         .getAll()
-        .then((data) => setTaskTypes(data))
+        .then((data) => {
+          setTaskTypes(data);
+          if (defaultTaskTypeId) {
+            const selected = data.find((t) => t.id === defaultTaskTypeId);
+            if (selected?.rules) {
+              const checklistRules = selected.rules.filter((r) => r.ruleType === 'CHECKLIST_REQUIRED');
+              if (checklistRules.length > 0) {
+                setChecklistItems((prev) => {
+                  const newItems = [...prev];
+                  checklistRules.forEach((rule) => {
+                    const ruleTitle = rule.description?.trim() || `${rule.targetColumnTitle} Kontrolü`;
+                    if (!newItems.some((item) => item.title.trim().toLowerCase() === ruleTitle.toLowerCase())) {
+                      const targetCol = columns.find(
+                        (c) =>
+                          (rule.targetColumnId && c.id === rule.targetColumnId) ||
+                          (rule.targetColumnTitle && isColumnMatching(rule.targetColumnTitle, c.title))
+                      );
+                      newItems.push({
+                        title: ruleTitle,
+                        requiredForColumnId: targetCol?.id,
+                      });
+                    }
+                  });
+                  return newItems;
+                });
+              }
+            }
+          }
+        })
         .catch(() => { /* fallback */ })
         .finally(() => setLoadingTypes(false));
     }
-  }, [isOpen]);
+  }, [isOpen, defaultTaskTypeId, columns]);
 
   // Reset on open
   useEffect(() => {
     if (isOpen) {
       setForm({ title: '', description: '', priority: 'MEDIUM', dueDate: '' });
       setSelectedColumnId(columnId || columns[0]?.id || 0);
-      setSelectedTaskTypeId(null);
+      setSelectedTaskTypeId(defaultTaskTypeId || null);
       setSelectedAssigneeIds([]);
+      setReporterId(user?.id || null);
+      setTestDueDate('');
+      setTargetEnvironment('');
+      setEstimatedHours('');
       setChecklistItems([]);
       setNewChecklistTitle('');
       setSelectedFile(null);
@@ -90,7 +132,7 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
       setAssigneeSearch('');
       setTimeout(() => titleRef.current?.focus(), 50);
     }
-  }, [isOpen, columnId, columns]);
+  }, [isOpen, columnId, columns, defaultTaskTypeId, user]);
 
   // Close assignee dropdown on outside click
   useEffect(() => {
@@ -127,7 +169,7 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
             const targetCol = columns.find(
               (c) =>
                 (rule.targetColumnId && c.id === rule.targetColumnId) ||
-                (rule.targetColumnTitle && c.title.toLowerCase() === rule.targetColumnTitle.toLowerCase())
+                (rule.targetColumnTitle && isColumnMatching(rule.targetColumnTitle, c.title))
             );
             newItems.push({
               title: ruleTitle,
@@ -170,16 +212,25 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
       return;
     }
 
+    if (selectedFile && selectedFile.size > 25 * 1024 * 1024) {
+      toast.error('Dosya boyutu 25MB sınırını aşamaz.');
+      return;
+    }
+
     setLoading(true);
     try {
       const payload: TaskRequest = {
-        title:          form.title.trim(),
-        description:    form.description?.trim() || undefined,
-        priority:       form.priority,
-        dueDate:        form.dueDate || undefined,
-        taskTypeId:     selectedTaskTypeId || undefined,
-        assigneeIds:    selectedAssigneeIds.length > 0 ? selectedAssigneeIds : undefined,
-        checklistItems: checklistItems.length > 0 ? checklistItems : undefined,
+        title:             form.title.trim(),
+        description:       form.description?.trim() || undefined,
+        priority:          form.priority,
+        dueDate:           form.dueDate || undefined,
+        testDueDate:       testDueDate || undefined,
+        targetEnvironment: targetEnvironment || undefined,
+        estimatedHours:    typeof estimatedHours === 'number' && !isNaN(estimatedHours) ? estimatedHours : undefined,
+        reporterId:        reporterId || undefined,
+        taskTypeId:        selectedTaskTypeId || undefined,
+        assigneeIds:       selectedAssigneeIds.length > 0 ? selectedAssigneeIds : undefined,
+        checklistItems:    checklistItems.length > 0 ? checklistItems : undefined,
       };
 
       const task = await taskApi.create(boardId, targetColId, payload);
@@ -354,6 +405,91 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                 value={form.dueDate}
                 onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
                 className="field"
+              />
+            </div>
+          </div>
+
+          {/* 5.1 Extended Fields: Reporter & Test Due Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="task-reporter" className="field-label flex items-center justify-between">
+                <span>Raporlayan (Reporter)</span>
+                <span className="text-[10px] text-slate-400 font-normal">Varsayılan: Siz</span>
+              </label>
+              <select
+                id="task-reporter"
+                value={reporterId ?? ''}
+                onChange={(e) => setReporterId(e.target.value ? Number(e.target.value) : null)}
+                className="field text-xs font-medium"
+              >
+                <option value="">-- Raporlayan Seçiniz --</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.username} {u.id === user?.id ? '(Siz)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="task-test-due-date" className="field-label flex items-center justify-between">
+                <span>Test Tarihi (Test Due Date)</span>
+                {selectedType?.requireTestDate && (
+                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                    QA Kolonu İçin Zorunlu
+                  </span>
+                )}
+              </label>
+              <input
+                id="task-test-due-date"
+                type="date"
+                value={testDueDate}
+                onChange={(e) => setTestDueDate(e.target.value)}
+                className={`field text-xs font-medium ${
+                  selectedType?.requireTestDate && !testDueDate
+                    ? 'border-amber-400 bg-amber-50/30'
+                    : ''
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* 5.2 Extended Fields: Target Environment & Estimated Hours */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="task-environment" className="field-label flex items-center justify-between">
+                <span>Test Ortamı (Environment)</span>
+                {selectedType?.requireEnvironment && (
+                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                    QA Kolonu İçin Zorunlu
+                  </span>
+                )}
+              </label>
+              <select
+                id="task-environment"
+                value={targetEnvironment}
+                onChange={(e) => setTargetEnvironment(e.target.value)}
+                className="field text-xs font-medium"
+              >
+                <option value="">-- Ortam Seçiniz --</option>
+                {ENVIRONMENTS.map((env) => (
+                  <option key={env} value={env}>{env}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="task-estimated-hours" className="field-label">
+                Tahmini Efor / Süre (Saat / SP)
+              </label>
+              <input
+                id="task-estimated-hours"
+                type="number"
+                min={0}
+                placeholder="Örn: 8 (saat) veya 5 (story points)"
+                value={estimatedHours}
+                onChange={(e) => setEstimatedHours(e.target.value ? Number(e.target.value) : '')}
+                className="field text-xs font-medium"
               />
             </div>
           </div>
@@ -568,9 +704,9 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                 Dosya / Medya Eki <span className="text-slate-400 font-normal text-xs">(Opsiyonel)</span>
               </label>
               {selectedType?.rules?.some((r) => r.ruleType === 'ATTACHMENT_REQUIRED') && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  [Bu aşama için Dosya/Görsel Yüklemek Zorunludur]
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  [Bu aşama için Görsel/Dosya Zorunludur]
                 </span>
               )}
             </div>

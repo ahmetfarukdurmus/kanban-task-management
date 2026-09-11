@@ -16,6 +16,10 @@ public record UpdateTaskTypeRequest(
         @Size(max = 20, message = "Color hex code must not exceed 20 characters")
         String colorHex,
 
+        Boolean requireTestDate,
+
+        Boolean requireEnvironment,
+
         List<CreateTaskTypeColumnRequest> columns,
 
         List<CreateTransitionRuleRequest> rules

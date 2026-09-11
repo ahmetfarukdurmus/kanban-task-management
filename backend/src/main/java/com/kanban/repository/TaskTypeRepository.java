@@ -10,6 +10,10 @@ public interface TaskTypeRepository extends JpaRepository<TaskType, Long> {
 
     List<TaskType> findAllByOrganizationIdOrderByNameAsc(Long organizationId);
 
+    List<TaskType> findAllByOrganizationIsNullOrderByNameAsc();
+
+    List<TaskType> findAllByOrganizationIdInOrderByNameAsc(List<Long> organizationIds);
+
     Optional<TaskType> findByIdAndOrganizationId(Long id, Long organizationId);
 
     boolean existsByOrganizationIdAndNameIgnoreCase(Long organizationId, String name);

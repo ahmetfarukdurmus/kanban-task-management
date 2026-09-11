@@ -7,6 +7,7 @@ import { taskApi } from '@/api/taskApi';
 import { columnApi } from '@/api/columnApi';
 import { taskTypeService } from '@/services/taskTypeService';
 import { useAuth } from '@/contexts/AuthContext';
+import { isColumnMatching } from '@/utils/workflowUtils';
 
 interface Props {
   boardId:    number;
@@ -52,7 +53,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
             for (const rule of currentType.rules) {
               const targetMatches =
                 (rule.targetColumnId && rule.targetColumnId === dstColId) ||
-                (rule.targetColumnTitle && rule.targetColumnTitle.toLowerCase() === dstCol.title.toLowerCase());
+                (rule.targetColumnTitle && isColumnMatching(rule.targetColumnTitle, dstCol.title));
 
               if (!targetMatches) continue;
 
@@ -60,7 +61,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
               if (hasSource && srcCol) {
                 const sourceMatches =
                   (rule.sourceColumnId && rule.sourceColumnId === srcColId) ||
-                  (rule.sourceColumnTitle && rule.sourceColumnTitle.toLowerCase() === srcCol.title.toLowerCase());
+                  (rule.sourceColumnTitle && isColumnMatching(rule.sourceColumnTitle, srcCol.title));
                 if (!sourceMatches) continue;
               }
 
@@ -70,7 +71,8 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
                   (item) => !item.isCompleted && (!item.requiredForColumnId || item.requiredForColumnId === dstColId)
                 );
                 if (items.length === 0 || uncompleted.length > 0) {
-                  toast.error('Bu aşamaya geçebilmek için zorunlu kontrol listesi maddeleri tamamlanmalıdır.', {
+                  const ruleDetail = rule.description ? ` (${rule.description})` : '';
+                  toast.error(`Bu aşamaya (${dstCol.title}) geçebilmek için kontrol listesi maddeleri tamamlanmalıdır.${ruleDetail}`, {
                     duration: 5000,
                     style: {
                       border: '1px solid #EF4444',
@@ -178,7 +180,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
   /* ── Render ────────────────────────────────────────────────────── */
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 items-start overflow-x-auto pb-6 pt-2 px-1 min-h-[calc(100vh-200px)]">
+      <div className="w-full flex gap-3.5 items-start overflow-x-auto pb-6 pt-1 px-0.5 min-h-[calc(100vh-180px)]">
         {columns.map((col) => (
           <KanbanColumn
             key={col.id}
@@ -194,8 +196,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
         {/* ── Add column panel – ADMIN only ─────────────────────── */}
         {isAdmin && (
           addingCol ? (
-            <div className="flex-shrink-0 w-72 bg-white border border-slate-200 rounded-xl p-3 shadow-sm
-                            animate-scale-in">
+            <div className="flex-1 min-w-[280px] max-w-[340px] shrink-0 bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-sm animate-scale-in">
               <input
                 autoFocus
                 placeholder="Kolon başlığı…"
@@ -205,7 +206,7 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
                   if (e.key === 'Enter')  handleAddColumn();
                   if (e.key === 'Escape') { setAddingCol(false); setNewColTitle(''); }
                 }}
-                className="field text-sm mb-2"
+                className="field text-xs sm:text-sm py-1.5 mb-2.5"
               />
               <div className="flex gap-2">
                 <button onClick={handleAddColumn} className="btn-primary flex-1 py-1.5 text-xs font-semibold">
@@ -219,16 +220,17 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
           ) : (
             <button
               onClick={() => setAddingCol(true)}
-              className="flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 rounded-xl
-                         border-2 border-dashed border-slate-300 hover:border-blue-400
-                         text-slate-500 hover:text-blue-600 transition-all duration-200 group bg-slate-50/50 hover:bg-white"
+              className="flex-1 min-w-[280px] max-w-[340px] shrink-0 min-h-[160px] flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/20 text-slate-400 hover:text-blue-600 transition-all duration-200 group bg-slate-50/40 cursor-pointer shadow-2xs"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                   className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5"  y1="12" x2="19" y2="12" />
-              </svg>
-              <span className="text-sm font-semibold">Yeni Kolon Ekle</span>
+              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 group-hover:border-blue-300 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-all text-slate-400 group-hover:text-blue-600">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+                     className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5"  y1="12" x2="19" y2="12" />
+                </svg>
+              </div>
+              <span className="text-xs font-bold tracking-tight">Yeni Kolon Ekle</span>
+              <span className="text-[10px] text-slate-400 font-normal">İş akışına yeni bir aşama tanımlayın</span>
             </button>
           )
         )}

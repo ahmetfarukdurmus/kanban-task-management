@@ -18,6 +18,10 @@ public record CreateTaskTypeRequest(
 
         Long organizationId,
 
+        Boolean requireTestDate,
+
+        Boolean requireEnvironment,
+
         List<CreateTaskTypeColumnRequest> columns,
 
         List<CreateTransitionRuleRequest> rules

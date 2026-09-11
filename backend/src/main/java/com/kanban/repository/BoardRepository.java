@@ -23,7 +23,8 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
      * 2. AND/OR boards where the user is assigned to at least one task (guest access).
      */
     @Query("SELECT DISTINCT b FROM Board b " +
-           "WHERE (b.organization.id IN :userOrgIds) " +
+           "WHERE (b.owner.id = :userId) " +
+           "   OR (b.organization.id IN :userOrgIds) " +
            "   OR EXISTS (SELECT t FROM Task t JOIN t.assignees a WHERE t.column.board.id = b.id AND (a.id = :userId OR a.username = :username)) " +
            "ORDER BY b.createdAt DESC")
     List<Board> findAccessibleBoardsForUser(

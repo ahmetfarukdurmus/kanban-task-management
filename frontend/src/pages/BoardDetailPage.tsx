@@ -40,7 +40,7 @@ export default function BoardDetailPage() {
       } catch {
         setIsError(true);
         if (!isBackground) {
-          toast.error('Pano bilgileri yüklenirken bir sorun oluştu.');
+          toast.error('Board bilgileri yüklenirken bir sorun oluştu.');
         }
       } finally {
         if (!isBackground) setIsLoading(false);
@@ -60,13 +60,13 @@ export default function BoardDetailPage() {
 
   const handleDeleteCurrentBoard = async () => {
     if (!boardData) return;
-    if (!confirm(`Bu panoyu (${boardData.name}) ve içindeki tüm görevleri silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) return;
+    if (!confirm(`Bu board'u (${boardData.name}) ve içindeki tüm görevleri silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) return;
     try {
       await boardApi.remove(boardId);
-      toast.success(`"${boardData.name}" panosu başarıyla silindi.`);
+      toast.success(`"${boardData.name}" board'u başarıyla silindi.`);
       navigate('/boards', { replace: true });
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Pano silinirken bir hata oluştu.';
+      const msg = err.response?.data?.detail || err.message || 'Board silinirken bir hata oluştu.';
       toast.error(msg);
     }
   };
@@ -78,7 +78,7 @@ export default function BoardDetailPage() {
         <Navbar />
         <div className="flex-1 flex flex-col items-center justify-center">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
-          <p className="text-slate-500 text-sm font-medium">Pano yükleniyor…</p>
+          <p className="text-slate-500 text-sm font-medium">Board yükleniyor…</p>
         </div>
       </div>
     );
@@ -96,16 +96,16 @@ export default function BoardDetailPage() {
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <h2 className="text-lg font-bold text-slate-800 mb-1">Pano Yüklenemedi</h2>
+          <h2 className="text-lg font-bold text-slate-800 mb-1">Board Yüklenemedi</h2>
           <p className="text-slate-500 text-sm mb-5 max-w-sm">
-            İstediğiniz pano bulunamadı veya erişim yetkiniz kısıtlanmış olabilir.
+            İstediğiniz board bulunamadı veya erişim yetkiniz kısıtlanmış olabilir.
           </p>
           <div className="flex gap-3">
             <button onClick={() => fetchBoardDetails(false)} className="btn-secondary">
               Yeniden Dene
             </button>
             <Link to="/boards" className="btn-primary">
-              ← Panolara Dön
+              ← Boardlara Dön
             </Link>
           </div>
         </div>
@@ -119,13 +119,13 @@ export default function BoardDetailPage() {
 
       {/* ── Board Header ───────────────────────────────────────────── */}
       <div className="border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 py-3 flex items-center gap-3">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
 
           {/* Back link */}
           <Link
             to="/boards"
             className="text-slate-400 hover:text-slate-700 transition-colors p-1 -ml-1 rounded-lg hover:bg-slate-100"
-            aria-label="Panolara geri dön"
+            aria-label="Boardlara geri dön"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
                  className="w-4 h-4">
@@ -139,6 +139,24 @@ export default function BoardDetailPage() {
           {boardData.description && (
             <span className="hidden sm:block text-sm text-slate-400 truncate max-w-xs ml-1">
               {boardData.description}
+            </span>
+          )}
+
+          {/* Workflow / Task Type Badge */}
+          {boardData.taskTypeName && (
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-2xs shrink-0"
+              style={{
+                backgroundColor: boardData.taskTypeColor ? `${boardData.taskTypeColor}15` : '#EFF6FF',
+                color: boardData.taskTypeColor || '#2563EB',
+                borderColor: boardData.taskTypeColor ? `${boardData.taskTypeColor}35` : '#BFDBFE',
+              }}
+            >
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: boardData.taskTypeColor || '#2563EB' }}
+              />
+              İş Akışı: {boardData.taskTypeName}
             </span>
           )}
 
@@ -177,7 +195,7 @@ export default function BoardDetailPage() {
               </button>
             )}
 
-            {/* + Yeni Görev Oluştur Butonu (All Users / Jira Standard) */}
+            {/* + Yeni Görev Oluştur Butonu (All Users) */}
             <button
               onClick={() => {
                 setSelectedColumnId(columns[0]?.id || null);
@@ -195,13 +213,13 @@ export default function BoardDetailPage() {
               + Yeni Görev Oluştur
             </button>
 
-            {/* Panoyu Sil Butonu (Admin / Super Admin) */}
+            {/* Boardu Sil Butonu (Admin / Super Admin) */}
             {canDelete && (
               <button
                 onClick={handleDeleteCurrentBoard}
                 className="btn-ghost p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                title="Panoyu Sil"
-                aria-label="Panoyu Sil"
+                title="Board'u Sil"
+                aria-label="Board'u Sil"
               >
                 <TrashIcon className="w-4 h-4 text-rose-500" />
               </button>
@@ -211,7 +229,7 @@ export default function BoardDetailPage() {
       </div>
 
       {/* ── Kanban Board Workspace ──────────────────────────────────── */}
-      <main className="flex-1 mx-auto max-w-screen-2xl w-full px-4 sm:px-6 py-4 flex flex-col min-h-0">
+      <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-4 flex flex-col min-h-0">
         <KanbanBoard
           boardId={boardId}
           columns={columns}
@@ -228,6 +246,7 @@ export default function BoardDetailPage() {
           boardId={boardId}
           columnId={selectedColumnId}
           columns={columns}
+          defaultTaskTypeId={boardData.taskTypeId}
           onTaskAdded={() => fetchBoardDetails(true)}
         />
       )}

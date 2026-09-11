@@ -64,6 +64,8 @@ export default function TaskTypeModal({
   const [name, setName]                     = useState('');
   const [colorHex, setColorHex]             = useState('#3B82F6');
   const [organizationId, setOrganizationId] = useState<number | null>(null);
+  const [requireTestDate, setRequireTestDate] = useState(false);
+  const [requireEnvironment, setRequireEnvironment] = useState(false);
   
   // Dynamic Workflow Columns
   const [columns, setColumns]               = useState<ColumnFormItem[]>([]);
@@ -92,6 +94,8 @@ export default function TaskTypeModal({
       setName(taskTypeToEdit.name);
       setColorHex(taskTypeToEdit.colorHex || '#3B82F6');
       setOrganizationId(taskTypeToEdit.organizationId || null);
+      setRequireTestDate(!!taskTypeToEdit.requireTestDate);
+      setRequireEnvironment(!!taskTypeToEdit.requireEnvironment);
 
       // Populate workflow columns
       if (taskTypeToEdit.columns && taskTypeToEdit.columns.length > 0) {
@@ -130,6 +134,8 @@ export default function TaskTypeModal({
       setName('');
       setColorHex('#3B82F6');
       setOrganizationId(user?.organizationId || null);
+      setRequireTestDate(false);
+      setRequireEnvironment(false);
       setColumns(
         DEFAULT_WORKFLOW_COLUMNS.map((c, i) => ({
           key: `col-default-${i}`,
@@ -301,6 +307,8 @@ export default function TaskTypeModal({
         const updatePayload: UpdateTaskTypeRequest = {
           name: name.trim(),
           colorHex: colorHex.trim(),
+          requireTestDate,
+          requireEnvironment,
           columns: formattedColumns,
           rules: formattedRules,
         };
@@ -310,6 +318,8 @@ export default function TaskTypeModal({
         const createPayload: CreateTaskTypeRequest = {
           name: name.trim(),
           colorHex: colorHex.trim(),
+          requireTestDate,
+          requireEnvironment,
           organizationId: organizationId || undefined,
           columns: formattedColumns,
           rules: formattedRules,
@@ -443,6 +453,44 @@ export default function TaskTypeModal({
               </div>
             </div>
 
+            {/* Workflow Feature Flags */}
+            <div className="p-3.5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Gelişmiş Doğrulama Ayarları
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requireTestDate}
+                    onChange={(e) => setRequireTestDate(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                  <div className="text-xs">
+                    <span className="font-semibold text-slate-800">Test Tarihi Zorunlu (QA/Test Kolonuna Geçişte)</span>
+                    <p className="text-slate-500 text-[11px] mt-0.5">
+                      Kart Test veya QA aşamasına taşınırken 'Test Tarihi' girilmemişse geçiş engellenir.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requireEnvironment}
+                    onChange={(e) => setRequireEnvironment(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                  <div className="text-xs">
+                    <span className="font-semibold text-slate-800">Test Ortamı Zorunlu (DEV/TEST/STAGING/PROD)</span>
+                    <p className="text-slate-500 text-[11px] mt-0.5">
+                      Kart Test veya QA aşamasına taşınırken hedef ortam seçilmemişse geçiş engellenir.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {/* Organization Selector for SuperAdmin */}
             {isSuperAdmin && organizations.length > 0 && !isEditing && (
               <div>
@@ -476,7 +524,7 @@ export default function TaskTypeModal({
                   </span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Bu görev tipine ait özel aşamaları ve panodaki kolon sırasını tanımlayın.
+                  Bu görev tipine ait özel aşamaları ve boarddaki kolon sırasını tanımlayın.
                 </p>
               </div>
 

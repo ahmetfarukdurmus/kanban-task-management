@@ -92,6 +92,9 @@ export interface BoardResponse {
   organizationId?: number | null;
   organizationName?: string | null;
   boardType?: BoardType;
+  taskTypeId?: number | null;
+  taskTypeName?: string | null;
+  taskTypeColor?: string | null;
 }
 
 /* ── Column ────────────────────────────────────────────────────────── */
@@ -165,6 +168,8 @@ export interface TaskTypeDto {
   id: number;
   name: string;
   colorHex?: string | null;
+  requireTestDate?: boolean;
+  requireEnvironment?: boolean;
   organizationId?: number | null;
   organizationName?: string | null;
   columns?: TaskTypeColumnDto[];
@@ -175,6 +180,8 @@ export interface TaskTypeDto {
 export interface CreateTaskTypeRequest {
   name: string;
   colorHex?: string;
+  requireTestDate?: boolean;
+  requireEnvironment?: boolean;
   organizationId?: number | null;
   columns?: CreateTaskTypeColumnRequest[];
   rules?: CreateTransitionRuleRequest[];
@@ -183,6 +190,8 @@ export interface CreateTaskTypeRequest {
 export interface UpdateTaskTypeRequest {
   name: string;
   colorHex?: string;
+  requireTestDate?: boolean;
+  requireEnvironment?: boolean;
   columns?: CreateTaskTypeColumnRequest[];
   rules?: CreateTransitionRuleRequest[];
 }
@@ -216,6 +225,11 @@ export interface TaskRequest {
   description?: string;
   priority?: Priority;
   dueDate?: string;   // ISO-8601 date string (YYYY-MM-DD)
+  testDueDate?: string | null; // ISO-8601 date string (YYYY-MM-DD)
+  targetEnvironment?: string | null; // DEV, TEST, STAGING, PROD
+  estimatedHours?: number | null;
+  reporterId?: number | null;
+  reporter?: string | null;
   assignee?: string;
   assigneeIds?: number[];
   taskTypeId?: number | null;
@@ -234,6 +248,12 @@ export interface TaskResponse {
   description: string | null;
   priority: Priority;
   dueDate: string | null;
+  testDueDate?: string | null;
+  targetEnvironment?: string | null;
+  estimatedHours?: number | null;
+  reporterId?: number | null;
+  reporterName?: string | null;
+  reporter?: UserSummary | null;
   assignee: string | null;
   position: number;
   columnId: number;

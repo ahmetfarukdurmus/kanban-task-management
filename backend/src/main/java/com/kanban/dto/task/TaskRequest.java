@@ -32,6 +32,17 @@ public record TaskRequest(
 
         LocalDate dueDate,
 
+        LocalDate testDueDate,
+
+        @Size(max = 50, message = "Target environment must not exceed 50 characters")
+        String targetEnvironment,
+
+        Integer estimatedHours,
+
+        Long reporterId,
+
+        String reporter,
+
         @Size(max = 100, message = "Assignee name must not exceed 100 characters")
         String assignee,
 
@@ -43,11 +54,15 @@ public record TaskRequest(
 
         List<CreateChecklistItemRequest> checklistItems
 ) {
+    public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee, Set<Long> assigneeIds, Long taskTypeId, List<CustomFieldDto> customFields, List<CreateChecklistItemRequest> checklistItems) {
+        this(title, description, priority, dueDate, null, null, null, null, null, assignee, assigneeIds, taskTypeId, customFields, checklistItems);
+    }
+
     public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee, List<CustomFieldDto> customFields) {
-        this(title, description, priority, dueDate, assignee, null, null, customFields, null);
+        this(title, description, priority, dueDate, null, null, null, null, null, assignee, null, null, customFields, null);
     }
 
     public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee) {
-        this(title, description, priority, dueDate, assignee, null, null, null, null);
+        this(title, description, priority, dueDate, null, null, null, null, null, assignee, null, null, null, null);
     }
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Navigate } from 'react-router-dom';
@@ -24,6 +24,16 @@ export default function AdminTaskTypesPage() {
   const [deletingId, setDeletingId]             = useState<number | null>(null);
   const [searchQuery, setSearchQuery]           = useState('');
   const [orgFilter, setOrgFilter]               = useState<string>('ALL');
+  const [expandedCards, setExpandedCards]       = useState<Record<number, boolean>>({});
+
+  // View mode: 'grid' | 'table'
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
+    return (localStorage.getItem('admin_task_types_view_mode') as 'grid' | 'table') || 'grid';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('admin_task_types_view_mode', viewMode);
+  }, [viewMode]);
 
   // Guard: Only ADMIN or SUPER_ADMIN can access
   if (!isAdmin && !isSuperAdmin) {
@@ -72,6 +82,10 @@ export default function AdminTaskTypesPage() {
       return true;
     });
   }, [taskTypes, orgFilter, searchQuery]);
+
+  const toggleExpand = (id: number) => {
+    setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleOpenCreate = () => {
     setEditingTaskType(null);
@@ -123,83 +137,146 @@ export default function AdminTaskTypesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 flex flex-col">
+    <div className="min-h-screen bg-slate-50/60 flex flex-col">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-4 max-w-screen-2xl">
         
-        {/* Header Banner */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-                  <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
-                  <path d="M7 7h.01" />
-                </svg>
-              </span>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+        {/* Header Banner - Compact & Linear-styled */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/90 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shadow-2xs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4.5 h-4.5">
+                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                <path d="M7 7h.01" />
+              </svg>
+            </span>
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
                 Görev Tipleri & İş Akışı Kuralları
               </h1>
+              <p className="text-xs text-slate-500 font-medium">
+                Dinamik şablonları, iş akışı aşamalarını ve kolon geçiş kurallarını (Guards) yönetin.
+              </p>
             </div>
-            <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
-              Kart renklerini, şablon tiplerini ve kolonlar arası geçişte zorunlu tutulacak doğrulama kurallarını (Workflow Guards) buradan yönetin.
-            </p>
           </div>
 
           <button
             onClick={handleOpenCreate}
             type="button"
-            className="btn-primary py-2.5 px-4 rounded-xl text-xs font-semibold gap-2 shadow-xs shrink-0 self-start md:self-auto"
+            className="btn-primary py-2 px-3.5 rounded-lg text-xs font-bold gap-1.5 shadow-xs shrink-0 self-start sm:self-auto"
           >
-            <PlusIcon className="w-4 h-4" />
-            <span>Yeni Görev Tipi Oluştur</span>
+            <PlusIcon className="w-3.5 h-3.5" />
+            <span>Yeni Görev Tipi</span>
           </button>
         </div>
 
-        {/* Filter and Search Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-72">
-            <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Görev tipi veya kural ara…"
-              className="w-full pl-9 pr-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-            />
+        {/* Filter, Search & View Controls Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs">
+          <div className="flex flex-1 items-center gap-2.5 flex-wrap sm:flex-nowrap">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-sm">
+              <SearchIcon className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Görev tipi, kural veya kolon ara…"
+                className="w-full pl-8 pr-7 py-1.5 bg-slate-50/70 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md hover:bg-slate-200 transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Organization Filter */}
+            {isSuperAdmin && organizations.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Org:</span>
+                <select
+                  value={orgFilter}
+                  onChange={(e) => setOrgFilter(e.target.value)}
+                  className="bg-slate-50/70 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  <option value="ALL">Tümü ({taskTypes.length})</option>
+                  <option value="GLOBAL">Genel / Şirket Bağımsız</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.name}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          {isSuperAdmin && organizations.length > 0 && (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-xs font-semibold text-slate-500 shrink-0">Organizasyon:</span>
-              <select
-                value={orgFilter}
-                onChange={(e) => setOrgFilter(e.target.value)}
-                className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+          {/* Stats & View Switcher */}
+          <div className="flex items-center justify-between sm:justify-end gap-3">
+            <span className="text-xs font-semibold text-slate-500">
+              {filteredTaskTypes.length} Görev Tipi
+            </span>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-bold transition-all ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-blue-600 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Kompakt Grid Görünümü"
               >
-                <option value="ALL">Tüm Organizasyonlar</option>
-                <option value="GLOBAL">Genel / Şirket Bağımsız</option>
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.name}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                </svg>
+                <span className="hidden sm:inline">Grid</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-bold transition-all ${
+                  viewMode === 'table'
+                    ? 'bg-white text-blue-600 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Yönetim Tablosu"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" />
+                  <line x1="3" y1="18" x2="3.01" y2="18" />
+                </svg>
+                <span className="hidden sm:inline">Tablo</span>
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Loading / Error States */}
         {isLoading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="flex flex-col items-center justify-center py-20 gap-2">
+            <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-slate-500 font-medium">Görev tipleri yükleniyor…</span>
           </div>
         )}
 
         {isError && (
-          <div className="p-6 bg-rose-50 border border-rose-200 rounded-2xl text-center space-y-2">
+          <div className="p-6 bg-rose-50 border border-rose-200 rounded-xl text-center space-y-2">
             <p className="text-xs text-rose-700 font-semibold">Görev tipleri yüklenirken bir sorun oluştu.</p>
             <button
               onClick={() => refetch()}
@@ -212,9 +289,9 @@ export default function AdminTaskTypesPage() {
 
         {/* Empty State */}
         {!isLoading && !isError && filteredTaskTypes.length === 0 && (
-          <div className="p-12 text-center bg-white border border-dashed border-slate-200 rounded-2xl space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-xs">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-6 h-6">
+          <div className="p-10 text-center bg-white border border-dashed border-slate-200 rounded-xl space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-2xs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
                 <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
                 <path d="M7 7h.01" />
               </svg>
@@ -229,7 +306,7 @@ export default function AdminTaskTypesPage() {
               <button
                 onClick={handleOpenCreate}
                 type="button"
-                className="btn-primary text-xs py-2 px-4 rounded-xl font-semibold gap-1.5 mt-2 inline-flex"
+                className="btn-primary text-xs py-1.5 px-3.5 rounded-lg font-semibold gap-1.5 mt-2 inline-flex"
               >
                 <PlusIcon className="w-3.5 h-3.5" />
                 <span>İlk Görev Tipini Oluştur</span>
@@ -238,209 +315,363 @@ export default function AdminTaskTypesPage() {
           </div>
         )}
 
-        {/* Task Types Grid / Cards */}
+        {/* ── Content: Grid View or Table View ──────────────────────── */}
         {!isLoading && !isError && filteredTaskTypes.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {filteredTaskTypes.map((type) => {
-              const ruleCount = type.rules?.length || 0;
-              const color = type.colorHex || '#3B82F6';
+          viewMode === 'grid' ? (
+            /* ── 3-Column Compact Grid View ──────────────────────────── */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredTaskTypes.map((type) => {
+                const ruleCount = type.rules?.length || 0;
+                const colCount = type.columns?.length || 0;
+                const color = type.colorHex || '#3B82F6';
+                const isExpanded = expandedCards[type.id] ?? true;
 
-              return (
-                <div
-                  key={type.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
-                >
-                  {/* Card Header */}
-                  <div className="p-5 border-b border-slate-100 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className="w-4 h-4 rounded-full ring-2 ring-white shadow-xs shrink-0"
-                          style={{ backgroundColor: color }}
-                        />
-                        <div>
-                          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                            <span>{type.name}</span>
-                            <span
-                              className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border"
-                              style={{
-                                backgroundColor: `${color}15`,
-                                color: color,
-                                borderColor: `${color}35`,
-                              }}
-                            >
-                              {color}
+                return (
+                  <div
+                    key={type.id}
+                    className="bg-white rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between border-l-4"
+                    style={{ borderLeftColor: color }}
+                  >
+                    {/* Compact Card Header */}
+                    <div className="p-3.5 border-b border-slate-100">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0 shadow-2xs"
+                            style={{ backgroundColor: color }}
+                          />
+                          <div className="min-w-0">
+                            <h2 className="text-sm font-bold text-slate-900 truncate" title={type.name}>
+                              {type.name}
+                            </h2>
+                            {type.organizationName ? (
+                              <span className="text-[10px] text-slate-500 font-medium truncate block">
+                                {type.organizationName}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-medium block">
+                                Genel Şablon
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => handleOpenEdit(type)}
+                            type="button"
+                            className="px-2 py-0.5 text-[11px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 rounded-md transition-all border border-blue-200/60"
+                          >
+                            Düzenle
+                          </button>
+                          <button
+                            onClick={() => handleDelete(type)}
+                            type="button"
+                            disabled={deletingId === type.id}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            title="Görev Tipini Sil"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Summary Badges Row */}
+                      <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100 text-xs">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center font-semibold text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200/60">
+                            {colCount} Kolon
+                          </span>
+                          <span
+                            className="inline-flex items-center font-semibold text-[10px] px-2 py-0.5 rounded-md border"
+                            style={{
+                              backgroundColor: `${color}12`,
+                              color: color,
+                              borderColor: `${color}30`,
+                            }}
+                          >
+                            {ruleCount} Kural
+                          </span>
+                          {type.requireTestDate && (
+                            <span className="inline-flex items-center font-bold text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200" title="QA Kolonuna Geçişte Test Tarihi Zorunlu">
+                              Test Tarihi Zorunlu
                             </span>
-                          </h2>
-                          {type.organizationName && (
-                            <span className="text-[11px] text-slate-500 font-medium">
-                              Organizasyon: <strong className="text-slate-700">{type.organizationName}</strong>
+                          )}
+                          {type.requireEnvironment && (
+                            <span className="inline-flex items-center font-bold text-[9px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200" title="QA Kolonuna Geçişte Ortam Zorunlu">
+                              Ortam Zorunlu
                             </span>
                           )}
                         </div>
-                      </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Accordion Toggle */}
                         <button
-                          onClick={() => handleOpenEdit(type)}
                           type="button"
-                          className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          onClick={() => toggleExpand(type.id)}
+                          className="text-[10px] font-bold text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
                         >
-                          Düzenle
-                        </button>
-                        <button
-                          onClick={() => handleDelete(type)}
-                          type="button"
-                          disabled={deletingId === type.id}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Görev Tipini Sil"
-                        >
-                          <TrashIcon className="w-4 h-4" />
+                          <span>{isExpanded ? 'Gizle' : 'Detaylar'}</span>
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                            className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                          >
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
                         </button>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Card Body: Workflow Stages & Transition Rules */}
-                  <div className="p-5 bg-slate-50/40 flex-1 space-y-4">
+                    {/* Collapsible Body: Columns & Transition Rules */}
+                    {isExpanded && (
+                      <div className="p-3 bg-slate-50/50 flex-1 space-y-2.5 text-xs animate-fade-in">
+                        {/* Columns Mini Flow */}
+                        {type.columns && type.columns.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                              Aşamalar ({type.columns.length}):
+                            </span>
+                            <div className="flex flex-wrap items-center gap-1 p-1.5 bg-white rounded-lg border border-slate-200/70 shadow-2xs">
+                              {type.columns.map((col, cIdx) => (
+                                <div key={col.id || cIdx} className="flex items-center gap-1">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border"
+                                    style={{
+                                      backgroundColor: col.colorHex ? `${col.colorHex}10` : '#f8fafc',
+                                      borderColor: col.colorHex ? `${col.colorHex}30` : '#e2e8f0',
+                                      color: col.colorHex || '#475569',
+                                    }}
+                                  >
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                                      style={{ backgroundColor: col.colorHex || '#94a3b8' }}
+                                    />
+                                    <span>{col.title}</span>
+                                  </span>
+                                  {cIdx < (type.columns?.length || 0) - 1 && (
+                                    <span className="text-slate-300 text-[9px]">→</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                    {/* Workflow Stages Pipeline */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-blue-600">
-                            <rect x="3" y="3" width="7" height="18" rx="1" />
-                            <rect x="14" y="3" width="7" height="11" rx="1" />
-                          </svg>
-                          <span>İş Akışı Aşamaları (Kolonlar)</span>
-                        </span>
-                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                          {type.columns?.length || 0} Kolon
-                        </span>
+                        {/* Transition Rules List (Max Height Scroll) */}
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Geçiş Kuralları ({ruleCount}):
+                          </span>
+
+                          {ruleCount === 0 ? (
+                            <p className="text-[11px] text-slate-400 italic py-0.5">
+                              Özel geçiş kuralı bulunmuyor.
+                            </p>
+                          ) : (
+                            <div className="max-h-36 overflow-y-auto space-y-1.5 pr-0.5">
+                              {type.rules.map((rule) => {
+                                const isChecklist = rule.ruleType === 'CHECKLIST_REQUIRED';
+                                return (
+                                  <div
+                                    key={rule.id}
+                                    className="flex items-center justify-between gap-1.5 p-1.5 bg-white border border-slate-200/80 rounded-lg text-[11px] shadow-2xs"
+                                  >
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      {/* Path */}
+                                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px] shrink-0">
+                                        <span>{rule.sourceColumnTitle || 'Tümü'}</span>
+                                        <span className="text-slate-400">→</span>
+                                        <span className="text-blue-700 font-bold">{rule.targetColumnTitle}</span>
+                                      </span>
+
+                                      {/* Type Icon Badge */}
+                                      <span
+                                        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                                          isChecklist
+                                            ? 'bg-blue-50 text-blue-700 border border-blue-200/80'
+                                            : 'bg-amber-50 text-amber-800 border border-amber-200/80'
+                                        }`}
+                                        title={isChecklist ? 'Kontrol Listesi Şartı' : 'Dosya / Görsel Şartı'}
+                                      >
+                                        {isChecklist ? (
+                                          <span>✓ Liste</span>
+                                        ) : (
+                                          <>
+                                            <PaperclipIcon className="w-2.5 h-2.5" />
+                                            <span>Ek</span>
+                                          </>
+                                        )}
+                                      </span>
+
+                                      {/* Description */}
+                                      {rule.description && (
+                                        <span className="text-slate-500 text-[10px] truncate" title={rule.description}>
+                                          {rule.description}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteRule(type.id, rule.id)}
+                                      className="text-slate-400 hover:text-rose-600 p-0.5 rounded hover:bg-rose-50 transition-colors shrink-0"
+                                      title="Kuralı Sil"
+                                    >
+                                      <TrashIcon className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* ── Modern Table View (Linear SaaS Style) ────────────────── */
+            <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="py-2.5 px-3.5">Görev Tipi</th>
+                      <th className="py-2.5 px-3">Organizasyon</th>
+                      <th className="py-2.5 px-3">İş Akışı Kolonları</th>
+                      <th className="py-2.5 px-3">Geçiş Kuralları</th>
+                      <th className="py-2.5 px-3 text-right">İşlemler</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredTaskTypes.map((type) => {
+                      const color = type.colorHex || '#3B82F6';
+                      const ruleCount = type.rules?.length || 0;
+                      const colCount = type.columns?.length || 0;
 
-                      {type.columns && type.columns.length > 0 ? (
-                        <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-200/70 shadow-2xs">
-                          {type.columns.map((col, cIdx) => (
-                            <div key={col.id || cIdx} className="flex items-center gap-1.5">
+                      return (
+                        <tr key={type.id} className="group hover:bg-blue-50/30 transition-colors">
+                          {/* Name & Color */}
+                          <td className="py-2.5 px-3.5">
+                            <div className="flex items-center gap-2">
                               <span
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border shadow-2xs"
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: color }}
+                              />
+                              <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                                {type.name}
+                              </span>
+                              <span
+                                className="text-[10px] font-mono px-1.5 py-0.2 rounded border"
                                 style={{
-                                  backgroundColor: col.colorHex ? `${col.colorHex}12` : '#f1f5f9',
-                                  borderColor: col.colorHex ? `${col.colorHex}35` : '#e2e8f0',
-                                  color: col.colorHex || '#334155',
+                                  backgroundColor: `${color}12`,
+                                  color: color,
+                                  borderColor: `${color}30`,
                                 }}
                               >
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: col.colorHex || '#94a3b8' }}
-                                />
-                                <span>{col.title}</span>
+                                {color}
                               </span>
-                              {cIdx < (type.columns?.length || 0) - 1 && (
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3 text-slate-400">
-                                  <path d="m9 18 6-6-6-6" />
-                                </svg>
+                            </div>
+                          </td>
+
+                          {/* Organization */}
+                          <td className="py-2.5 px-3">
+                            {type.organizationName ? (
+                              <span className="inline-flex items-center font-medium text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-600 border border-slate-200/80">
+                                {type.organizationName}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 font-medium">Genel Şablon</span>
+                            )}
+                          </td>
+
+                          {/* Columns */}
+                          <td className="py-2.5 px-3">
+                            {colCount > 0 ? (
+                              <div className="flex items-center gap-1 flex-wrap max-w-sm">
+                                {type.columns?.map((c, i) => (
+                                  <span
+                                    key={c.id || i}
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border"
+                                    style={{
+                                      backgroundColor: c.colorHex ? `${c.colorHex}10` : '#f8fafc',
+                                      borderColor: c.colorHex ? `${c.colorHex}30` : '#e2e8f0',
+                                      color: c.colorHex || '#475569',
+                                    }}
+                                  >
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full"
+                                      style={{ backgroundColor: c.colorHex || '#94a3b8' }}
+                                    />
+                                    {c.title}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">Standart</span>
+                            )}
+                          </td>
+
+                          {/* Rules */}
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                className="inline-flex items-center font-bold text-[10px] px-2 py-0.5 rounded-md border"
+                                style={{
+                                  backgroundColor: `${color}12`,
+                                  color: color,
+                                  borderColor: `${color}30`,
+                                }}
+                              >
+                                {ruleCount} Kural
+                              </span>
+                              {type.requireTestDate && (
+                                <span className="inline-flex items-center font-bold text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">
+                                  Test Tarihi
+                                </span>
+                              )}
+                              {type.requireEnvironment && (
+                                <span className="inline-flex items-center font-bold text-[9px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
+                                  Ortam
+                                </span>
                               )}
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400 italic py-0.5">
-                          Standart pano kolonları kullanılır.
-                        </p>
-                      )}
-                    </div>
+                          </td>
 
-                    {/* Transition Rules */}
-                    <div className="pt-3 border-t border-slate-200/60 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-blue-600">
-                            <path d="M5 12h14" />
-                            <path d="m12 5 7 7-7 7" />
-                          </svg>
-                          <span>Geçiş Doğrulama Kuralları</span>
-                        </span>
-                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                          {ruleCount} Kural
-                        </span>
-                      </div>
-
-                    {ruleCount === 0 ? (
-                      <p className="text-xs text-slate-400 italic py-1">
-                        Bu görev tipi için henüz bir kolon geçiş kuralı tanımlanmamış.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {type.rules.map((rule) => {
-                          const isChecklist = rule.ruleType === 'CHECKLIST_REQUIRED';
-                          return (
-                            <div
-                              key={rule.id}
-                              className="flex items-center justify-between gap-2 p-2.5 bg-white border border-slate-200/80 rounded-xl text-xs shadow-xs"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                {/* Transition Path Badge */}
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[11px] shrink-0">
-                                  <span>{rule.sourceColumnTitle || 'Tüm Kolonlar'}</span>
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3 text-slate-400">
-                                    <path d="M5 12h14M12 5l7 7-7 7" />
-                                  </svg>
-                                  <span className="text-blue-700 font-bold">{rule.targetColumnTitle}</span>
-                                </span>
-
-                                {/* Rule Type Badge */}
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold shrink-0 ${
-                                    isChecklist
-                                      ? 'bg-blue-50 text-blue-700 border border-blue-200/80'
-                                      : 'bg-amber-50 text-amber-800 border border-amber-200/80'
-                                  }`}
-                                >
-                                  {isChecklist ? (
-                                    <>
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3">
-                                        <polyline points="20 6 9 17 4 12" />
-                                      </svg>
-                                      <span>Kontrol Listesi</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <PaperclipIcon className="w-3 h-3" />
-                                      <span>Dosya / Görsel Eki</span>
-                                    </>
-                                  )}
-                                </span>
-
-                                {/* Description */}
-                                {rule.description && (
-                                  <span className="text-slate-500 text-[11px] truncate" title={rule.description}>
-                                    "{rule.description}"
-                                  </span>
-                                )}
-                              </div>
-
+                          {/* Actions */}
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
                               <button
+                                onClick={() => handleOpenEdit(type)}
                                 type="button"
-                                onClick={() => handleDeleteRule(type.id, rule.id)}
-                                className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors shrink-0"
-                                title="Kuralı Sil"
+                                className="px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 rounded-md transition-all border border-blue-200/60"
+                              >
+                                Düzenle
+                              </button>
+                              <button
+                                onClick={() => handleDelete(type)}
+                                type="button"
+                                disabled={deletingId === type.id}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all"
+                                title="Görev Tipini Sil"
                               >
                                 <TrashIcon className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
         )}
 
       </main>

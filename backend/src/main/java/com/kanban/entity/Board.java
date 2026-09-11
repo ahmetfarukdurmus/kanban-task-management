@@ -1,5 +1,6 @@
 package com.kanban.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -15,6 +16,7 @@ import java.util.List;
 @Table(name = "boards")
 @Getter @Setter @Builder
 @NoArgsConstructor @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Board {
 
     @Id
@@ -44,13 +46,22 @@ public class Board {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "owner_id", nullable = false,
                 foreignKey = @ForeignKey(name = "fk_boards_owner"))
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "boards", "authorities"})
     private User owner;
 
     /** Organization / Team this board belongs to – multi-tenancy key. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id",
                 foreignKey = @ForeignKey(name = "fk_boards_organization"))
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "members"})
     private Organization organization;
+
+    /** Default TaskType / Workflow linked to this board. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "task_type_id",
+                foreignKey = @ForeignKey(name = "fk_boards_task_type"))
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "columns", "rules"})
+    private TaskType taskType;
 
     /** Ordered list of columns on this board. */
     @OneToMany(mappedBy = "board",
@@ -58,5 +69,6 @@ public class Board {
                orphanRemoval = true)
     @OrderBy("position ASC")
     @Builder.Default
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "board"})
     private List<BoardColumn> columns = new ArrayList<>();
 }

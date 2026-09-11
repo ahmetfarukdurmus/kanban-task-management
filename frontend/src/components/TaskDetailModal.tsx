@@ -19,8 +19,12 @@ import { attachmentService } from '@/services/attachmentService';
 import { userService } from '@/services/userService';
 import { taskTypeService } from '@/services/taskTypeService';
 import { useAuth } from '@/contexts/AuthContext';
+import { isColumnMatching } from '@/utils/workflowUtils';
 import {
+  CalendarIcon,
+  ClockIcon,
   DownloadIcon,
+  LockIcon,
   MessageSquareIcon,
   PaperclipIcon,
   PlusIcon,
@@ -47,6 +51,23 @@ const priorityBadge: Record<Priority, { label: string; className: string }> = {
   LOW:    { label: 'Düşük',  className: 'badge-low' },
 };
 
+function getAvatarColor(name: string) {
+  const colors = [
+    'bg-blue-600 text-white',
+    'bg-emerald-600 text-white',
+    'bg-violet-600 text-white',
+    'bg-amber-600 text-white',
+    'bg-rose-600 text-white',
+    'bg-cyan-600 text-white',
+    'bg-indigo-600 text-white',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
 export default function TaskDetailModal({
   task,
   boardId,
@@ -56,13 +77,26 @@ export default function TaskDetailModal({
   onUpdated,
   onDeleted,
 }: Props) {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin } = useAuth();
+  const canEditAdminFields = isAdmin || isSuperAdmin;
+  const isReporter = !!(
+    user && (
+      (task?.reporterId && task.reporterId === user.id) ||
+      (task?.reporter?.id && task.reporter.id === user.id) ||
+      (task?.reporterName && user.username && task.reporterName.toLowerCase() === user.username.toLowerCase())
+    )
+  );
+  const canEditEstimatedHours = canEditAdminFields || isReporter;
 
   /* ── Form State ─────────────────────────────────────────────────── */
   const [title, setTitle]                 = useState('');
   const [description, setDescription]     = useState('');
   const [priority, setPriority]           = useState<Priority>('MEDIUM');
   const [dueDate, setDueDate]             = useState('');
+  const [testDueDate, setTestDueDate]     = useState('');
+  const [targetEnvironment, setTargetEnvironment] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState<number | ''>('');
+  const [reporterId, setReporterId]       = useState<number | null>(null);
   const [columnId, setColumnId]           = useState<number>(0);
   const [selectedTaskTypeId, setSelectedTaskTypeId] = useState<number | null>(null);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<number[]>([]);
@@ -106,6 +140,10 @@ export default function TaskDetailModal({
       setDescription(task.description ?? '');
       setPriority(task.priority);
       setDueDate(task.dueDate ?? '');
+      setTestDueDate(task.testDueDate ?? '');
+      setTargetEnvironment(task.targetEnvironment ?? '');
+      setEstimatedHours(task.estimatedHours ?? '');
+      setReporterId(task.reporterId ?? task.reporter?.id ?? null);
       setColumnId(task.columnId);
       setSelectedTaskTypeId(task.taskTypeId ?? null);
       setSelectedAssigneeIds(task.assigneeIds || (task.assignee ? [] : []));
@@ -141,6 +179,10 @@ export default function TaskDetailModal({
           setDescription(freshTask.description ?? '');
           setPriority(freshTask.priority);
           setDueDate(freshTask.dueDate ?? '');
+          setTestDueDate(freshTask.testDueDate ?? '');
+          setTargetEnvironment(freshTask.targetEnvironment ?? '');
+          setEstimatedHours(freshTask.estimatedHours ?? '');
+          setReporterId(freshTask.reporterId ?? freshTask.reporter?.id ?? null);
           setColumnId(freshTask.columnId);
           setSelectedTaskTypeId(freshTask.taskTypeId ?? null);
           setSelectedAssigneeIds(freshTask.assigneeIds || []);
@@ -192,7 +234,7 @@ export default function TaskDetailModal({
         const targetCol = columns.find(
           (c) =>
             (rule.targetColumnId && c.id === rule.targetColumnId) ||
-            (rule.targetColumnTitle && c.title.toLowerCase() === rule.targetColumnTitle.toLowerCase())
+            (rule.targetColumnTitle && isColumnMatching(rule.targetColumnTitle, c.title))
         );
         try {
           const created = await taskApi.addChecklist(task.id, {
@@ -326,54 +368,95 @@ export default function TaskDetailModal({
           const targetCol = columns.find((c) => c.id === columnId);
           const sourceCol = columns.find((c) => c.id === task.columnId);
 
-          if (currentType?.rules && targetCol) {
-            for (const rule of currentType.rules) {
-              const targetMatches =
-                (rule.targetColumnId && rule.targetColumnId === columnId) ||
-                (rule.targetColumnTitle && rule.targetColumnTitle.toLowerCase() === targetCol.title.toLowerCase());
+          if (currentType && targetCol) {
+            const isQaCol = isColumnMatching('test', targetCol.title) ||
+                            isColumnMatching('qa', targetCol.title) ||
+                            isColumnMatching('review', targetCol.title) ||
+                            isColumnMatching('inceleme', targetCol.title) ||
+                            isColumnMatching('kontrol', targetCol.title);
 
-              if (!targetMatches) continue;
-
-              const hasSource = rule.sourceColumnId || (rule.sourceColumnTitle && rule.sourceColumnTitle.trim() !== '');
-              if (hasSource && sourceCol) {
-                const sourceMatches =
-                  (rule.sourceColumnId && rule.sourceColumnId === sourceCol.id) ||
-                  (rule.sourceColumnTitle && rule.sourceColumnTitle.toLowerCase() === sourceCol.title.toLowerCase());
-                if (!sourceMatches) continue;
+            if (isQaCol) {
+              if (currentType.requireTestDate && !testDueDate) {
+                toast.error(`Bu aşamaya (${targetCol.title}) geçebilmek için 'Test Tarihi' girilmesi zorunludur.`, {
+                  duration: 5000,
+                  style: {
+                    border: '1px solid #EF4444',
+                    padding: '12px',
+                    color: '#991B1B',
+                    backgroundColor: '#FEF2F2',
+                  },
+                });
+                setColumnId(task.columnId);
+                setSaving(false);
+                return;
               }
+              if (currentType.requireEnvironment && !targetEnvironment) {
+                toast.error(`Bu aşamaya (${targetCol.title}) geçebilmek için 'Test Ortamı' (DEV/TEST/STAGING/PROD) seçilmesi zorunludur.`, {
+                  duration: 5000,
+                  style: {
+                    border: '1px solid #EF4444',
+                    padding: '12px',
+                    color: '#991B1B',
+                    backgroundColor: '#FEF2F2',
+                  },
+                });
+                setColumnId(task.columnId);
+                setSaving(false);
+                return;
+              }
+            }
 
-              if (rule.ruleType === 'CHECKLIST_REQUIRED') {
-                const uncompleted = checklistItems.filter(
-                  (item) => !item.isCompleted && (!item.requiredForColumnId || item.requiredForColumnId === columnId)
-                );
-                if (checklistItems.length === 0 || uncompleted.length > 0) {
-                  toast.error('Bu aşamaya geçebilmek için zorunlu kontrol listesi maddeleri tamamlanmalıdır.', {
-                    duration: 5000,
-                    style: {
-                      border: '1px solid #EF4444',
-                      padding: '12px',
-                      color: '#991B1B',
-                      backgroundColor: '#FEF2F2',
-                    },
-                  });
-                  setColumnId(task.columnId);
-                  setSaving(false);
-                  return;
+            if (currentType.rules) {
+              for (const rule of currentType.rules) {
+                const targetMatches =
+                  (rule.targetColumnId && rule.targetColumnId === columnId) ||
+                  (rule.targetColumnTitle && isColumnMatching(rule.targetColumnTitle, targetCol.title));
+
+                if (!targetMatches) continue;
+
+                const hasSource = rule.sourceColumnId || (rule.sourceColumnTitle && rule.sourceColumnTitle.trim() !== '');
+                if (hasSource && sourceCol) {
+                  const sourceMatches =
+                    (rule.sourceColumnId && rule.sourceColumnId === sourceCol.id) ||
+                    (rule.sourceColumnTitle && isColumnMatching(rule.sourceColumnTitle, sourceCol.title));
+                  if (!sourceMatches) continue;
                 }
-              } else if (rule.ruleType === 'ATTACHMENT_REQUIRED') {
-                if (attachments.length === 0) {
-                  toast.error('Bu aşamaya geçebilmek için dosya/görsel eki yüklenmelidir.', {
-                    duration: 5000,
-                    style: {
-                      border: '1px solid #EF4444',
-                      padding: '12px',
-                      color: '#991B1B',
-                      backgroundColor: '#FEF2F2',
-                    },
-                  });
-                  setColumnId(task.columnId);
-                  setSaving(false);
-                  return;
+
+                if (rule.ruleType === 'CHECKLIST_REQUIRED') {
+                  const uncompleted = checklistItems.filter(
+                    (item) => !item.isCompleted && (!item.requiredForColumnId || item.requiredForColumnId === columnId)
+                  );
+                  if (checklistItems.length === 0 || uncompleted.length > 0) {
+                    const ruleDetail = rule.description ? ` (${rule.description})` : '';
+                    toast.error(`Bu aşamaya (${targetCol.title}) geçebilmek için kontrol listesi maddeleri tamamlanmalıdır.${ruleDetail}`, {
+                      duration: 5000,
+                      style: {
+                        border: '1px solid #EF4444',
+                        padding: '12px',
+                        color: '#991B1B',
+                        backgroundColor: '#FEF2F2',
+                      },
+                    });
+                    setColumnId(task.columnId);
+                    setSaving(false);
+                    return;
+                  }
+                } else if (rule.ruleType === 'ATTACHMENT_REQUIRED') {
+                  if (attachments.length === 0) {
+                    const ruleDetail = rule.description ? ` (${rule.description})` : '';
+                    toast.error(`Bu aşamaya (${targetCol.title}) geçebilmek için dosya/görsel eki yüklenmelidir.${ruleDetail}`, {
+                      duration: 5000,
+                      style: {
+                        border: '1px solid #EF4444',
+                        padding: '12px',
+                        color: '#991B1B',
+                        backgroundColor: '#FEF2F2',
+                      },
+                    });
+                    setColumnId(task.columnId);
+                    setSaving(false);
+                    return;
+                  }
                 }
               }
             }
@@ -388,12 +471,16 @@ export default function TaskDetailModal({
       }
 
       const payload: TaskRequest = {
-        title:        title.trim(),
-        description:  description.trim() || undefined,
+        title:             title.trim(),
+        description:       description.trim() || undefined,
         priority,
-        dueDate:      dueDate || undefined,
-        taskTypeId:   selectedTaskTypeId,
-        assigneeIds:  selectedAssigneeIds,
+        dueDate:           dueDate || undefined,
+        testDueDate:       testDueDate || undefined,
+        targetEnvironment: targetEnvironment || undefined,
+        estimatedHours:    typeof estimatedHours === 'number' && !isNaN(estimatedHours) ? estimatedHours : undefined,
+        reporterId:        reporterId || undefined,
+        taskTypeId:        selectedTaskTypeId,
+        assigneeIds:       selectedAssigneeIds,
         customFields,
       };
 
@@ -461,8 +548,8 @@ export default function TaskDetailModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Dosya boyutu 10MB sınırını aşamaz.');
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('Dosya boyutu 25MB sınırını aşamaz.');
       return;
     }
 
@@ -555,24 +642,24 @@ export default function TaskDetailModal({
 
           {/* ── Workflow Transition Rules Info Banner (Gereken Kurallar Bilgi Kutusu) ── */}
           {selectedType && selectedType.rules && selectedType.rules.length > 0 && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-amber-50/70 border border-blue-200/90 shadow-xs space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-amber-50/70 border border-blue-200/90 shadow-2xs space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-white shadow-2xs">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-600 text-white shadow-2xs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3">
                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
                   </span>
                   <h4 className="text-xs font-bold text-slate-900 tracking-tight">
-                    Bu görevin bir sonraki aşamaya geçebilmesi için gereken kurallar (Workflow Guards)
+                    Kolon Geçiş Kuralları (Workflow Guards)
                   </h4>
                 </div>
-                <span className="text-[11px] font-bold text-blue-700 bg-white px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded-full border border-blue-200 shadow-2xs">
                   {selectedType.rules.length} Kural Tanımlı
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
                 {selectedType.rules.map((rule) => {
                   const isChecklist = rule.ruleType === 'CHECKLIST_REQUIRED';
                   const isSatisfied = isChecklist
@@ -582,16 +669,16 @@ export default function TaskDetailModal({
                   return (
                     <div
                       key={rule.id}
-                      className={`p-2.5 rounded-xl border text-xs flex items-start gap-2.5 transition-all ${
+                      className={`p-2 rounded-lg border text-xs flex items-start gap-2 transition-all ${
                         isSatisfied
                           ? 'bg-emerald-50/90 border-emerald-300/80 text-emerald-900 shadow-2xs'
                           : 'bg-white border-amber-200/90 text-slate-800 shadow-2xs'
                       }`}
                     >
                       <span
-                        className={`flex items-center justify-center w-4 h-4 rounded-full mt-0.5 shrink-0 text-[10px] font-bold ${
+                        className={`flex items-center justify-center w-3.5 h-3.5 rounded-full mt-0.5 shrink-0 text-[9px] font-bold ${
                           isSatisfied
-                            ? 'bg-emerald-600 text-white shadow-2xs'
+                            ? 'bg-emerald-600 text-white'
                             : 'bg-amber-100 text-amber-800 border border-amber-300'
                         }`}
                       >
@@ -604,25 +691,25 @@ export default function TaskDetailModal({
                           </span>
                           {rule.sourceColumnTitle && (
                             <span className="text-[10px] text-slate-400 font-normal">
-                              ({rule.sourceColumnTitle} aşamasından)
+                              ({rule.sourceColumnTitle}’dan)
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                        <p className="text-[11px] text-slate-600 mt-0.5 leading-tight">
                           {isChecklist ? (
                             <>
-                              <strong className="font-semibold text-slate-800">Kontrol Listesi:</strong>{' '}
-                              {rule.description ? rule.description : 'Tüm kontrol listesi maddeleri tamamlanmalı'}{' '}
+                              <strong className="font-semibold text-slate-800">Kontrol:</strong>{' '}
+                              {rule.description ? rule.description : 'Tüm checklist tamamlanmalı'}{' '}
                               <span className={`font-semibold ${checklistItems.length > 0 && checklistItems.every((i) => i.isCompleted) ? 'text-emerald-700' : 'text-amber-700'}`}>
-                                ({checklistItems.filter((i) => i.isCompleted).length}/{checklistItems.length} tamamlandı)
+                                ({checklistItems.filter((i) => i.isCompleted).length}/{checklistItems.length})
                               </span>
                             </>
                           ) : (
                             <>
                               <strong className="font-semibold text-slate-800">Medya/Ek:</strong>{' '}
-                              {rule.description ? rule.description : 'En az bir görsel veya dosya yüklenmeli'}{' '}
+                              {rule.description ? rule.description : 'Dosya/ek yüklenmeli'}{' '}
                               <span className={`font-semibold ${attachments.length > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                ({attachments.length} dosya yüklü)
+                                ({attachments.length} yüklü)
                               </span>
                             </>
                           )}
@@ -922,9 +1009,9 @@ export default function TaskDetailModal({
                     {attachments.length}
                   </span>
                   {selectedType?.rules?.some((r) => r.ruleType === 'ATTACHMENT_REQUIRED') && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                      [Bu aşama için Dosya/Görsel Yüklemek Zorunludur]
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                      [Bu aşama için Görsel/Dosya Zorunludur]
                     </span>
                   )}
                 </div>
@@ -973,7 +1060,7 @@ export default function TaskDetailModal({
                   <p className="text-xs font-semibold text-slate-600 group-hover:text-blue-600 transition-colors">
                     Dosya veya görsel yüklemek için tıklayın
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">PNG, JPG, PDF, ZIP (En fazla 10MB)</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">PNG, JPG, PDF, ZIP (En fazla 25MB)</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1115,29 +1202,53 @@ export default function TaskDetailModal({
 
             {/* Görev Tipi (Task Type) */}
             <div>
-              <label htmlFor="detail-task-type" className="field-label">
-                Görev Tipi (Task Type)
-              </label>
-              <select
-                id="detail-task-type"
-                value={selectedTaskTypeId ?? ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const newTypeId = val ? Number(val) : null;
-                  setSelectedTaskTypeId(newTypeId);
-                  if (newTypeId) {
-                    populateChecklistFromTaskType(newTypeId, checklistItems);
-                  }
-                }}
-                className="field text-sm font-medium text-slate-700"
-              >
-                <option value="">-- Görev Tipi Seçiniz --</option>
-                {taskTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="detail-task-type" className="field-label mb-0">
+                  Görev Tipi (Task Type)
+                </label>
+                {!canEditAdminFields && (
+                  <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                    <LockIcon className="w-3 h-3 text-slate-400" />
+                    Salt Okunur
+                  </span>
+                )}
+              </div>
+              {canEditAdminFields ? (
+                <select
+                  id="detail-task-type"
+                  value={selectedTaskTypeId ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const newTypeId = val ? Number(val) : null;
+                    setSelectedTaskTypeId(newTypeId);
+                    if (newTypeId) {
+                      populateChecklistFromTaskType(newTypeId, checklistItems);
+                    }
+                  }}
+                  className="field text-sm font-medium text-slate-700"
+                >
+                  <option value="">-- Görev Tipi Seçiniz --</option>
+                  {taskTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-semibold text-slate-700">
+                  {selectedType ? (
+                    <>
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                        style={{ backgroundColor: selectedType.colorHex || '#64748b' }}
+                      />
+                      <span>{selectedType.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-400 font-normal">Görev tipi atanmamış</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Atanan Kişiler (Multi-Select) */}
@@ -1246,18 +1357,172 @@ export default function TaskDetailModal({
               </select>
             </div>
 
+            {/* Raporlayan (Reporter) - Profil Rozeti */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="field-label mb-0">Raporlayan (Reporter)</label>
+                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                  <LockIcon className="w-3 h-3 text-slate-400" />
+                  Sabit
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-slate-200/90 shadow-2xs">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(task?.reporterName || (reporterId ? users.find((u) => u.id === reporterId)?.username : '') || 'Kullanıcı')}`}>
+                  {(task?.reporterName || (reporterId ? users.find((u) => u.id === reporterId)?.username : '') || 'K').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-800 truncate">
+                    {task?.reporterName || (reporterId ? users.find((u) => u.id === reporterId)?.username : '') || (task?.reporterId ? `User #${task.reporterId}` : 'Belirtilmemiş')}
+                  </p>
+                  <p className="text-[10px] text-slate-400">Görevi oluşturan</p>
+                </div>
+              </div>
+            </div>
+
             {/* Bitiş Tarihi (Due Date) */}
             <div>
-              <label htmlFor="detail-task-due" className="field-label">
-                Bitiş Tarihi
-              </label>
-              <input
-                id="detail-task-due"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="field text-sm font-medium"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="detail-task-due" className="field-label mb-0">
+                  Bitiş Tarihi
+                </label>
+                {!canEditAdminFields && (
+                  <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                    <LockIcon className="w-3 h-3 text-slate-400" />
+                    Yönetici
+                  </span>
+                )}
+              </div>
+              {canEditAdminFields ? (
+                <input
+                  id="detail-task-due"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="field text-sm font-medium"
+                />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-medium text-slate-600">
+                  <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{dueDate ? format(parseISO(dueDate), 'dd.MM.yyyy') : 'Tarih belirlenmemiş'}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Test Tarihi (Test Due Date) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="detail-task-test-due" className="field-label mb-0">
+                    Test Tarihi
+                  </label>
+                  {selectedType?.requireTestDate && (
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                      QA Zorunlu
+                    </span>
+                  )}
+                </div>
+                {!canEditAdminFields && (
+                  <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                    <LockIcon className="w-3 h-3 text-slate-400" />
+                    Yönetici
+                  </span>
+                )}
+              </div>
+              {canEditAdminFields ? (
+                <input
+                  id="detail-task-test-due"
+                  type="date"
+                  value={testDueDate}
+                  onChange={(e) => setTestDueDate(e.target.value)}
+                  className={`field text-sm font-medium ${
+                    selectedType?.requireTestDate && !testDueDate ? 'border-amber-400 bg-amber-50/30' : ''
+                  }`}
+                />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-medium text-slate-600">
+                  <CalendarIcon className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{testDueDate ? format(parseISO(testDueDate), 'dd.MM.yyyy') : 'Test tarihi girilmemiş'}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Test Ortamı (Target Environment) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="detail-task-env" className="field-label mb-0">
+                    Test Ortamı (Environment)
+                  </label>
+                  {selectedType?.requireEnvironment && (
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                      QA Zorunlu
+                    </span>
+                  )}
+                </div>
+                {!canEditAdminFields && (
+                  <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                    <LockIcon className="w-3 h-3 text-slate-400" />
+                    Yönetici
+                  </span>
+                )}
+              </div>
+              {canEditAdminFields ? (
+                <select
+                  id="detail-task-env"
+                  value={targetEnvironment}
+                  onChange={(e) => setTargetEnvironment(e.target.value)}
+                  className="field text-sm font-medium text-slate-700"
+                >
+                  <option value="">-- Ortam Seçiniz --</option>
+                  <option value="DEV">DEV</option>
+                  <option value="TEST">TEST</option>
+                  <option value="STAGING">STAGING</option>
+                  <option value="PROD">PROD</option>
+                </select>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-semibold text-slate-700">
+                  {targetEnvironment ? (
+                    <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[11px] font-bold">
+                      {targetEnvironment}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 font-normal">Ortam belirtilmemiş</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Tahmini Efor (Estimated Hours / Story Points) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="detail-task-estimated-hours" className="field-label mb-0">
+                  Tahmini Efor / Süre (Saat / SP)
+                </label>
+                {!canEditEstimatedHours && (
+                  <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                    <LockIcon className="w-3 h-3 text-slate-400" />
+                    Kilitli
+                  </span>
+                )}
+              </div>
+              {canEditEstimatedHours ? (
+                <input
+                  id="detail-task-estimated-hours"
+                  type="number"
+                  min={0}
+                  placeholder="Örn: 8 (saat) veya 5 (SP)"
+                  value={estimatedHours}
+                  onChange={(e) => setEstimatedHours(e.target.value ? Number(e.target.value) : '')}
+                  className="field text-sm font-medium"
+                />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-medium text-slate-600">
+                  <ClockIcon className="w-3.5 h-3.5 text-slate-400" />
+                  <span>
+                    {estimatedHours !== '' && estimatedHours !== undefined ? `${estimatedHours} Saat / SP` : 'Efor girilmemiş'}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* İşlem Butonları */}

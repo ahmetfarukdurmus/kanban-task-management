@@ -8,6 +8,7 @@ import com.kanban.entity.TaskCustomField.FieldType;
 import com.kanban.exception.BusinessException;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.*;
+import com.kanban.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -36,6 +38,7 @@ public class TaskService {
     private final TaskTypeRepository               taskTypeRepository;
     private final TaskTypeTransitionRuleRepository transitionRuleRepository;
     private final TaskChecklistItemRepository      checklistItemRepository;
+    private final SecurityUtils                    securityUtils;
 
     // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -78,10 +81,27 @@ public class TaskService {
             userRepository.findByUsername(request.assignee().trim()).ifPresent(assignees::add);
         }
 
-        // 2. Resolve TaskType
+        // 2. Resolve TaskType (explicit request override or inherit from Board)
         TaskType taskType = null;
         if (request.taskTypeId() != null) {
             taskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
+        } else if (column.getBoard() != null && column.getBoard().getTaskType() != null) {
+            taskType = column.getBoard().getTaskType();
+        }
+
+        // 3. Resolve Reporter (explicit request or fallback to current authenticated user)
+        User reporter = null;
+        if (request.reporterId() != null) {
+            reporter = userRepository.findById(request.reporterId()).orElse(null);
+        } else if (request.reporter() != null && !request.reporter().isBlank()) {
+            reporter = userRepository.findByUsername(request.reporter().trim()).orElse(null);
+        }
+        if (reporter == null) {
+            try {
+                reporter = securityUtils.getCurrentUser();
+            } catch (Exception ignored) {
+                // If unauthenticated context, reporter remains null
+            }
         }
 
         Task task = Task.builder()
@@ -89,6 +109,10 @@ public class TaskService {
                 .description(request.description())
                 .priority(request.priority() != null ? request.priority() : Priority.MEDIUM)
                 .dueDate(request.dueDate())
+                .testDueDate(request.testDueDate())
+                .targetEnvironment(request.targetEnvironment() != null && !request.targetEnvironment().isBlank() ? request.targetEnvironment().trim() : null)
+                .estimatedHours(request.estimatedHours())
+                .reporter(reporter)
                 .taskType(taskType)
                 .assignees(assignees)
                 .position(nextPosition)
@@ -99,7 +123,7 @@ public class TaskService {
                 .customFields(new ArrayList<>())
                 .build();
 
-        // 3. Custom fields
+        // 4. Custom fields
         if (request.customFields() != null) {
             for (CustomFieldDto dto : request.customFields()) {
                 if (dto.fieldName() != null && !dto.fieldName().isBlank()) {
@@ -113,7 +137,7 @@ public class TaskService {
             }
         }
 
-        // 4. Initial Checklist Items
+        // 5. Initial Checklist Items
         if (request.checklistItems() != null) {
             for (CreateChecklistItemRequest itemReq : request.checklistItems()) {
                 if (itemReq.title() != null && !itemReq.title().isBlank()) {
@@ -157,6 +181,16 @@ public class TaskService {
             task.setPriority(request.priority());
         }
         task.setDueDate(request.dueDate());
+        task.setTestDueDate(request.testDueDate());
+        task.setTargetEnvironment(request.targetEnvironment() != null && !request.targetEnvironment().isBlank() ? request.targetEnvironment().trim() : null);
+        task.setEstimatedHours(request.estimatedHours());
+
+        // Update reporter if provided
+        if (request.reporterId() != null) {
+            userRepository.findById(request.reporterId()).ifPresent(task::setReporter);
+        } else if (request.reporter() != null && !request.reporter().isBlank()) {
+            userRepository.findByUsername(request.reporter().trim()).ifPresent(task::setReporter);
+        }
 
         // Update task type
         if (request.taskTypeId() != null) {
@@ -204,7 +238,7 @@ public class TaskService {
         requireColumn(boardId, columnId);
 
         Task task       = requireTask(columnId, taskId);
-        int  deletedPos = task.getPosition();
+        int  deletedPos = task.getPosition() != null ? task.getPosition() : 0;
 
         taskRepository.delete(task);
         taskRepository.flush();   // flush DELETE before the UPDATE
@@ -222,8 +256,8 @@ public class TaskService {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Task", taskId));
 
-        Long srcColId = task.getColumn().getId();
-        int  srcPos   = task.getPosition();
+        Long srcColId = task.getColumn() != null ? task.getColumn().getId() : null;
+        int  srcPos   = task.getPosition() != null ? task.getPosition() : 0;
         Long dstColId = request.targetColumnId();
         int  dstPos   = request.targetPosition();
 
@@ -269,11 +303,25 @@ public class TaskService {
 
     /**
      * Validates column transition rules for the task's TaskType.
+     * Performs ID-based, name-based, and semantic alias matching (e.g. 'To Do' == 'Yapılacaklar', 'In Progress' == 'Geliştirmede').
      * Throws {@link BusinessException} (mapped to 400 Bad Request) if any rule is violated.
      */
     private void validateTransitionRules(Task task, BoardColumn sourceColumn, BoardColumn targetColumn) {
         if (task.getTaskType() == null) {
             return;
+        }
+
+        if (task.getTaskType() != null) {
+            TaskType type = task.getTaskType();
+            String targetCat = getColumnCanonicalCategory(normalizeColumnName(targetColumn.getTitle()));
+            if ("IN_REVIEW".equals(targetCat)) {
+                if (Boolean.TRUE.equals(type.getRequireTestDate()) && task.getTestDueDate() == null) {
+                    throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için 'Test Tarihi' girilmesi zorunludur.");
+                }
+                if (Boolean.TRUE.equals(type.getRequireEnvironment()) && (task.getTargetEnvironment() == null || task.getTargetEnvironment().isBlank())) {
+                    throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için 'Test Ortamı' (DEV/TEST/STAGING/PROD) seçilmesi zorunludur.");
+                }
+            }
         }
 
         List<TaskTypeTransitionRule> rules = transitionRuleRepository
@@ -284,18 +332,18 @@ public class TaskService {
         }
 
         for (TaskTypeTransitionRule rule : rules) {
-            // 1. Check target column match (by ID or Title trimmed)
+            // 1. Check target column match (by ID or Title semantic matching)
             boolean targetMatches = false;
             if (rule.getTargetColumn() != null && rule.getTargetColumn().getId().equals(targetColumn.getId())) {
                 targetMatches = true;
             }
             if (!targetMatches && rule.getTargetTaskTypeColumn() != null && targetColumn.getTitle() != null) {
-                if (rule.getTargetTaskTypeColumn().getTitle().trim().equalsIgnoreCase(targetColumn.getTitle().trim())) {
+                if (isColumnTitleMatching(rule.getTargetTaskTypeColumn().getTitle(), targetColumn.getTitle())) {
                     targetMatches = true;
                 }
             }
             if (!targetMatches && rule.getTargetColumnTitle() != null && targetColumn.getTitle() != null) {
-                if (rule.getTargetColumnTitle().trim().equalsIgnoreCase(targetColumn.getTitle().trim())) {
+                if (isColumnTitleMatching(rule.getTargetColumnTitle(), targetColumn.getTitle())) {
                     targetMatches = true;
                 }
             }
@@ -315,12 +363,12 @@ public class TaskService {
                     sourceMatches = true;
                 }
                 if (!sourceMatches && rule.getSourceTaskTypeColumn() != null && sourceColumn.getTitle() != null) {
-                    if (rule.getSourceTaskTypeColumn().getTitle().trim().equalsIgnoreCase(sourceColumn.getTitle().trim())) {
+                    if (isColumnTitleMatching(rule.getSourceTaskTypeColumn().getTitle(), sourceColumn.getTitle())) {
                         sourceMatches = true;
                     }
                 }
                 if (!sourceMatches && rule.getSourceColumnTitle() != null && sourceColumn.getTitle() != null) {
-                    if (rule.getSourceColumnTitle().trim().equalsIgnoreCase(sourceColumn.getTitle().trim())) {
+                    if (isColumnTitleMatching(rule.getSourceColumnTitle(), sourceColumn.getTitle())) {
                         sourceMatches = true;
                     }
                 }
@@ -331,21 +379,92 @@ public class TaskService {
             }
 
             // 3. Enforce Rule Type Guard
+            String ruleDesc = rule.getDescription() != null && !rule.getDescription().isBlank()
+                    ? " (" + rule.getDescription() + ")"
+                    : "";
+
             if (rule.getRuleType() == TransitionRuleType.ATTACHMENT_REQUIRED) {
                 if (task.getAttachments() == null || task.getAttachments().isEmpty()) {
-                    throw new BusinessException("Bu aşamaya geçebilmek için görsel veya dosya eki yüklenmesi zorunludur.");
+                    throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için görsel veya dosya eki yüklenmesi zorunludur." + ruleDesc);
                 }
             } else if (rule.getRuleType() == TransitionRuleType.CHECKLIST_REQUIRED) {
                 List<TaskChecklistItem> items = task.getChecklistItems();
                 if (items == null || items.isEmpty()) {
-                    throw new BusinessException("Bu aşamaya geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur.");
+                    throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur." + ruleDesc);
                 }
                 boolean anyUncompleted = items.stream().anyMatch(item -> !item.isCompleted());
                 if (anyUncompleted) {
-                    throw new BusinessException("Bu aşamaya geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur.");
+                    throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur." + ruleDesc);
                 }
             }
         }
+    }
+
+    private static String normalizeColumnName(String name) {
+        if (name == null) return "";
+        String s = name.trim().toLowerCase(Locale.ROOT);
+        s = s.replace('ç', 'c')
+             .replace('ğ', 'g')
+             .replace('ı', 'i')
+             .replace('ö', 'o')
+             .replace('ş', 's')
+             .replace('ü', 'u')
+             .replace('İ', 'i');
+        return s.replaceAll("[^a-z0-9]", "");
+    }
+
+    private static String getColumnCanonicalCategory(String normalized) {
+        if (normalized.isEmpty()) return "";
+
+        // 1. TODO / Backlog
+        if (normalized.contains("todo") || normalized.contains("yapilacak") || normalized.contains("backlog")
+                || normalized.contains("open") || normalized.contains("acik") || normalized.contains("beklemede")
+                || normalized.contains("tanimlandi") || normalized.contains("analiz") || normalized.contains("plan")) {
+            return "TODO";
+        }
+
+        // 2. IN_PROGRESS / Development
+        if (normalized.contains("inprogress") || normalized.contains("gelistirmede") || normalized.contains("dev")
+                || normalized.contains("suruyor") || normalized.contains("devamediyor") || normalized.contains("islemde")
+                || normalized.contains("calisiliyor") || normalized.contains("yapiliyor") || normalized.contains("doing")
+                || normalized.contains("active") || normalized.contains("aktif") || normalized.contains("kodlama")
+                || normalized.contains("progress")) {
+            return "IN_PROGRESS";
+        }
+
+        // 3. IN_REVIEW / QA / Testing
+        if (normalized.contains("inreview") || normalized.contains("review") || normalized.contains("test")
+                || normalized.contains("qa") || normalized.contains("inceleme") || normalized.contains("kontrol")
+                || normalized.contains("dogrulama") || normalized.contains("codereview") || normalized.contains("onay")
+                || normalized.contains("denetim")) {
+            return "IN_REVIEW";
+        }
+
+        // 4. DONE / Completed
+        if (normalized.contains("done") || normalized.contains("tamamlandi") || normalized.contains("bitti")
+                || normalized.contains("kapandi") || normalized.contains("completed") || normalized.contains("closed")
+                || normalized.contains("finish") || normalized.contains("finished") || normalized.contains("sonuclandi")
+                || normalized.contains("yayinda") || normalized.contains("deploy")) {
+            return "DONE";
+        }
+
+        return normalized;
+    }
+
+    private static boolean isColumnTitleMatching(String ruleColTitle, String boardColTitle) {
+        if (ruleColTitle == null || boardColTitle == null) return false;
+        String norm1 = normalizeColumnName(ruleColTitle);
+        String norm2 = normalizeColumnName(boardColTitle);
+
+        if (norm1.isEmpty() || norm2.isEmpty()) return false;
+        if (norm1.equals(norm2)) return true;
+        if (norm1.contains(norm2) || norm2.contains(norm1)) return true;
+
+        String cat1 = getColumnCanonicalCategory(norm1);
+        String cat2 = getColumnCanonicalCategory(norm2);
+        if (!cat1.isEmpty() && cat1.equals(cat2)) return true;
+
+        return false;
     }
 
     // ── Checklist Management ──────────────────────────────────────────────────
@@ -482,15 +601,40 @@ public class TaskService {
         String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
         String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
 
+        UserSummaryDto reporterDto = null;
+        Long reporterId = null;
+        String reporterName = null;
+        if (task.getReporter() != null) {
+            User r = task.getReporter();
+            reporterId = r.getId();
+            reporterName = r.getUsername();
+            reporterDto = new UserSummaryDto(
+                    r.getId(),
+                    r.getUsername(),
+                    r.getEmail(),
+                    r.getRole() != null ? r.getRole().name() : "ROLE_USER",
+                    r.getPrimaryOrganizationId(),
+                    r.getPrimaryOrganizationName(),
+                    r.getOrganizations() != null ? r.getOrganizations().stream().map(Organization::getId).toList() : List.of(),
+                    r.getOrganizations() != null ? r.getOrganizations().stream().map(Organization::getName).toList() : List.of(),
+                    r.getCreatedAt());
+        }
+
         return new TaskResponse(
                 task.getId(),
                 task.getTitle(),
                 task.getDescription(),
-                task.getPriority().name(),
+                task.getPriority() != null ? task.getPriority().name() : "MEDIUM",
                 task.getDueDate(),
+                task.getTestDueDate(),
+                task.getTargetEnvironment(),
+                task.getEstimatedHours(),
+                reporterId,
+                reporterName,
+                reporterDto,
                 task.getAssignee(),
-                task.getPosition(),
-                task.getColumn().getId(),
+                task.getPosition() != null ? task.getPosition() : 0,
+                task.getColumn() != null ? task.getColumn().getId() : null,
                 fields,
                 taskTypeId,
                 taskTypeName,

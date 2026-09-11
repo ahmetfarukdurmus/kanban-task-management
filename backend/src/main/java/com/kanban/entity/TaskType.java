@@ -30,6 +30,24 @@ public class TaskType {
     @Column(length = 20)
     private String colorHex;
 
+    /** Whether test due date is required before transitioning to QA/Test columns. */
+    @Column(name = "require_test_date", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean requireTestDate = false;
+
+    /** Whether target environment is required before transitioning to QA/Test columns. */
+    @Column(name = "require_environment", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean requireEnvironment = false;
+
+    public Boolean getRequireTestDate() {
+        return requireTestDate;
+    }
+
+    public Boolean getRequireEnvironment() {
+        return requireEnvironment;
+    }
+
     /** Multi-tenant organization this task type belongs to. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id",

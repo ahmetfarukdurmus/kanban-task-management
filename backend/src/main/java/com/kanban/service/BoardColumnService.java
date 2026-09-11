@@ -102,7 +102,7 @@ public class BoardColumnService {
         requireBoard(boardId);
 
         BoardColumn column = requireColumn(boardId, columnId);
-        int deletedPos = column.getPosition();
+        int deletedPos = column.getPosition() != null ? column.getPosition() : 0;
 
         columnRepository.delete(column);
         columnRepository.flush();   // ensure DELETE is sent before the UPDATE below
@@ -119,7 +119,7 @@ public class BoardColumnService {
         requireBoard(boardId);
 
         BoardColumn column  = requireColumn(boardId, columnId);
-        int         srcPos  = column.getPosition();
+        int         srcPos  = column.getPosition() != null ? column.getPosition() : 0;
 
         int total    = columnRepository.countByBoardId(boardId);
         int clampedDst = Math.min(newPosition, total - 1);
@@ -157,7 +157,7 @@ public class BoardColumnService {
     private ColumnResponse toResponse(BoardColumn col) {
         List<TaskResponse> tasks = col.getTasks() != null
                 ? col.getTasks().stream()
-                        .sorted(java.util.Comparator.comparingInt(Task::getPosition))
+                        .sorted(java.util.Comparator.comparingInt(t -> t.getPosition() != null ? t.getPosition() : 0))
                         .map(this::toTaskResponse)
                         .toList()
                 : List.of();
@@ -165,8 +165,8 @@ public class BoardColumnService {
         return new ColumnResponse(
                 col.getId(),
                 col.getTitle(),
-                col.getPosition(),
-                col.getBoard().getId(),
+                col.getPosition() != null ? col.getPosition() : 0,
+                col.getBoard() != null ? col.getBoard().getId() : null,
                 tasks);
     }
 
@@ -212,15 +212,40 @@ public class BoardColumnService {
         String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
         String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
 
+        UserSummaryDto reporterDto = null;
+        Long reporterId = null;
+        String reporterName = null;
+        if (task.getReporter() != null) {
+            User r = task.getReporter();
+            reporterId = r.getId();
+            reporterName = r.getUsername();
+            reporterDto = new UserSummaryDto(
+                    r.getId(),
+                    r.getUsername(),
+                    r.getEmail(),
+                    r.getRole() != null ? r.getRole().name() : "ROLE_USER",
+                    r.getPrimaryOrganizationId(),
+                    r.getPrimaryOrganizationName(),
+                    r.getOrganizations() != null ? r.getOrganizations().stream().map(Organization::getId).toList() : List.of(),
+                    r.getOrganizations() != null ? r.getOrganizations().stream().map(Organization::getName).toList() : List.of(),
+                    r.getCreatedAt());
+        }
+
         return new TaskResponse(
                 task.getId(),
                 task.getTitle(),
                 task.getDescription(),
-                task.getPriority().name(),
+                task.getPriority() != null ? task.getPriority().name() : "MEDIUM",
                 task.getDueDate(),
+                task.getTestDueDate(),
+                task.getTargetEnvironment(),
+                task.getEstimatedHours(),
+                reporterId,
+                reporterName,
+                reporterDto,
                 task.getAssignee(),
-                task.getPosition(),
-                task.getColumn().getId(),
+                task.getPosition() != null ? task.getPosition() : 0,
+                task.getColumn() != null ? task.getColumn().getId() : null,
                 fields,
                 taskTypeId,
                 taskTypeName,

@@ -44,10 +44,28 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "task_type_id",
                 foreignKey = @ForeignKey(name = "fk_tasks_task_type"))
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "columns", "rules"})
     private TaskType taskType;
 
     /** Optional due date displayed on the card. */
     private LocalDate dueDate;
+
+    /** Target test due date (required if task type enforces it on QA/Test transition). */
+    private LocalDate testDueDate;
+
+    /** Test/Deployment target environment (e.g. DEV, TEST, STAGING, PROD). */
+    @Column(length = 50)
+    private String targetEnvironment;
+
+    /** Estimated effort / duration (e.g. hours or story points). */
+    private Integer estimatedHours;
+
+    /** The user who reported/created the task. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reporter_id",
+                foreignKey = @ForeignKey(name = "fk_tasks_reporter"))
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "boards", "authorities", "organizations"})
+    private User reporter;
 
     /**
      * Multi-user assignment for this task (ManyToMany).
@@ -60,6 +78,7 @@ public class Task {
         inverseJoinColumns = @JoinColumn(name = "user_id", foreignKey = @ForeignKey(name = "fk_task_assignees_user"))
     )
     @Builder.Default
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "boards", "authorities", "organizations"})
     private Set<User> assignees = new HashSet<>();
 
     /**
@@ -72,6 +91,7 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "column_id", nullable = false,
                 foreignKey = @ForeignKey(name = "fk_tasks_column"))
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "tasks", "board"})
     private BoardColumn column;
 
     /** Checklist items on this task – cascaded on delete */

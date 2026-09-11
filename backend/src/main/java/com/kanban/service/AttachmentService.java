@@ -122,6 +122,9 @@ public class AttachmentService {
 
         Attachment saved = attachmentRepository.save(attachment);
         attachmentRepository.flush();
+        if (task.getAttachments() != null && !task.getAttachments().contains(saved)) {
+            task.getAttachments().add(saved);
+        }
         return toDto(saved);
     }
 
@@ -141,7 +144,11 @@ public class AttachmentService {
         } catch (IOException ex) {
             log.warn("Could not delete file from disk: {}", ex.getMessage());
         }
+        if (attachment.getTask() != null && attachment.getTask().getAttachments() != null) {
+            attachment.getTask().getAttachments().remove(attachment);
+        }
         attachmentRepository.delete(attachment);
+        attachmentRepository.flush();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
