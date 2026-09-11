@@ -1,378 +1,537 @@
-# Multi-Tenant Kanban ve Dinamik İş Akışı Yönetim Sistemi
+# 🏦 Kanban Task Management — Enterprise Edition
 
-Kurumsal ekipler ve organizasyonlar için geliştirilmiş; mantıksal çok kiracılı mimari (Logical Multi-tenancy), dinamik görev şablonları, kural bazlı kolon geçiş mekanizmaları (Workflow Transition Guards) ve rol tabanlı erişim kontrolü (RBAC) sunan görev yönetim platformu.
-
----
-
-## 1. Proje Özeti
-
-Bu platform, birden fazla departman veya ekibin aynı sistem üzerinde izole şekilde çalışabildiği kurumsal ölçekte bir Kanban ve iş akışı yönetim sistemidir. Temel özellikleri şunlardır:
-
-- **Dinamik Görev Tipleri:** Sistem yöneticileri, "Bug", "Tasarım Görevi" veya "Story" gibi özel görev tiplerini renk, kolon yapısı ve geçiş kurallarıyla birlikte sıfırdan tanımlayabilir.
-- **Kural Bazlı Workflow Guards:** Bir görev belirli bir kolona taşınmadan önce checklist tamamlanması veya dosya/ek yüklenmesi gibi ön koşullar zorunlu kılınabilir.
-- **Mantıksal Çok Kiracılılık:** Her organizasyon, pano ve görev verisi birbirinden izole çalışır; bir kullanıcı birden fazla organizasyona üye olabilir.
-- **Çoklu Atama Desteği:** Bir göreve birden fazla kullanıcı atanabilir (Set<User> assignees).
-- **Gerçek Zamanlı Sıralı Kolon Yönetimi:** Pano kolonları pozisyon bazlı sıralama motoruyla yönetilir.
+> **FinTech & Core Banking Solutions** — A production-grade, full-stack Kanban board application built as a realistic simulation of a payment-system engineering workflow.  
+> Demonstrates 3D Secure task tracking, PCI-DSS compliance checklists, and environment-gated deployment workflows — all enforced by server-side transition guards.
 
 ---
 
-## 2. Mimari ve Teknoloji Yığını
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [Tech Stack](#2-tech-stack)
+3. [Architecture & Design Principles](#3-architecture--design-principles)
+4. [Database Model & Relationships](#4-database-model--relationships)
+5. [Workflow Engine & Transition Guards](#5-workflow-engine--transition-guards)
+6. [Role-Based Access Control (RBAC)](#6-role-based-access-control-rbac)
+7. [REST API Reference](#7-rest-api-reference)
+8. [Running the Project](#8-running-the-project)
+9. [Demo Seed Data](#9-demo-seed-data)
+
+---
+
+## 1. Project Overview
+
+This application is a **Kanban-style project management system** tailored for a FinTech engineering department. Tasks model real banking engineering artifacts:
+
+| Scenario | How it maps |
+|---|---|
+| **3D Secure integration** | Task with `targetEnvironment = PROD`, requiring full checklist completion before moving to "Done" |
+| **PCI-DSS audit prep** | Tasks gate-blocked by `ATTACHMENT_REQUIRED` rule — auditors must upload evidence before progressing |
+| **Deployment pipeline** | Columns represent `DEV → TEST → STAGING → PROD`; transition rules enforce QA sign-off |
+| **Security & DevOps review** | Reporter field tracks accountability; test due date drives sprint planning |
+
+The system supports **multiple organizations (departments)**, **dynamic task types** with configurable column workflows, and **server-side enforcement** of all transition rules — so rules cannot be bypassed from the frontend.
+
+---
+
+## 2. Tech Stack
+
+### Backend
+| Layer | Technology |
+|---|---|
+| Language | Java 21 (LTS) |
+| Framework | Spring Boot 3.x |
+| Security | Spring Security 6 + JWT (stateless) |
+| ORM | Spring Data JPA / Hibernate 6 |
+| Database | PostgreSQL 16 |
+| Build | Apache Maven |
+| Utilities | Lombok (`@RequiredArgsConstructor`, `@Data`) |
+| File Upload | Spring Multipart (25 MB limit) |
+
+### Frontend
+| Layer | Technology |
+|---|---|
+| Language | TypeScript 5 |
+| Framework | React 18 |
+| State / Data | TanStack React Query (server state) |
+| Styling | Tailwind CSS 3 |
+| Bundler | Vite |
+| HTTP Client | Axios |
+| Drag & Drop | `@hello-pangea/dnd` |
+
+### Infrastructure
+| Component | Technology |
+|---|---|
+| Containerisation | Docker + Docker Compose |
+| Frontend server | Nginx (reverse-proxies `/api` to backend) |
+| Data persistence | Docker named volume `kanban_postgres_data` |
+
+---
+
+## 3. Architecture & Design Principles
 
 ```
-+---------------------------+       +---------------------------+
-|     React 18 SPA          |       |   Spring Boot 3.3 API     |
-|   TypeScript + Vite       | ----> |   Java 21 + Maven         |
-|   TailwindCSS + Context   |  JWT  |   Spring Security + JPA   |
-+---------------------------+       +---------------------------+
-                                              |
-                                    +---------+---------+
-                                    |  PostgreSQL 16    |
-                                    |  (Docker Volume)  |
-                                    +-------------------+
+┌─────────────────────────────────────┐
+│           React 18 SPA              │  http://localhost (Nginx)
+│   TypeScript · Tailwind · Vite      │
+└────────────────┬────────────────────┘
+                 │  HTTP  /api/*
+┌────────────────▼────────────────────┐
+│       Spring Boot REST API          │  :8080
+│  Controller → Service → Repository  │
+│  JWT filter on every request        │
+└────────────────┬────────────────────┘
+                 │  JDBC
+┌────────────────▼────────────────────┐
+│         PostgreSQL 16               │  :5432
+│   kanban_db / kanban_user           │
+└─────────────────────────────────────┘
 ```
 
-| Katman              | Teknoloji                         | Fonksiyon                                              |
-|---------------------|-----------------------------------|--------------------------------------------------------|
-| Sunum (Frontend)    | React 18, TypeScript, Vite        | Tek sayfa uygulaması (SPA), dinamik bileşenler         |
-| Stil                | TailwindCSS                       | Utility-first CSS çerçevesi                            |
-| Durum Yönetimi      | React Context API                 | Kimlik doğrulama ve global uygulama durumu             |
-| API Katmanı         | Spring Boot 3.3.2, Java 21        | RESTful servis katmanı, iş mantığı                     |
-| Güvenlik            | Spring Security, JWT (Stateless)  | BCrypt şifreleme, Bearer token doğrulama, RBAC         |
-| Kalıcı Depolama     | Spring Data JPA, Hibernate        | ORM katmanı, entity ilişkileri                         |
-| Veritabanı          | PostgreSQL 16                     | İlişkisel veritabanı, Docker named volume ile kalıcılık |
-| Konteynerleştirme   | Docker, Docker Compose            | Servis orkestrasyon, ağ izolasyonu                     |
-| Dosya Depolama      | Yerel dosya sistemi (/uploads)    | Görev eklerinin (attachment) sunucu tarafında saklanması|
+### Controller → Service → Repository
+
+- **Controllers** are thin: they validate input (`@Valid`), delegate to the service layer, and map the result to an HTTP response.
+- **Services** contain all business logic: authorization checks, position calculations, transition rule enforcement, DTO mapping.
+- **Repositories** are plain `JpaRepository` extensions. Custom JPQL lives here (shift operations, `findBy*` queries).
+
+### DTO Pattern — No Entity Leakage
+
+Every endpoint returns a **DTO**, never a raw JPA entity. This prevents:
+- Jackson circular-reference / infinite-recursion errors (bidirectional `@OneToMany ↔ @ManyToOne`)
+- Accidental exposure of password hashes or lazy-loaded proxies
+- Breaking API clients on internal schema changes
+
+Key DTOs:
+
+| DTO | Description |
+|---|---|
+| `BoardResponse` | Board summary with `taskTypeName`, `taskTypeColor`, column list |
+| `TaskResponse` | Full task with assignees, checklist items, attachments, reporter |
+| `TaskTypeDto` | Task type with column definitions and transition rules |
+| `AuthResponse` | JWT token + user info on login/register |
+| `UserSummaryDto` | Safe user projection (no password) |
+
+### Constructor Injection (`@RequiredArgsConstructor`)
+
+All Spring beans use **constructor injection** (via Lombok's `@RequiredArgsConstructor`) rather than field injection. This makes dependencies explicit, enables immutability, and simplifies unit testing.
+
+### Column & Task Position Algorithm
+
+Columns and tasks maintain an integer `position` (0-based) within their parent. When an item is inserted or removed, adjacent items are shifted to keep positions contiguous using two JPQL `@Modifying` queries:
+
+```java
+// Shifts remaining columns/tasks up when one is deleted
+@Modifying
+@Query("UPDATE BoardColumn c SET c.position = c.position - 1 " +
+       "WHERE c.board.id = :boardId AND c.position > :position")
+void shiftPositionsLeft(@Param("boardId") Long boardId, @Param("position") int position);
+
+// Shifts existing columns/tasks down to make room for an insert
+@Modifying
+@Query("UPDATE BoardColumn c SET c.position = c.position + 1 " +
+       "WHERE c.board.id = :boardId AND c.position >= :position")
+void shiftPositionsRight(@Param("boardId") Long boardId, @Param("position") int position);
+```
+
+`TaskRepository` has identical methods scoped to `columnId`. The reorder endpoint (`PATCH .../reorder`) orchestrates both shift operations atomically inside a `@Transactional` service method.
 
 ---
 
-## 3. Veritabanı ve İlişki Modeli
+## 4. Database Model & Relationships
 
-### 3.1 Temel Entity'ler ve İlişkiler
+### Entity Map
 
 ```
-User (N) <---[user_organizations]---> (N) Organization
-  |
-  +-- (N) assignees <---> (N) Task [task_assignees]
+Organization
+  │  ManyToMany ←──────────────────────── User  (user_organizations join table)
+  │  OneToMany
+  └─► TaskType
+        │  OneToMany
+        └─► TaskTypeColumn          (ordered by position)
+        │  OneToMany
+        └─► TaskTypeTransitionRule  (references two TaskTypeColumns)
 
-Organization (1) <---> (N) Board
-Board (1) <---> (N) BoardColumn
-BoardColumn (1) <---> (N) Task
-
-Task (N) <---> (1) TaskType
-Task (1) <---> (N) TaskChecklistItem
-Task (1) <---> (N) Attachment
-Task (1) <---> (N) Comment
-
-TaskType (1) <---> (N) TaskTypeColumn      [Dinamik kolon şablonu]
-TaskType (1) <---> (N) TaskTypeTransitionRule
-TaskTypeTransitionRule (N) <---> (1) TaskTypeColumn [kaynak / hedef]
+Board  ManyToOne──► Organization
+       ManyToOne──► User (owner)
+       ManyToOne──► TaskType (optional)
+  │  OneToMany  (cascade ALL, orphanRemoval)
+  └─► BoardColumn  (position)
+        │  OneToMany  (cascade ALL, orphanRemoval)
+        └─► Task  (position)
+              ManyToMany──► User[]        (task_assignees join table)
+              ManyToOne──► User           (reporter)
+              ManyToOne──► TaskType       (override, optional)
+              OneToMany──► TaskChecklistItem
+              OneToMany──► Attachment
+              OneToMany──► Comment
 ```
 
-### 3.2 Entity Tanımları
+### Entity Reference
 
-| Entity                   | Tablo Adi                     | Aciklama                                                      |
-|--------------------------|-------------------------------|---------------------------------------------------------------|
-| User                     | users                         | Kimlik doğrulama, rol ve organizasyon ilişkileri              |
-| Organization             | organizations                 | Departman / şirket birimi; multi-tenant yalıtım sınırı        |
-| Board                    | boards                        | Pano; bir organizasyona bağlı                                 |
-| BoardColumn              | board_columns                 | Panoya bağlı kolonlar, position alanlı sıralama               |
-| Task                     | tasks                         | Görev kartları; kolon, tip ve çoklu atama ilişkileri          |
-| TaskChecklistItem        | task_checklist_items          | Göreve bağlı yapılacaklar listesi öğeleri                     |
-| Attachment               | attachments                   | Göreve yüklenen dosyalar (yol, tip, boyut)                    |
-| Comment                  | comments                      | Göreve eklenen zaman damgalı yorumlar                         |
-| TaskType                 | task_types                    | Admin tarafından tanımlanan dinamik görev şablonu             |
-| TaskTypeColumn           | task_type_columns             | TaskType'a ait iş akışı kolon şablonu (position bazlı)        |
-| TaskTypeTransitionRule   | task_type_transition_rules    | Kolon geçişi ön koşul kuralları (Guard)                       |
+| Entity | Table | Key Fields | Notes |
+|---|---|---|---|
+| `User` | `users` | `username`, `email`, `password` (BCrypt), `role`, `createdAt` | Implements `UserDetails` |
+| `Organization` | `organizations` | `name` | ManyToMany with User |
+| `Board` | `boards` | `name`, `description`, `position` | columns cascade ALL + orphan |
+| `BoardColumn` | `board_columns` | `title`, `position` | tasks cascade ALL + orphan |
+| `Task` | `tasks` | `title`, `description`, `priority`, `dueDate`, `testDueDate`, `targetEnvironment`, `estimatedHours`, `storyPoints`, `position` | checklists + attachments + comments cascade ALL + orphan |
+| `TaskChecklistItem` | `task_checklist_items` | `content`, `isCompleted`, `requiredForColumnId` | gates column transitions |
+| `Attachment` | `attachments` | `fileName`, `fileType`, `filePath`, `fileSize` | stored in `uploads/` dir |
+| `Comment` | `comments` | `content`, `createdAt` | chronological order |
+| `TaskType` | `task_types` | `name`, `colorHex`, `description` | columns + rules cascade ALL + orphan |
+| `TaskTypeColumn` | `task_type_columns` | `title`, `colorHex`, `position` | blueprint columns |
+| `TaskTypeTransitionRule` | `task_type_transition_rules` | `ruleType`, `sourceColumnTitle`, `targetColumnTitle` | workflow gate definitions |
 
-### 3.3 Workflow Transition Guard Mekanizması
+### Enumerations
 
-`TaskTypeTransitionRule`, bir görev belirli bir kaynak kolondan hedef kolona taşınmadan önce hangi koşulun sağlanması gerektiğini tanımlar.
-
-| Alan               | Tip                                  | Aciklama                                        |
-|--------------------|--------------------------------------|-------------------------------------------------|
-| ruleType           | Enum: CHECKLIST_REQUIRED             | Tüm checklist öğeleri tamamlanmalı              |
-| ruleType           | Enum: ATTACHMENT_REQUIRED            | En az bir dosya eki yüklenmiş olmalı            |
-| sourceColumnTitle  | String                               | Kaynak kolon adı (title bazlı eşleştirme)       |
-| targetColumnTitle  | String                               | Hedef kolon adı (title bazlı eşleştirme)        |
-
-Kural ihlali durumunda `TaskService.moveTask()` metodu `400 Bad Request` yanıtı döndürür.
+| Enum | Values |
+|---|---|
+| `Role` | `ROLE_USER`, `ROLE_ADMIN`, `ROLE_SUPER_ADMIN` |
+| `Priority` | `LOW`, `MEDIUM`, `HIGH` |
+| `TransitionRuleType` | `CHECKLIST_REQUIRED`, `ATTACHMENT_REQUIRED` |
 
 ---
 
-## 4. Kurumsal İş Mantığı ve Güvenlik
+## 5. Workflow Engine & Transition Guards
 
-### 4.1 Mantıksal Çok Kiracılılık
+### How Transition Rules Work
 
-Veritabanı düzeyinde fiziksel ayrım yapılmamıştır; yalıtım, servis katmanında uygulanır:
+Each `TaskType` can define **column transition rules**. A rule specifies:
 
-- Her `Board`, bir `Organization`'a bağlıdır.
-- `BoardService.getAllBoards()`, `ROLE_SUPER_ADMIN` için tüm panoları; diğer roller için yalnızca kullanıcının üye olduğu organizasyonlara ait panoları döndürür.
-- `TaskTypeService.getTaskTypes()`, organizasyon filtresi ile çalışır (`?organizationId=` parametresi).
+- **Source column** (optional) — the column the task is moving *from*
+- **Target column** (required) — the column the task is moving *into*
+- **Rule type** — what condition must be satisfied
 
-### 4.2 Rol Tabanlı Erişim Kontrolü (RBAC)
+When the frontend calls `PATCH /api/tasks/{taskId}/move`, `TaskService` evaluates all applicable rules **server-side** before allowing the move:
 
-| Rol              | Yetkiler                                                                                  |
-|------------------|-------------------------------------------------------------------------------------------|
-| ROLE_USER        | Pano görüntüleme, görev oluşturma/düzenleme, yorum ve ek yükleme                         |
-| ROLE_ADMIN       | ROLE_USER yetkilerine ek olarak pano silme, görev tipi oluşturma/düzenleme/silme         |
-| ROLE_SUPER_ADMIN | Tüm sistem yetkisi; organizasyon oluşturma/silme, üye yönetimi, tüm panolara erişim      |
+```
+PATCH /api/tasks/{id}/move  →  TaskService.moveTask()
+  │
+  ├─ Find matching rules for target column (by ID, then title fuzzy-match)
+  ├─ Optionally check source column match
+  │
+  ├─ CHECKLIST_REQUIRED ──► all TaskChecklistItems must have isCompleted = true
+  │                          (items flagged with requiredForColumnId are prioritised)
+  │
+  └─ ATTACHMENT_REQUIRED ──► task must have at least one Attachment row
+```
 
-Erişim kontrolü Spring Security'nin `@PreAuthorize` anotasyonu ile metot düzeyinde uygulanır.
+### Turkish Character Normalization
 
-### 4.3 Kimlik Doğrulama Akışı
+Column titles are matched using `normalizeColumnName()`, which folds Turkish diacritics to ASCII for fuzzy comparison:
 
-1. `POST /api/auth/login` veya `POST /api/auth/register` ile JWT alınır.
-2. Sonraki tüm isteklerde `Authorization: Bearer <token>` başlığı gönderilir.
-3. `JwtAuthenticationFilter`, her istekte tokeni doğrular ve `SecurityContext`'i doldurur.
-4. Token geçerlilik süresi `JWT_EXPIRATION_MS` ortam değişkeniyle yapılandırılır (varsayılan: 24 saat).
+```
+ş → s   ç → c   ğ → g   ı → i   ö → o   ü → u
+```
 
-### 4.4 Dinamik Kolon Sıralama Motoru
+This allows rules created against `"Tamamlandı"` to still match board columns with slight spelling variants.
 
-`BoardColumnService.reorderColumn()` metodu, bir kolonun yeni pozisyona taşınmasıyla birlikte aynı panonun diğer kolonlarının `position` değerlerini yeniden hesaplar. Pozisyon değerleri 0'dan başlayan tamsayı dizisidir.
+### Example: PCI-DSS Banking Workflow
+
+| → Target Column | Rule Type | Meaning |
+|---|---|---|
+| `Test Aşamasında` | `CHECKLIST_REQUIRED` | All dev checklist items must be ticked before QA |
+| `Onay Bekliyor` | `CHECKLIST_REQUIRED` | All QA checklist items must be ticked before sign-off |
+| `Canlıya Alındı` | `ATTACHMENT_REQUIRED` | Release evidence (screenshot/PDF) must be uploaded before going live |
 
 ---
 
-## 5. Kurulum ve Çalıştırma Kılavuzu
+## 6. Role-Based Access Control (RBAC)
 
-### 5.1 Önkoşullar
+### Roles
 
-| Arac          | Surumu  | Amac                                     |
-|---------------|---------|------------------------------------------|
-| Docker        | 24+     | Konteyner çalıştırma altyapısı           |
-| Docker Compose| 2.x     | Çoklu servis orkestrasyon                |
-| Java          | 21      | Yerel geliştirme (opsiyonel)             |
-| Maven         | 3.9+    | Yerel derleme (opsiyonel)                |
-| Node.js       | 20+     | Frontend yerel geliştirme (opsiyonel)    |
+| Role | Access Level |
+|---|---|
+| `ROLE_SUPER_ADMIN` | Full system access — create/delete organizations, manage all users and boards |
+| `ROLE_ADMIN` | Manage boards and task types within their organization |
+| `ROLE_USER` | Create tasks, comment, upload attachments; read-only on sensitive fields |
 
-### 5.2 Docker Compose ile Başlangıç
+### Endpoint-Level Guards (`@PreAuthorize`)
+
+| Action | Required Role |
+|---|---|
+| `DELETE /api/boards/{id}` | `ADMIN` or `SUPER_ADMIN` |
+| `POST /api/organizations` | `SUPER_ADMIN` |
+| `DELETE /api/organizations/{id}` | `SUPER_ADMIN` |
+| `POST/DELETE /api/organizations/{id}/members/*` | `SUPER_ADMIN` |
+| `POST/PUT/DELETE /api/task-types/*` | `ADMIN` or `SUPER_ADMIN` |
+| `POST/DELETE /api/task-types/{id}/rules/*` | `ADMIN` or `SUPER_ADMIN` |
+
+### Frontend UI Guards
+
+The React application reads `currentUser.role` from the JWT-derived auth context:
+
+- **Task Detail Modal** — `dueDate`, `testDueDate`, `taskType`, `reporter`, and `targetEnvironment` fields are `disabled` and rendered as read-only badges for `ROLE_USER`.
+- **Board list actions** — Delete board button is hidden for `ROLE_USER`.
+- **Task Type management** — The entire admin panel is hidden for `ROLE_USER`.
+
+---
+
+## 7. REST API Reference
+
+> **Base URL:** `http://localhost:8080/api`  
+> All endpoints except `/auth/*` and `GET /organizations` require an `Authorization: Bearer <JWT>` header.
+
+### Authentication
+
+| Method | Path | Body | Description |
+|---|---|---|---|
+| `POST` | `/auth/register` | `{ username, email, password, organizationId? }` | Register, returns JWT |
+| `POST` | `/auth/login` | `{ username, password }` | Login, returns JWT |
+
+### Users
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/users` | List all users (for assignment dropdowns) |
+
+### Organizations
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/organizations` | Any | List all organizations |
+| `POST` | `/organizations` | `SUPER_ADMIN` | Create organization |
+| `DELETE` | `/organizations/{id}` | `SUPER_ADMIN` | Delete organization (cascades boards) |
+| `GET` | `/organizations/{orgId}/members` | Authenticated | List members |
+| `POST` | `/organizations/{orgId}/members/existing` | `SUPER_ADMIN` | Add existing users to org |
+| `POST` | `/organizations/{orgId}/members/new` | `SUPER_ADMIN` | Create & add new user |
+| `DELETE` | `/organizations/{orgId}/members/{userId}` | `SUPER_ADMIN` | Remove member |
+
+### Boards
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/boards` | Authenticated | List all boards |
+| `POST` | `/boards` | Authenticated | Create board |
+| `GET` | `/boards/{id}` | Authenticated | Board detail (columns + tasks) |
+| `PUT` | `/boards/{id}` | Authenticated | Update board |
+| `DELETE` | `/boards/{id}` | `ADMIN` / `SUPER_ADMIN` | Delete board and all children |
+
+### Board Columns
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/boards/{boardId}/columns` | List columns |
+| `POST` | `/boards/{boardId}/columns` | Add column |
+| `GET` | `/boards/{boardId}/columns/{columnId}` | Get column |
+| `PUT` | `/boards/{boardId}/columns/{columnId}` | Rename column |
+| `DELETE` | `/boards/{boardId}/columns/{columnId}` | Delete column + tasks |
+| `PATCH` | `/boards/{boardId}/columns/{columnId}/reorder` | Reorder `{ "newPosition": 2 }` |
+
+### Tasks
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/boards/{boardId}/columns/{columnId}/tasks` | List tasks |
+| `POST` | `/boards/{boardId}/columns/{columnId}/tasks` | Create task |
+| `GET` | `/boards/{boardId}/columns/{columnId}/tasks/{taskId}` | Get task |
+| `PUT` | `/boards/{boardId}/columns/{columnId}/tasks/{taskId}` | Update task |
+| `PUT` | `/tasks/{taskId}` | Update task (column-agnostic) |
+| `DELETE` | `/boards/{boardId}/columns/{columnId}/tasks/{taskId}` | Delete task |
+| `PATCH` | `/tasks/{taskId}/move` | Move/reorder — enforces transition rules |
+
+**Move request body:**
+```json
+{
+  "targetColumnId": 12,
+  "newPosition": 0
+}
+```
+
+### Checklist Items
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/tasks/{taskId}/checklists` | Add item |
+| `PATCH` | `/tasks/{taskId}/checklists/{itemId}/toggle` | Toggle completion |
+| `PUT` | `/tasks/{taskId}/checklists/{itemId}` | Update content |
+| `DELETE` | `/tasks/{taskId}/checklists/{itemId}` | Delete item |
+
+### Comments
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/tasks/{taskId}/comments` | List comments (chronological) |
+| `POST` | `/tasks/{taskId}/comments` | Add comment |
+| `DELETE` | `/tasks/{taskId}/comments/{commentId}` | Delete comment |
+
+### Attachments
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/tasks/{taskId}/attachments` | List attachments |
+| `POST` | `/tasks/{taskId}/attachments` | Upload (`multipart/form-data`, field: `file`) — max 25 MB |
+| `GET` | `/tasks/{taskId}/attachments/{attachmentId}/download` | Stream/download |
+| `DELETE` | `/tasks/{taskId}/attachments/{attachmentId}` | Delete |
+
+### Task Types
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/task-types` | Authenticated | List (filter: `?organizationId=`) |
+| `GET` | `/task-types/{id}` | Authenticated | Get task type |
+| `POST` | `/task-types` | `ADMIN` / `SUPER_ADMIN` | Create |
+| `PUT` | `/task-types/{id}` | `ADMIN` / `SUPER_ADMIN` | Update |
+| `DELETE` | `/task-types/{id}` | `ADMIN` / `SUPER_ADMIN` | Delete |
+| `POST` | `/task-types/{id}/rules` | `ADMIN` / `SUPER_ADMIN` | Add transition rule |
+| `DELETE` | `/task-types/{id}/rules/{ruleId}` | `ADMIN` / `SUPER_ADMIN` | Remove rule |
+
+---
+
+## 8. Running the Project
+
+### Prerequisites
+
+- Docker Desktop (v24+) and Docker Compose v2
+- No other local dependencies required — everything runs inside containers
+
+### Quick Start
 
 ```bash
-# Depoyu klonla
+# 1. Clone the repository
 git clone <repo-url>
 cd kanban-task-management
 
-# Ortam değişkenlerini yapılandır (opsiyonel)
+# 2. (Optional) Copy the example environment file and customise
 cp .env.example .env
 
-# Tüm servisleri arka planda başlat (ilk çalıştırmada image'lar derlenir)
-docker compose up -d --build
-
-# Servis loglarını canlı izle
-docker compose logs -f
-
-# Yalnızca backend loglarını izle
-docker compose logs -f backend
-```
-
-Başarılı başlatma sonrasında:
-
-| Servis   | URL                        |
-|----------|----------------------------|
-| Frontend | http://localhost           |
-| Backend  | http://localhost:8080/api  |
-| Postgres | localhost:5432 / kanban_db |
-
-**Önemli:** `docker compose down -v` komutu Postgres named volume'unu silerek tüm veriyi kalıcı olarak kaybettirir. Volume'u korumak için yalnızca `docker compose down` kullanın.
-
-### 5.3 Konteyner Durdurma ve Yeniden Başlama
-
-```bash
-# Servisleri durdur, konteynerleri kaldır (volume korunur)
-docker compose down
-
-# Yeniden başlat (volume verisi korunur)
+# 3. Start all services (postgres → backend → frontend)
 docker compose up -d
 
-# Sadece backend'i yeniden oluştur ve başlat
-docker compose up -d --build backend
+# 4. Follow logs to watch startup
+docker compose logs -f
+
+# 5. Open the app
+open http://localhost
 ```
 
-### 5.4 Yerel Geliştirme Ortamı
+> First startup takes ~2–3 minutes while Docker builds the backend and frontend images. Subsequent starts are fast — images are cached.
 
-**Backend:**
+### Service URLs
+
+| Service | URL |
+|---|---|
+| Frontend (React SPA) | http://localhost |
+| Backend REST API | http://localhost:8080/api |
+| PostgreSQL | localhost:5432 (host-only, not exposed externally) |
+
+### Stop & Cleanup
+
 ```bash
+docker compose down          # stop (data preserved)
+docker compose down -v       # stop + delete all data
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_HOST` | `postgres` | PostgreSQL hostname |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_NAME` | `kanban_db` | Database name |
+| `DB_USER` | `kanban_user` | Database user |
+| `DB_PASS` | `kanban_pass` | Database password |
+| `JWT_SECRET` | *(base64 key)* | HMAC-SHA256 signing secret — **change in production** |
+| `JWT_EXPIRATION_MS` | `86400000` | Token TTL (24 hours) |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Allowed CORS origins |
+| `SERVER_PORT` | `8080` | Backend HTTP port |
+| `UPLOAD_DIR` | `uploads` | Attachment storage directory |
+
+> **Production checklist:** generate a fresh JWT secret with `openssl rand -base64 64`, set `spring.jpa.hibernate.ddl-auto: validate`, and do not expose port 5432 publicly.
+
+### Local Development (without Docker)
+
+```bash
+# Backend — requires local PostgreSQL with kanban_db / kanban_user / kanban_pass
 cd backend
-export DB_HOST=localhost DB_PORT=5432 DB_NAME=kanban_db DB_USER=kanban_user DB_PASS=kanban_pass
-mvn spring-boot:run -DskipTests
-```
+mvn spring-boot:run
 
-**Frontend:**
-```bash
+# Frontend — Vite dev server (proxies /api to localhost:8080)
 cd frontend
 npm install
-npm run dev      # Geliştirme sunucusu: http://localhost:5173
-npm run build    # Üretim derlemesi doğrulaması
+npm run dev   # http://localhost:5173
 ```
 
 ---
 
-## 6. REST API Referans Tablosu
+## 9. Demo Seed Data
 
-Tüm endpoint'ler `/api` ön eki ile erişilebilir (örnek: `http://localhost:8080/api/auth/login`).
+`DataInitializer` (a Spring `CommandLineRunner`) seeds a complete **FinTech banking scenario** on every startup. All records are idempotent — created only if they do not already exist.
 
-### Kimlik Doğrulama
+### Organization
 
-| HTTP Metodu | Endpoint           | Aciklama                             | Yetki Seviyesi  |
-|-------------|--------------------|--------------------------------------|-----------------|
-| POST        | /auth/register     | Yeni kullanıcı kaydı ve JWT dönüş    | Herkese Açık    |
-| POST        | /auth/login        | Kimlik doğrulama ve JWT dönüş        | Herkese Açık    |
+| Field | Value |
+|---|---|
+| Name | FinTech & Core Banking Solutions |
 
-### Kullanıcılar
+### Users
 
-| HTTP Metodu | Endpoint | Aciklama                                            | Yetki Seviyesi   |
-|-------------|----------|-----------------------------------------------------|------------------|
-| GET         | /users   | Tüm kullanıcıları listele (atama ve ekip yönetimi)  | Giriş Yapılmış   |
+| Username | Full Name | Role | Password |
+|---|---|---|---|
+| `superadmin` | Sistem Yöneticisi | `SUPER_ADMIN` | `password123` |
+| `ali.yilmaz` | Ali Yılmaz — Backend Lead | `USER` | `password123` |
+| `zeynep.kaya` | Zeynep Kaya — Frontend Dev | `USER` | `password123` |
+| `mehmet.demir` | Mehmet Demir — QA Automation | `USER` | `password123` |
+| `ayse.celik` | Ayşe Çelik — Security & DevOps | `USER` | `password123` |
+| `burak.ozkan` | Burak Özkan — Product Owner | `USER` | `password123` |
 
-### Organizasyonlar
+### Task Types
 
-| HTTP Metodu | Endpoint                                  | Aciklama                                        | Yetki Seviyesi  |
-|-------------|-------------------------------------------|-------------------------------------------------|-----------------|
-| GET         | /organizations                            | Tüm organizasyonları listele                    | Giriş Yapılmış  |
-| POST        | /organizations                            | Yeni organizasyon oluştur                       | SUPER_ADMIN     |
-| DELETE      | /organizations/{id}                       | Organizasyonu sil (pano ve bağlantılar silinir) | SUPER_ADMIN     |
-| GET         | /organizations/{orgId}/members            | Organizasyon üyelerini listele                  | Giriş Yapılmış  |
-| POST        | /organizations/{orgId}/members            | Mevcut kullanıcıları organizasyona ekle         | SUPER_ADMIN     |
-| POST        | /organizations/{orgId}/members/new        | Yeni kullanıcı oluştur ve organizasyona ekle    | SUPER_ADMIN     |
-| DELETE      | /organizations/{orgId}/members/{userId}   | Kullanıcının organizasyon üyeliğini kaldır      | SUPER_ADMIN     |
+| Name | Color | Columns |
+|---|---|---|
+| Kritik Ödeme Entegrasyonu | `#2563EB` (blue) | Backlog → Geliştirme Aşamasında → Test Aşamasında → Onay Bekliyor → Canlıya Alındı |
+| Internship Task | `#EF4444` (red) | Backlog → In Progress → In Review → Done |
 
-### Panolar
+**Transition Rules (Kritik Ödeme Entegrasyonu):**
 
-| HTTP Metodu | Endpoint       | Aciklama                                          | Yetki Seviyesi     |
-|-------------|----------------|---------------------------------------------------|--------------------|
-| GET         | /boards        | Mevcut kullanıcının erişebileceği panoları listele| Giriş Yapılmış     |
-| POST        | /boards        | Yeni pano oluştur (opsiyonel: taskTypeId ile)     | Giriş Yapılmış     |
-| GET         | /boards/{id}   | Panonun kolon ve görev detaylarını getir          | Giriş Yapılmış     |
-| PUT         | /boards/{id}   | Pano ad ve açıklamasını güncelle                  | Giriş Yapılmış     |
-| DELETE      | /boards/{id}   | Panoyu ve tüm alt öğelerini sil                   | ADMIN / SUPER_ADMIN|
+| → Target Column | Rule Type | Meaning |
+|---|---|---|
+| `Test Aşamasında` | `CHECKLIST_REQUIRED` | Dev checklist must be complete before QA |
+| `Onay Bekliyor` | `CHECKLIST_REQUIRED` | QA checklist must be complete before sign-off |
+| `Canlıya Alındı` | `ATTACHMENT_REQUIRED` | Release evidence must be uploaded before going live |
 
-### Pano Kolonları
+### Seed Board & Tasks
 
-| HTTP Metodu | Endpoint                                        | Aciklama                                  | Yetki Seviyesi  |
-|-------------|-------------------------------------------------|-------------------------------------------|-----------------|
-| GET         | /boards/{boardId}/columns                       | Kolonları görev listesiyle birlikte getir | Giriş Yapılmış  |
-| POST        | /boards/{boardId}/columns                       | Panoya yeni kolon ekle                    | Giriş Yapılmış  |
-| GET         | /boards/{boardId}/columns/{columnId}            | Tek kolon detayını getir                  | Giriş Yapılmış  |
-| PUT         | /boards/{boardId}/columns/{columnId}            | Kolon adını güncelle                      | Giriş Yapılmış  |
-| DELETE      | /boards/{boardId}/columns/{columnId}            | Kolonu ve görevlerini sil                 | Giriş Yapılmış  |
-| PATCH       | /boards/{boardId}/columns/{columnId}/reorder    | Kolon sırasını değiştir                   | Giriş Yapılmış  |
+**Board:** `Ödeme Sistemleri Ana Board` — linked to *Kritik Ödeme Entegrasyonu* task type
 
-### Görevler
+| # | Task Title | Column | Priority | Assignees |
+|---|---|---|---|---|
+| 1 | 3D Secure 2.0 Entegrasyon Modülü | Geliştirme Aşamasında | HIGH | ali.yilmaz, zeynep.kaya |
+| 2 | PCI-DSS Uyumluluk Denetim Altyapısı | Test Aşamasında | HIGH | mehmet.demir, ayse.celik |
+| 3 | SWIFT MT103 Mesaj Parser Geliştirmesi | Backlog | MEDIUM | ali.yilmaz |
 
-| HTTP Metodu | Endpoint                                                | Aciklama                                             | Yetki Seviyesi  |
-|-------------|---------------------------------------------------------|------------------------------------------------------|-----------------|
-| GET         | /boards/{boardId}/columns/{columnId}/tasks              | Kolondaki görevleri listele                          | Giriş Yapılmış  |
-| POST        | /boards/{boardId}/columns/{columnId}/tasks              | Yeni görev oluştur (assigneeIds, taskTypeId desteği) | Giriş Yapılmış  |
-| GET         | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Görev detayını getir                                 | Giriş Yapılmış  |
-| PUT         | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Görevi güncelle (kolon yolu ile)                     | Giriş Yapılmış  |
-| PUT         | /tasks/{taskId}                                         | Görevi doğrudan güncelle (kolon yolu olmadan)        | Giriş Yapılmış  |
-| DELETE      | /boards/{boardId}/columns/{columnId}/tasks/{taskId}     | Görevi sil                                           | Giriş Yapılmış  |
-| PATCH       | /tasks/{taskId}/move                                    | Görevi başka kolona taşı (Transition Guard çalışır)  | Giriş Yapılmış  |
-
-### Checklist (Yapılacaklar Listesi)
-
-| HTTP Metodu | Endpoint                                       | Aciklama                          | Yetki Seviyesi  |
-|-------------|------------------------------------------------|-----------------------------------|-----------------|
-| POST        | /tasks/{taskId}/checklists                     | Göreve checklist öğesi ekle       | Giriş Yapılmış  |
-| PATCH       | /tasks/{taskId}/checklists/{itemId}/toggle     | Checklist öğesini tamamla/geri al | Giriş Yapılmış  |
-| PUT         | /tasks/{taskId}/checklists/{itemId}            | Checklist öğesi metnini güncelle  | Giriş Yapılmış  |
-| DELETE      | /tasks/{taskId}/checklists/{itemId}            | Checklist öğesini sil             | Giriş Yapılmış  |
-
-### Ekler (Attachments)
-
-| HTTP Metodu | Endpoint                                             | Aciklama                              | Yetki Seviyesi  |
-|-------------|------------------------------------------------------|---------------------------------------|-----------------|
-| GET         | /tasks/{taskId}/attachments                          | Göreve ait dosya eklerini listele     | Giriş Yapılmış  |
-| POST        | /tasks/{taskId}/attachments                          | Dosya yükle (multipart/form-data)     | Giriş Yapılmış  |
-| GET         | /tasks/{taskId}/attachments/{attachmentId}/download  | Dosyayı indir veya aktar              | Giriş Yapılmış  |
-| DELETE      | /tasks/{taskId}/attachments/{attachmentId}           | Dosya ekini sil                       | Giriş Yapılmış  |
-
-### Yorumlar
-
-| HTTP Metodu | Endpoint                               | Aciklama                                   | Yetki Seviyesi  |
-|-------------|----------------------------------------|--------------------------------------------|-----------------|
-| GET         | /tasks/{taskId}/comments               | Göreve ait yorumları kronolojik listele    | Giriş Yapılmış  |
-| POST        | /tasks/{taskId}/comments               | Yorum ekle (yazar: giriş yapan kullanıcı) | Giriş Yapılmış  |
-| DELETE      | /tasks/{taskId}/comments/{commentId}   | Yorumu sil                                 | Giriş Yapılmış  |
-
-### Görev Tipleri (Task Types)
-
-| HTTP Metodu | Endpoint                         | Aciklama                                                        | Yetki Seviyesi     |
-|-------------|----------------------------------|-----------------------------------------------------------------|--------------------|
-| GET         | /task-types                      | Görev tiplerini listele (opsiyonel: ?organizationId=)           | Giriş Yapılmış     |
-| GET         | /task-types/{id}                 | Tek görev tipi detayını getir (kolonlar ve kurallar dahil)      | Giriş Yapılmış     |
-| POST        | /task-types                      | Yeni görev tipi oluştur (kolonlar ve kurallar birlikte)         | ADMIN / SUPER_ADMIN|
-| PUT         | /task-types/{id}                 | Görev tipini güncelle                                           | ADMIN / SUPER_ADMIN|
-| DELETE      | /task-types/{id}                 | Görev tipini sil                                                | ADMIN / SUPER_ADMIN|
-| POST        | /task-types/{id}/rules           | Görev tipine geçiş kuralı ekle                                  | ADMIN / SUPER_ADMIN|
-| DELETE      | /task-types/{id}/rules/{ruleId}  | Geçiş kuralı sil                                                | ADMIN / SUPER_ADMIN|
+Each task has pre-seeded checklist items demonstrating the transition gate requirements.
 
 ---
 
-## 7. Ortam Değişkenleri
-
-| Değişken           | Varsayılan Değer  | Açıklama                                         |
-|--------------------|-------------------|--------------------------------------------------|
-| DB_HOST            | postgres          | Veritabanı sunucusu adresi                       |
-| DB_PORT            | 5432              | Veritabanı portu                                 |
-| DB_NAME            | kanban_db         | Veritabanı adı                                   |
-| DB_USER            | kanban_user       | Veritabanı kullanıcı adı                         |
-| DB_PASS            | kanban_pass       | Veritabanı şifresi                               |
-| JWT_SECRET         | (zorunlu)         | JWT imzalama anahtarı; üretim için değiştirilmeli|
-| JWT_EXPIRATION_MS  | 86400000          | Token geçerlilik süresi (ms); varsayılan 24 saat |
-| CORS_ORIGINS       | http://localhost  | İzin verilen kaynak adresler (CORS)              |
-| SERVER_PORT        | 8080              | Spring Boot dinleme portu                        |
-
-Üretim ortamına geçiş öncesinde `JWT_SECRET` mutlaka güçlü ve rastgele bir değer ile değiştirilmelidir.
-Örnek üretim: `openssl rand -base64 64`
-
----
-
-## 8. Proje Dizin Yapısı
+## Project Structure
 
 ```
 kanban-task-management/
-+-- backend/
-|   +-- src/main/java/com/kanban/
-|   |   +-- controller/        # REST katmanı (AuthController, BoardController, ...)
-|   |   +-- service/           # İş mantığı (BoardService, TaskService, TaskTypeService, ...)
-|   |   +-- repository/        # Spring Data JPA arayüzleri
-|   |   +-- entity/            # JPA entity sınıfları (User, Board, Task, TaskType, ...)
-|   |   +-- dto/               # Veri transfer nesneleri (Request / Response / Dto Records)
-|   |   +-- security/          # JWT filtresi, SecurityConfig, UserDetailsService
-|   |   +-- config/            # Uygulama yapılandırması (DataInitializer, CorsConfig, ...)
-|   +-- Dockerfile
-|   +-- pom.xml
-+-- frontend/
-|   +-- src/
-|   |   +-- components/        # Yeniden kullanılabilir React bileşenler
-|   |   +-- pages/             # Sayfa düzeyindeki bileşenler (BoardPage, AdminTaskTypesPage, ...)
-|   |   +-- context/           # AuthContext (JWT, kullanıcı durumu)
-|   |   +-- types/             # TypeScript tip tanımları (index.ts)
-|   |   +-- App.tsx            # Rota tanımları
-|   +-- Dockerfile
-|   +-- vite.config.ts
-+-- docker-compose.yml
-+-- .env.example
-+-- README.md
+├── backend/
+│   ├── src/main/java/com/kanban/
+│   │   ├── config/          # SecurityConfig, DataInitializer, JwtConfig
+│   │   ├── controller/      # 9 REST controllers
+│   │   ├── dto/             # Request/Response DTOs (no entity leakage)
+│   │   ├── entity/          # JPA entities
+│   │   ├── repository/      # Spring Data JPA repositories
+│   │   ├── security/        # JwtFilter, JwtUtil, UserDetailsService
+│   │   └── service/         # Business logic layer
+│   ├── src/main/resources/
+│   │   └── application.yml
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── api/             # Axios API clients
+│   │   ├── components/      # Reusable UI components
+│   │   ├── context/         # AuthContext (JWT decode, currentUser)
+│   │   ├── pages/           # Route-level page components
+│   │   └── types/           # TypeScript interfaces
+│   └── Dockerfile
+├── docker-compose.yml
+└── README.md
 ```
 
 ---
 
-## 9. Test Kullanıcıları (DataInitializer)
-
-Sistem ilk çalıştırıldığında aşağıdaki kullanıcılar otomatik olarak oluşturulur.
-
-| Kullanıcı Adı  | E-posta               | Şifre    | Rol              |
-|----------------|-----------------------|----------|------------------|
-| superadmin     | -                     | admin123 | ROLE_SUPER_ADMIN |
-| ali_yilmaz     | ali@kanban.local      | user123  | ROLE_USER        |
-| ayse_kaya      | ayse@kanban.local     | user123  | ROLE_USER        |
-| mehmet_demir   | mehmet@kanban.local   | user123  | ROLE_USER        |
-| zeynep_celik   | zeynep@kanban.local   | user123  | ROLE_USER        |
-| can_ozkan      | can@kanban.local      | user123  | ROLE_ADMIN       |
-
----
-
-## 10. Lisans
-
-Bu proje kurumsal iç kullanım amaçlı geliştirilmiştir. Açık kaynak lisans uygulanmamaktadır.
+*Built with ❤️ on Java 21 · Spring Boot 3 · React 18 · TypeScript · Tailwind CSS · PostgreSQL 16*
