@@ -68,7 +68,7 @@ public class Task {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 50, columnDefinition = "VARCHAR(50)")
     @Builder.Default
     private Priority priority = Priority.MEDIUM;
 

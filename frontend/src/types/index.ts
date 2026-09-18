@@ -119,7 +119,7 @@ export interface ColumnResponse {
 }
 
 /* ── Custom Field ──────────────────────────────────────────────────── */
-export type CustomFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT';
+export type CustomFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'CASCADING_SELECT';
 
 export interface CustomFieldDto {
   id?: number;

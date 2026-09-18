@@ -939,6 +939,7 @@ export default function TaskTypeModal({
                           <option value="NUMBER">Sayı</option>
                           <option value="DATE">Tarih</option>
                           <option value="SELECT">Seçim Listesi (Dropdown)</option>
+                          <option value="CASCADING_SELECT">Bağlantılı Dropdown (Cascading Select)</option>
                         </select>
                       </div>
 
@@ -956,7 +957,7 @@ export default function TaskTypeModal({
                       </div>
                     </div>
 
-                    {/* Inputs Row 2: Placeholder & Options if SELECT */}
+                    {/* Inputs Row 2: Placeholder & Options if SELECT or CASCADING_SELECT */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {/* Placeholder hint */}
                       <div>
@@ -967,7 +968,7 @@ export default function TaskTypeModal({
                           type="text"
                           value={fieldItem.placeholder}
                           onChange={(e) => handleFieldChange(idx, 'placeholder', e.target.value)}
-                          placeholder="Örn: 192.168.1.1 veya https://api.banka.com"
+                          placeholder="Örn: 192.168.1.1 veya Ana grubu seçiniz"
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder:text-slate-400"
                         />
                       </div>
@@ -986,6 +987,56 @@ export default function TaskTypeModal({
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder:text-slate-400"
                             required
                           />
+                        </div>
+                      )}
+
+                      {/* Options (if CASCADING_SELECT) */}
+                      {fieldItem.fieldType === 'CASCADING_SELECT' && (
+                        <div className="sm:col-span-2 space-y-1.5 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-[11px] font-bold text-blue-900">
+                              Bağlantılı Seçenekler Tanımı (JSON veya Satır Formatı) <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleFieldChange(
+                                    idx,
+                                    'options',
+                                    JSON.stringify(
+                                      {
+                                        parentLabel: 'Port Grubu',
+                                        childLabel: 'Alt Port / Protokol',
+                                        parentOptions: ['1000', '2000', '3000'],
+                                        childOptions: {
+                                          '1000': ['1001', '1002', '1003'],
+                                          '2000': ['2001', '2002', '2003'],
+                                          '3000': ['3001', '3002', '3003'],
+                                        },
+                                      },
+                                      null,
+                                      2
+                                    )
+                                  )
+                                }
+                                className="text-[10px] font-semibold text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-50 transition-colors shadow-2xs"
+                              >
+                                + Örnek Şablon Ekle (1000, 2000, 3000)
+                              </button>
+                            </div>
+                          </div>
+                          <textarea
+                            rows={4}
+                            value={fieldItem.options}
+                            onChange={(e) => handleFieldChange(idx, 'options', e.target.value)}
+                            placeholder={'Örnek:\n1000: 1001, 1002, 1003\n2000: 2001, 2002, 2003\n\nveya JSON:\n{"parentOptions": ["1000", "2000"], "childOptions": {"1000": ["1001", "1002"], "2000": ["2001"]}}'}
+                            className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400"
+                            required
+                          />
+                          <p className="text-[10px] text-blue-700">
+                            💡 Kullanıcı 1. seçimde ana grubu (örn: 1000) seçtiğinde, 2. seçimde sadece o gruba ait alt seçenekler (1001, 1002) listelenir.
+                          </p>
                         </div>
                       )}
                     </div>

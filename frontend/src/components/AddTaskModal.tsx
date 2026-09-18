@@ -17,6 +17,7 @@ import { taskTypeService } from '@/services/taskTypeService';
 import { attachmentService } from '@/services/attachmentService';
 import { useAuth } from '@/contexts/AuthContext';
 import { isColumnMatching } from '@/utils/workflowUtils';
+import CascadingSelectField from './CascadingSelectField';
 import { PlusIcon, UserIcon } from './icons';
 
 interface Props {
@@ -603,8 +604,10 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                           ? field.options.split(',').map((o) => o.trim()).filter(Boolean)
                           : [];
 
+                        const isCascading = field.fieldType === 'CASCADING_SELECT' || (field.fieldName != null && field.fieldName.toLowerCase().includes('port'));
+
                         return (
-                          <div key={field.id || field.fieldName} className={field.fieldType === 'TEXT' && (field.placeholder?.length || 0) > 30 ? 'sm:col-span-2' : ''}>
+                          <div key={field.id || field.fieldName} className={(isCascading || (field.fieldType === 'TEXT' && (field.placeholder?.length || 0) > 30)) ? 'sm:col-span-2' : ''}>
                             <label className="field-label flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
                               <span className="flex items-center gap-1">
                                 <span>{field.fieldName}</span>
@@ -617,7 +620,18 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                               )}
                             </label>
 
-                            {field.fieldType === 'SELECT' ? (
+                            {isCascading ? (
+                              <CascadingSelectField
+                                fieldName={field.fieldName}
+                                fieldValue={val}
+                                options={field.options}
+                                placeholder={field.placeholder}
+                                required={field.required}
+                                onChange={(newVal) =>
+                                  setCustomFieldValues((prev) => ({ ...prev, [field.fieldName]: newVal }))
+                                }
+                              />
+                            ) : field.fieldType === 'SELECT' ? (
                               <select
                                 value={val}
                                 onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.fieldName]: e.target.value }))}

@@ -60,7 +60,7 @@ public class TaskTypeTransitionRule {
 
     /** Rule type constraint (CHECKLIST_REQUIRED or ATTACHMENT_REQUIRED). */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 40)
+    @Column(nullable = false, length = 50, columnDefinition = "VARCHAR(50)")
     private TransitionRuleType ruleType;
 
     /** Descriptive message / condition requirement (e.g. "Test edildi mi?", "Ekran görüntüsü yüklenmeli"). */

@@ -23,6 +23,7 @@ import { userService } from '@/services/userService';
 import { taskTypeService } from '@/services/taskTypeService';
 import { useAuth } from '@/contexts/AuthContext';
 import { isColumnMatching, normalizeColumnTitle } from '@/utils/workflowUtils';
+import CascadingSelectField from './CascadingSelectField';
 import {
   CalendarIcon,
   ClockIcon,
@@ -1073,14 +1074,17 @@ export default function TaskDetailModal({
                   {/* Custom Fields List */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {customFields.map((cf, index) => {
-                      const typeLabel = cf.fieldType === 'DATE' ? 'Tarih' : cf.fieldType === 'NUMBER' ? 'Sayı' : cf.fieldType === 'SELECT' ? 'Seçim' : 'Metin';
-                      const typeBadgeColor = cf.fieldType === 'DATE' ? 'bg-amber-50 text-amber-700 border-amber-200' : cf.fieldType === 'NUMBER' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : cf.fieldType === 'SELECT' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200';
+                      const isCascading = cf.fieldType === 'CASCADING_SELECT' || (cf.fieldName != null && cf.fieldName.toLowerCase().includes('port'));
+                      const typeLabel = isCascading ? 'Bağlantılı Seçim' : cf.fieldType === 'DATE' ? 'Tarih' : cf.fieldType === 'NUMBER' ? 'Sayı' : cf.fieldType === 'SELECT' ? 'Seçim' : 'Metin';
+                      const typeBadgeColor = isCascading ? 'bg-blue-50 text-blue-700 border-blue-200' : cf.fieldType === 'DATE' ? 'bg-amber-50 text-amber-700 border-amber-200' : cf.fieldType === 'NUMBER' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : cf.fieldType === 'SELECT' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200';
                       const selectOptions = cf.options ? cf.options.split(',').map((o) => o.trim()).filter(Boolean) : [];
 
                       return (
                         <div
                           key={index}
-                          className="p-3 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 shadow-2xs transition-all space-y-1.5"
+                          className={`p-3 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 shadow-2xs transition-all space-y-1.5 ${
+                            isCascading ? 'sm:col-span-2' : ''
+                          }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
@@ -1098,7 +1102,16 @@ export default function TaskDetailModal({
                             </div>
                           </div>
 
-                          {cf.fieldType === 'SELECT' ? (
+                          {isCascading ? (
+                            <CascadingSelectField
+                              fieldName={cf.fieldName}
+                              fieldValue={cf.fieldValue || ''}
+                              options={cf.options}
+                              placeholder={cf.placeholder}
+                              required={cf.required}
+                              onChange={(newVal) => handleCustomFieldValueChange(index, newVal)}
+                            />
+                          ) : cf.fieldType === 'SELECT' ? (
                             <select
                               value={cf.fieldValue || ''}
                               onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}

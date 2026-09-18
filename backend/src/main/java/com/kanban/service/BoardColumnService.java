@@ -11,6 +11,7 @@ import com.kanban.entity.BoardColumn;
 import com.kanban.entity.Organization;
 import com.kanban.entity.Task;
 import com.kanban.entity.TaskType;
+import com.kanban.entity.TaskTypeField;
 import com.kanban.entity.User;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.BoardColumnRepository;
@@ -175,7 +176,19 @@ public class BoardColumnService {
     private TaskResponse toTaskResponse(Task task) {
         List<CustomFieldDto> fields = task.getCustomFields() != null
                 ? task.getCustomFields().stream()
-                        .map(f -> new CustomFieldDto(f.getId(), f.getFieldName(), f.getFieldType().name(), f.getFieldValue()))
+                        .map(f -> {
+                            TaskTypeField matchingTypeField = null;
+                            if (task.getTaskType() != null && task.getTaskType().getFields() != null) {
+                                matchingTypeField = task.getTaskType().getFields().stream()
+                                        .filter(tf -> tf.getFieldName() != null && tf.getFieldName().equalsIgnoreCase(f.getFieldName()))
+                                        .findFirst().orElse(null);
+                            }
+                            Boolean req = matchingTypeField != null ? matchingTypeField.isRequired() : null;
+                            String opts = matchingTypeField != null ? matchingTypeField.getOptions() : null;
+                            String plh = matchingTypeField != null ? matchingTypeField.getPlaceholder() : null;
+                            String fType = f.getFieldType() != null ? f.getFieldType().name() : (matchingTypeField != null && matchingTypeField.getFieldType() != null ? matchingTypeField.getFieldType().name() : "TEXT");
+                            return new CustomFieldDto(f.getId(), f.getFieldName(), fType, f.getFieldValue(), req, opts, plh);
+                        })
                         .toList()
                 : List.of();
 

@@ -30,7 +30,7 @@ public class TaskTypeField {
 
     /** Input type (TEXT, NUMBER, DATE, SELECT). */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 50, columnDefinition = "VARCHAR(50)")
     @Builder.Default
     private FieldType fieldType = FieldType.TEXT;
 
@@ -53,6 +53,6 @@ public class TaskTypeField {
     private Integer position = 0;
 
     public enum FieldType {
-        TEXT, NUMBER, DATE, SELECT
+        TEXT, NUMBER, DATE, SELECT, CASCADING_SELECT
     }
 }

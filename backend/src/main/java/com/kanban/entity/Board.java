@@ -34,7 +34,7 @@ public class Board {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(nullable = false, length = 50, columnDefinition = "VARCHAR(50)")
     @Builder.Default
     private BoardType boardType = BoardType.STANDARD;
 

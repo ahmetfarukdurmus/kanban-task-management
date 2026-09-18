@@ -49,7 +49,7 @@ public class User implements UserDetails {
      * RBAC role – stored as a string enum value (ROLE_USER, ROLE_ADMIN, ROLE_SUPER_ADMIN).
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(nullable = false, length = 50, columnDefinition = "VARCHAR(50)")
     @Builder.Default
     private Role role = Role.ROLE_USER;
 

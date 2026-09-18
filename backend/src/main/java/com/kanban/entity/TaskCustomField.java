@@ -25,7 +25,7 @@ public class TaskCustomField {
     private String fieldName;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 50, columnDefinition = "VARCHAR(50)")
     @Builder.Default
     private FieldType fieldType = FieldType.TEXT;
 
@@ -33,6 +33,6 @@ public class TaskCustomField {
     private String fieldValue;
 
     public enum FieldType {
-        TEXT, NUMBER, DATE
+        TEXT, NUMBER, DATE, SELECT, CASCADING_SELECT
     }
 }

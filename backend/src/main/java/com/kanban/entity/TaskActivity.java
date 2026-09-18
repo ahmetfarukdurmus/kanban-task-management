@@ -36,7 +36,7 @@ public class TaskActivity {
     private User user;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "activity_type", nullable = false, length = 50)
+    @Column(name = "activity_type", nullable = false, length = 50, columnDefinition = "VARCHAR(50)")
     private TaskActivityType activityType;
 
     @Column(columnDefinition = "TEXT", nullable = false)

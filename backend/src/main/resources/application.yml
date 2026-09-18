@@ -13,6 +13,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        schema_management:
+          allow_enum_check_constraints: false
+        hbm2ddl:
+          extra_physical_table_types: TABLE
 
   # Multipart file upload configuration
   servlet:

@@ -35,11 +35,14 @@ public class DataInitializer implements CommandLineRunner {
     private final TaskChecklistItemRepository      taskChecklistItemRepository;
     private final TaskTypeFieldRepository          taskTypeFieldRepository;
     private final PasswordEncoder                  passwordEncoder;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional
     public void run(String... args) {
         log.info("Running DataInitializer for banking scenario seed data...");
+
+        dropLegacyEnumCheckConstraints();
 
         // 1. Clean up legacy seed demo organizations if they exist
         List.of("Muhasebe", "Uyum & Risk").forEach(orgName -> {
@@ -419,9 +422,10 @@ public class DataInitializer implements CommandLineRunner {
                     TaskTypeField f4 = TaskTypeField.builder()
                             .taskType(savedFw)
                             .fieldName("Port & Protokol")
-                            .fieldType(TaskTypeField.FieldType.TEXT)
+                            .fieldType(TaskTypeField.FieldType.CASCADING_SELECT)
                             .required(false)
-                            .placeholder("Örn: 443 (HTTPS), 8080 (TCP), 5432 (Postgres)")
+                            .options("{\"parentLabel\":\"Port Grubu\",\"childLabel\":\"Alt Port / Protokol\",\"parentOptions\":[\"1000\",\"2000\",\"3000\"],\"childOptions\":{\"1000\":[\"1001\",\"1002\",\"1003\"],\"2000\":[\"2001\",\"2002\",\"2003\"],\"3000\":[\"3001\",\"3002\",\"3003\"]}}")
+                            .placeholder("Port grubunu seçiniz")
                             .position(3)
                             .build();
 
@@ -511,6 +515,61 @@ public class DataInitializer implements CommandLineRunner {
         });
         taskRepository.flush();
 
+        // 12. Synchronize and guarantee Cascading Select for Port fields
+        String cascadingPortOptions = "{\"parentLabel\":\"Ana Port Grubu\",\"childLabel\":\"Port Numarası\",\"parentOptions\":[\"1000\",\"2000\",\"3000\"],\"childOptions\":{\"1000\":[\"1001\",\"1002\",\"1003\"],\"2000\":[\"2001\",\"2002\",\"2003\"],\"3000\":[\"3001\",\"3002\",\"3003\"]}}";
+
+        taskTypeFieldRepository.findAll().forEach(f -> {
+            String name = f.getFieldName() != null ? f.getFieldName().toLowerCase() : "";
+            if (name.contains("port")) {
+                f.setFieldName("Port Bilgisi");
+                f.setFieldType(TaskTypeField.FieldType.CASCADING_SELECT);
+                f.setOptions(cascadingPortOptions);
+                f.setPlaceholder("Port grubu seçin");
+                taskTypeFieldRepository.save(f);
+                log.info("Synchronized TaskTypeField id={} to CASCADING_SELECT with 1000, 2000, 3000 port groups", f.getId());
+            }
+        });
+        taskTypeFieldRepository.flush();
+
+        // Ensure Firewall TaskType has the Port Bilgisi field
+        taskTypeRepository.findAll().stream()
+                .filter(tt -> tt.getName() != null && (tt.getName().toLowerCase().contains("firewall") || tt.getName().toLowerCase().contains("ag") || "FW".equalsIgnoreCase(tt.getTaskPrefix())))
+                .forEach(fw -> {
+                    boolean hasPortField = fw.getFields() != null && fw.getFields().stream().anyMatch(f -> f.getFieldName() != null && f.getFieldName().toLowerCase().contains("port"));
+                    if (!hasPortField) {
+                        TaskTypeField portField = TaskTypeField.builder()
+                                .taskType(fw)
+                                .fieldName("Port Bilgisi")
+                                .fieldType(TaskTypeField.FieldType.CASCADING_SELECT)
+                                .required(false)
+                                .options(cascadingPortOptions)
+                                .placeholder("Port grubu seçin")
+                                .position(3)
+                                .build();
+                        taskTypeFieldRepository.save(portField);
+                        if (fw.getFields() == null) fw.setFields(new ArrayList<>());
+                        fw.getFields().add(portField);
+                        taskTypeRepository.save(fw);
+                    }
+                });
+
+        // Ensure all tasks associated with FW or port fields have custom field values
+        taskRepository.findAll().forEach(t -> {
+            if (t.getCustomFields() != null) {
+                for (TaskCustomField cf : t.getCustomFields()) {
+                    if (cf.getFieldName() != null && cf.getFieldName().toLowerCase().contains("port")) {
+                        cf.setFieldName("Port Bilgisi");
+                        cf.setFieldType(TaskCustomField.FieldType.CASCADING_SELECT);
+                        if (cf.getFieldValue() == null || cf.getFieldValue().isBlank()) {
+                            cf.setFieldValue("1001");
+                        }
+                    }
+                }
+                taskRepository.save(t);
+            }
+        });
+        taskRepository.flush();
+
         log.info("DataInitializer completed: Banking scenario seed data is ready.");
     }
 
@@ -542,5 +601,26 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Created seed user: {} ({}) with organization: {}", username, role, organization != null ? organization.getName() : "None");
             return saved;
         });
+    }
+
+    private void dropLegacyEnumCheckConstraints() {
+        log.info("Dropping legacy PostgreSQL check constraints on enum fields if present...");
+        List<String> dropStatements = List.of(
+            "ALTER TABLE IF EXISTS task_custom_fields DROP CONSTRAINT IF EXISTS task_custom_fields_field_type_check",
+            "ALTER TABLE IF EXISTS task_type_fields DROP CONSTRAINT IF EXISTS task_type_fields_field_type_check",
+            "ALTER TABLE IF EXISTS boards DROP CONSTRAINT IF EXISTS boards_board_type_check",
+            "ALTER TABLE IF EXISTS tasks DROP CONSTRAINT IF EXISTS tasks_priority_check",
+            "ALTER TABLE IF EXISTS task_activities DROP CONSTRAINT IF EXISTS task_activities_activity_type_check",
+            "ALTER TABLE IF EXISTS task_type_transition_rules DROP CONSTRAINT IF EXISTS task_type_transition_rules_rule_type_check",
+            "ALTER TABLE IF EXISTS users DROP CONSTRAINT IF EXISTS users_role_check"
+        );
+
+        for (String sql : dropStatements) {
+            try {
+                jdbcTemplate.execute(sql);
+            } catch (Exception e) {
+                log.warn("Could not execute DDL constraint drop (harmless if not on PostgreSQL or constraint does not exist): {} - {}", sql, e.getMessage());
+            }
+        }
     }
 }
