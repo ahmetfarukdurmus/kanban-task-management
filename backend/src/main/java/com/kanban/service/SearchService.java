@@ -65,11 +65,12 @@ public class SearchService {
         // 2. Search Boards
         List<BoardSearchDto> matchedBoards = accessibleBoards.stream()
                 .filter(b -> {
+                    String boardKey = b.getEffectiveBoardKey().toLowerCase(Locale.ROOT);
                     String title = b.getName() != null ? b.getName().toLowerCase(Locale.ROOT) : "";
                     String desc = b.getDescription() != null ? b.getDescription().toLowerCase(Locale.ROOT) : "";
                     String orgName = b.getOrganization() != null && b.getOrganization().getName() != null
                             ? b.getOrganization().getName().toLowerCase(Locale.ROOT) : "";
-                    return title.contains(lowerQuery) || desc.contains(lowerQuery) || orgName.contains(lowerQuery);
+                    return boardKey.contains(lowerQuery) || title.contains(lowerQuery) || desc.contains(lowerQuery) || orgName.contains(lowerQuery);
                 })
                 .limit(10)
                 .map(b -> {
@@ -79,6 +80,7 @@ public class SearchService {
                             : 0;
                     return new BoardSearchDto(
                             b.getId(),
+                            b.getEffectiveBoardKey(),
                             b.getName(),
                             b.getDescription(),
                             b.getOrganization() != null ? b.getOrganization().getId() : null,
@@ -97,7 +99,9 @@ public class SearchService {
                 .filter(c -> c.getTasks() != null)
                 .flatMap(c -> c.getTasks().stream())
                 .filter(t -> {
-                    String taskKey = t.getTaskKey() != null ? t.getTaskKey().toLowerCase(Locale.ROOT) : "";
+                    String key = t.getEffectiveTaskKey();
+                    String lowerKey = key.toLowerCase(Locale.ROOT);
+
                     String title = t.getTitle() != null ? t.getTitle().toLowerCase(Locale.ROOT) : "";
                     String desc = t.getDescription() != null ? t.getDescription().toLowerCase(Locale.ROOT) : "";
                     String boardName = t.getColumn() != null && t.getColumn().getBoard() != null && t.getColumn().getBoard().getName() != null
@@ -109,26 +113,30 @@ public class SearchService {
                             .anyMatch(tag -> tag != null && tag.toLowerCase(Locale.ROOT).contains(lowerQuery));
 
                     // Exact or partial taskKey match (e.g. "FW-14", "FW", "14")
-                    boolean keyMatch = taskKey.contains(lowerQuery) || String.valueOf(t.getId()).equals(rawQuery);
+                    boolean keyMatch = lowerKey.contains(lowerQuery) || String.valueOf(t.getId()).equals(rawQuery);
 
                     return keyMatch || title.contains(lowerQuery) || desc.contains(lowerQuery) || tagMatch || boardName.contains(lowerQuery) || colName.contains(lowerQuery);
                 })
                 .limit(20)
                 .map(t -> {
-                    String prefix = t.getTaskType() != null && t.getTaskType().getTaskPrefix() != null
-                            ? t.getTaskType().getTaskPrefix()
-                            : (t.getTaskType() != null ? TaskTypeService.derivePrefix(t.getTaskType().getName(), null) : "TASK");
-                    String key = t.getTaskKey() != null ? t.getTaskKey() : (prefix + "-" + t.getId());
-                    Long boardId = t.getColumn() != null && t.getColumn().getBoard() != null ? t.getColumn().getBoard().getId() : null;
-                    String boardTitle = t.getColumn() != null && t.getColumn().getBoard() != null ? t.getColumn().getBoard().getName() : "";
+                    com.kanban.entity.TaskType effectiveType = t.getTaskType();
+                    if (effectiveType == null && t.getColumn() != null && t.getColumn().getBoard() != null) {
+                        effectiveType = t.getColumn().getBoard().getTaskType();
+                    }
+                    String key = t.getEffectiveTaskKey();
+                    Board b = t.getColumn() != null ? t.getColumn().getBoard() : null;
+                    Long boardId = b != null ? b.getId() : null;
+                    String boardKey = b != null ? b.getEffectiveBoardKey() : "TASK";
+                    String boardTitle = b != null ? b.getName() : "";
                     Long colId = t.getColumn() != null ? t.getColumn().getId() : null;
                     String colTitle = t.getColumn() != null ? t.getColumn().getTitle() : "";
-                    String colorHex = t.getTaskType() != null ? t.getTaskType().getColorHex() : null;
+                    String colorHex = effectiveType != null ? effectiveType.getColorHex() : null;
                     Set<String> tags = t.getTags() != null ? new HashSet<>(t.getTags()) : Set.of();
 
                     return new TaskSearchDto(
                             t.getId(),
                             key,
+                            boardKey,
                             t.getTitle(),
                             t.getPriority() != null ? t.getPriority().name() : "MEDIUM",
                             boardId,

@@ -1,20 +1,19 @@
-package com.kanban.dto.search;
+package com.kanban.dto.task;
 
 import java.util.Set;
 
 /**
- * Task search result item.
+ * Lightweight search result DTO for direct task lookup.
  */
-public record TaskSearchDto(
+public record TaskSearchResultDto(
         Long id,
         String taskKey,
         String boardKey,
         String title,
-        String priority,
         Long boardId,
         String boardTitle,
-        Long columnId,
         String columnName,
-        String taskTypeColor,
+        String priority,
+        String colorHex,
         Set<String> tags
 ) {}

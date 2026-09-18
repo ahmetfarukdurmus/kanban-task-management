@@ -19,6 +19,7 @@ import java.util.List;
  */
 public record BoardResponse(
         Long                 id,
+        String               boardKey,
         String               name,
         String               description,
         Instant              createdAt,
@@ -31,10 +32,10 @@ public record BoardResponse(
         String               taskTypeColor
 ) {
     public BoardResponse(Long id, String name, String description, Instant createdAt, List<ColumnResponse> columns) {
-        this(id, name, description, createdAt, columns, null, null, "STANDARD", null, null, null);
+        this(id, "BOARD", name, description, createdAt, columns, null, null, "STANDARD", null, null, null);
     }
 
     public BoardResponse(Long id, String name, String description, Instant createdAt, List<ColumnResponse> columns, Long organizationId, String organizationName) {
-        this(id, name, description, createdAt, columns, organizationId, organizationName, "STANDARD", null, null, null);
+        this(id, "BOARD", name, description, createdAt, columns, organizationId, organizationName, "STANDARD", null, null, null);
     }
 }

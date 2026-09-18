@@ -10,6 +10,7 @@ import com.kanban.entity.Board;
 import com.kanban.entity.BoardColumn;
 import com.kanban.entity.Organization;
 import com.kanban.entity.Task;
+import com.kanban.entity.TaskType;
 import com.kanban.entity.User;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.BoardColumnRepository;
@@ -209,9 +210,14 @@ public class BoardColumnService {
                         .toList()
                 : List.of();
 
-        Long taskTypeId = task.getTaskType() != null ? task.getTaskType().getId() : null;
-        String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
-        String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
+        TaskType effectiveType = task.getTaskType();
+        if (effectiveType == null && task.getColumn() != null && task.getColumn().getBoard() != null) {
+            effectiveType = task.getColumn().getBoard().getTaskType();
+        }
+
+        Long taskTypeId = effectiveType != null ? effectiveType.getId() : null;
+        String taskTypeName = effectiveType != null ? effectiveType.getName() : null;
+        String taskTypeColor = effectiveType != null ? effectiveType.getColorHex() : null;
 
         UserSummaryDto reporterDto = null;
         Long reporterId = null;
@@ -232,15 +238,18 @@ public class BoardColumnService {
                     r.getCreatedAt());
         }
 
-        String taskPrefix = task.getTaskType() != null && task.getTaskType().getTaskPrefix() != null
-                ? task.getTaskType().getTaskPrefix()
-                : (task.getTaskType() != null ? com.kanban.service.TaskTypeService.derivePrefix(task.getTaskType().getName(), null) : "TASK");
-        String taskKey = task.getTaskKey() != null ? task.getTaskKey() : (taskPrefix + "-" + task.getId());
+        Board b = task.getColumn() != null ? task.getColumn().getBoard() : null;
+        String boardKey = b != null ? b.getEffectiveBoardKey() : (effectiveType != null && effectiveType.getTaskPrefix() != null ? effectiveType.getTaskPrefix() : "TASK");
+        String taskPrefix = (effectiveType != null && effectiveType.getTaskPrefix() != null && !effectiveType.getTaskPrefix().isBlank())
+                ? effectiveType.getTaskPrefix()
+                : boardKey;
+        String taskKey = task.getEffectiveTaskKey();
         Set<String> tags = task.getTags() != null ? new HashSet<>(task.getTags()) : Set.of();
 
         return new TaskResponse(
                 task.getId(),
                 taskKey,
+                boardKey,
                 task.getTitle(),
                 task.getDescription(),
                 task.getPriority() != null ? task.getPriority().name() : "MEDIUM",

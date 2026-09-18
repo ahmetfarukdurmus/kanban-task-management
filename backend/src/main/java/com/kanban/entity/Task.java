@@ -35,6 +35,32 @@ public class Task {
     @Column(name = "task_key", length = 30)
     private String taskKey;
 
+    public String getEffectiveTaskKey() {
+        TaskType type = taskType;
+        if (type == null && column != null && column.getBoard() != null) {
+            type = column.getBoard().getTaskType();
+        }
+        String keyPrefix = (type != null && type.getTaskPrefix() != null && !type.getTaskPrefix().isBlank())
+                ? type.getTaskPrefix()
+                : (type != null ? com.kanban.service.TaskTypeService.derivePrefix(type.getName(), null)
+                : (column != null && column.getBoard() != null && column.getBoard().getBoardKey() != null && !column.getBoard().getBoardKey().isBlank() && !"BOARD".equalsIgnoreCase(column.getBoard().getBoardKey())
+                        ? column.getBoard().getBoardKey()
+                        : (column != null && column.getBoard() != null ? column.getBoard().getEffectiveBoardKey() : "TASK")));
+
+        if (taskKey != null && !taskKey.isBlank()) {
+            if (taskKey.startsWith(keyPrefix + "-")) {
+                return taskKey;
+            }
+            if (type != null && type.getTaskPrefix() != null && !type.getTaskPrefix().isBlank()) {
+                return keyPrefix + "-" + (id != null ? id : "0");
+            }
+            if (!taskKey.startsWith("TASK-") || "TASK".equalsIgnoreCase(keyPrefix)) {
+                return taskKey;
+            }
+        }
+        return keyPrefix + "-" + (id != null ? id : "0");
+    }
+
     @Column(nullable = false, length = 200)
     private String title;
 

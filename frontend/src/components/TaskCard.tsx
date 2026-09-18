@@ -55,6 +55,11 @@ export default function TaskCard({ task, index, onEdit }: Props) {
   const totalChecklists = task.checklistItems?.length || 0;
   const completedChecklists = task.checklistItems?.filter((c) => c.isCompleted).length || 0;
 
+  // Derive display task key: prioritize taskPrefix synchronization
+  const displayKey = (task.taskPrefix && task.taskKey && !task.taskKey.startsWith(`${task.taskPrefix}-`))
+    ? `${task.taskPrefix}-${task.id}`
+    : (task.taskKey || `${task.taskPrefix || 'TASK'}-${task.id}`);
+
   return (
     <Draggable draggableId={String(task.id)} index={index}>
       {(provided, snapshot) => (
@@ -88,9 +93,9 @@ export default function TaskCard({ task, index, onEdit }: Props) {
                     color: task.taskTypeColor || '#475569',
                     borderColor: task.taskTypeColor ? `${task.taskTypeColor}40` : '#CBD5E1',
                   }}
-                  title={`Görev Kodu: ${task.taskKey || `#${task.id}`}`}
+                  title={`Görev Kodu: ${displayKey}`}
                 >
-                  {task.taskKey || `#${task.id}`}
+                  {displayKey}
                 </span>
 
                 {task.taskTypeName && (

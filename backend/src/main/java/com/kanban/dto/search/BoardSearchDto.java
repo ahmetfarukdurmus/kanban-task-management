@@ -5,6 +5,7 @@ package com.kanban.dto.search;
  */
 public record BoardSearchDto(
         Long id,
+        String boardKey,
         String title,
         String description,
         Long organizationId,

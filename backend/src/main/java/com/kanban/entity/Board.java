@@ -26,6 +26,10 @@ public class Board {
     @Column(nullable = false, length = 100)
     private String name;
 
+    /** Key/prefix for tasks created on this board (e.g. FW, DEV, SEC, PAY, INT). */
+    @Column(name = "board_key", length = 10)
+    private String boardKey;
+
     @Column(length = 500)
     private String description;
 
@@ -39,7 +43,28 @@ public class Board {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (boardKey == null || boardKey.isBlank()) {
+            boardKey = getEffectiveBoardKey();
+        }
+    }
+
+    public String getEffectiveBoardKey() {
+        if (taskType != null && taskType.getTaskPrefix() != null && !taskType.getTaskPrefix().isBlank()) {
+            return taskType.getTaskPrefix();
+        }
+        if (boardKey != null && !boardKey.isBlank() && !"BOARD".equalsIgnoreCase(boardKey) && !"TASK".equalsIgnoreCase(boardKey)) {
+            return boardKey;
+        }
+        if (taskType != null && taskType.getName() != null) {
+            return com.kanban.service.TaskTypeService.derivePrefix(taskType.getName(), null);
+        }
+        if (name != null && !name.isBlank()) {
+            return com.kanban.service.TaskTypeService.derivePrefix(name, null);
+        }
+        return "TASK";
     }
 
     /** Owner of this board. */

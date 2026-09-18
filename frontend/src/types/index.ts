@@ -77,6 +77,7 @@ export type BoardType = 'STANDARD' | 'INTEGRATION' | 'QA_TEST';
 
 export interface BoardRequest {
   name: string;
+  boardKey?: string;
   description?: string;
   organizationId?: number;
   boardType?: BoardType;
@@ -85,6 +86,7 @@ export interface BoardRequest {
 
 export interface BoardResponse {
   id: number;
+  boardKey?: string;
   name: string;
   description: string | null;
   createdAt: string;
@@ -276,6 +278,7 @@ export interface MoveTaskRequest {
 export interface TaskResponse {
   id: number;
   taskKey?: string | null;
+  boardKey?: string | null;
   title: string;
   description: string | null;
   priority: Priority;
@@ -374,6 +377,7 @@ export interface TaskActivityDto {
 export interface TaskSearchDto {
   id: number;
   taskKey: string;
+  boardKey?: string;
   title: string;
   priority: Priority;
   boardId: number;
@@ -386,6 +390,7 @@ export interface TaskSearchDto {
 
 export interface BoardSearchDto {
   id: number;
+  boardKey?: string;
   title: string;
   description?: string | null;
   organizationId?: number | null;

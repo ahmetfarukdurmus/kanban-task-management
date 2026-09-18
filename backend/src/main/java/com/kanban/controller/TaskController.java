@@ -21,6 +21,12 @@ public class TaskController {
     private final TaskService taskService;
     private final TaskActivityService activityService;
 
+    // ── Global Search ────────────────────────────────────────────────────────
+    @GetMapping("/tasks/search")
+    public ResponseEntity<List<TaskSearchResultDto>> searchTasks(@RequestParam(name = "q", defaultValue = "") String query) {
+        return ResponseEntity.ok(taskService.searchTasks(query));
+    }
+
     // ── Nested CRUD ──────────────────────────────────────────────────────────
 
     @GetMapping("/boards/{boardId}/columns/{columnId}/tasks")

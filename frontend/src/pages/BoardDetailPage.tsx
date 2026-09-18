@@ -279,9 +279,20 @@ export default function BoardDetailPage() {
           task={selectedTask}
           boardId={boardId}
           columns={columns}
-          onClose={() => setSelectedTask(null)}
+          onClose={() => {
+            setSelectedTask(null);
+            if (taskIdParam) {
+              navigate(`/boards/${boardId}`, { replace: true });
+            }
+          }}
           onUpdated={() => fetchBoardDetails(true)}
-          onDeleted={() => fetchBoardDetails(true)}
+          onDeleted={() => {
+            fetchBoardDetails(true);
+            setSelectedTask(null);
+            if (taskIdParam) {
+              navigate(`/boards/${boardId}`, { replace: true });
+            }
+          }}
         />
       )}
     </div>

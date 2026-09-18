@@ -200,6 +200,7 @@ public class DataInitializer implements CommandLineRunner {
         if (!boardExists) {
             Board board = Board.builder()
                     .name("Ödeme Sistemleri Ana Board")
+                    .boardKey("PAY")
                     .description("FinTech & Core Banking Solutions ödeme ve provizyon iş akışları takip panosu.")
                     .boardType(BoardType.STANDARD)
                     .owner(superAdmin)
@@ -441,39 +442,74 @@ public class DataInitializer implements CommandLineRunner {
                     return taskTypeRepository.save(savedFw);
                 });
 
-        // 10. Backfill taskPrefix for any task type missing it
+        // 10. Synchronize and backfill taskPrefix for all task types
         taskTypeRepository.findAll().forEach(tt -> {
-            if (tt.getTaskPrefix() == null || tt.getTaskPrefix().isBlank()) {
-                String p = com.kanban.service.TaskTypeService.derivePrefix(tt.getName(), null);
-                tt.setTaskPrefix(p);
-                taskTypeRepository.save(tt);
-            }
+            String derivedPrefix = com.kanban.service.TaskTypeService.derivePrefix(tt.getName(), tt.getTaskPrefix());
+            tt.setTaskPrefix(derivedPrefix);
+            taskTypeRepository.save(tt);
+            log.info("Synchronized TaskType '{}' with prefix: {}", tt.getName(), derivedPrefix);
         });
+        taskTypeRepository.flush();
 
-        // 11. Auto-link boards and backfill taskKey for tasks
+        // 11. Auto-link boards, set boardKey and backfill/sync taskKey for tasks
         boardRepository.findAll().forEach(b -> {
             if (b.getTaskType() == null) {
                 if (b.getName() != null && (b.getName().toLowerCase().contains("kanban") || b.getName().toLowerCase().contains("intern") || b.getName().toLowerCase().contains("staj"))) {
                     b.setTaskType(internshipTaskType);
-                    boardRepository.save(b);
-                    log.info("Auto-linked board '{}' to TaskType '{}' ({})", b.getName(), internshipTaskType.getName(), internshipTaskType.getColorHex());
+                } else if (b.getName() != null && (b.getName().toLowerCase().contains("firewall") || b.getName().toLowerCase().contains("ag") || b.getName().toLowerCase().contains("fw"))) {
+                    TaskType fw = taskTypeRepository.findAll().stream().filter(t -> t.getName().contains("Firewall")).findFirst().orElse(paymentTaskType);
+                    b.setTaskType(fw);
                 } else {
                     b.setTaskType(paymentTaskType);
-                    boardRepository.save(b);
-                    log.info("Auto-linked board '{}' to default TaskType '{}' ({})", b.getName(), paymentTaskType.getName(), paymentTaskType.getColorHex());
                 }
             }
+
+            // Ensure boardKey is set and accurate
+            String bName = b.getName() != null ? b.getName().toLowerCase() : "";
+            String tName = b.getTaskType() != null && b.getTaskType().getName() != null ? b.getTaskType().getName().toLowerCase() : "";
+
+            String key;
+            if (bName.contains("firewall") || bName.contains("ag") || bName.contains("fw") || tName.contains("firewall") || tName.contains("ag")) {
+                key = "FW";
+            } else if (bName.contains("odeme") || bName.contains("payment") || bName.contains("pay") || tName.contains("odeme") || tName.contains("payment")) {
+                key = "PAY";
+            } else if (bName.contains("dev") || bName.contains("gelistirme") || tName.contains("dev") || tName.contains("gelistirme")) {
+                key = "DEV";
+            } else if (bName.contains("sizma") || bName.contains("sec") || bName.contains("guvenlik") || tName.contains("sizma") || tName.contains("sec")) {
+                key = "SEC";
+            } else if (bName.contains("intern") || bName.contains("staj") || tName.contains("intern") || tName.contains("staj")) {
+                key = "INT";
+            } else if (b.getTaskType() != null && b.getTaskType().getTaskPrefix() != null && !b.getTaskType().getTaskPrefix().isBlank()) {
+                key = b.getTaskType().getTaskPrefix();
+            } else {
+                key = com.kanban.service.TaskTypeService.derivePrefix(b.getName(), b.getBoardKey());
+            }
+
+            b.setBoardKey(key);
+            boardRepository.save(b);
+            log.info("Synchronized Board '{}' with boardKey: {}", b.getName(), key);
         });
+        boardRepository.flush();
 
         taskRepository.findAll().forEach(t -> {
-            if (t.getTaskKey() == null || t.getTaskKey().isBlank()) {
-                String prefix = (t.getTaskType() != null && t.getTaskType().getTaskPrefix() != null && !t.getTaskType().getTaskPrefix().isBlank())
-                        ? t.getTaskType().getTaskPrefix()
-                        : (t.getTaskType() != null ? com.kanban.service.TaskTypeService.derivePrefix(t.getTaskType().getName(), null) : "TASK");
-                t.setTaskKey(prefix + "-" + t.getId());
-                taskRepository.save(t);
+            if (t.getTaskType() == null && t.getColumn() != null && t.getColumn().getBoard() != null && t.getColumn().getBoard().getTaskType() != null) {
+                t.setTaskType(t.getColumn().getBoard().getTaskType());
             }
+            Board b = t.getColumn() != null ? t.getColumn().getBoard() : null;
+            TaskType effectiveType = t.getTaskType() != null ? t.getTaskType() : (b != null ? b.getTaskType() : null);
+            String keyPrefix = (effectiveType != null && effectiveType.getTaskPrefix() != null && !effectiveType.getTaskPrefix().isBlank())
+                    ? effectiveType.getTaskPrefix()
+                    : (effectiveType != null ? com.kanban.service.TaskTypeService.derivePrefix(effectiveType.getName(), null)
+                    : (b != null && b.getBoardKey() != null && !b.getBoardKey().isBlank() && !"BOARD".equalsIgnoreCase(b.getBoardKey())
+                            ? b.getBoardKey()
+                            : (b != null ? com.kanban.service.TaskTypeService.derivePrefix(b.getName(), null) : "TASK")));
+
+            String correctKey = keyPrefix + "-" + t.getId();
+            t.setTaskKey(correctKey);
+            taskRepository.save(t);
+            log.debug("Synchronized Task ID {} -> taskKey: {}", t.getId(), correctKey);
         });
+        taskRepository.flush();
 
         log.info("DataInitializer completed: Banking scenario seed data is ready.");
     }

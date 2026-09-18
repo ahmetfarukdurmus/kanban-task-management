@@ -167,10 +167,17 @@ public class TaskService {
 
         Task saved = taskRepository.save(task);
 
-        // Assign taskKey (e.g. FW-14)
-        String prefix = (saved.getTaskType() != null && saved.getTaskType().getTaskPrefix() != null && !saved.getTaskType().getTaskPrefix().isBlank())
-                ? saved.getTaskType().getTaskPrefix()
-                : (saved.getTaskType() != null ? TaskTypeService.derivePrefix(saved.getTaskType().getName(), null) : "TASK");
+        // Assign taskKey with strict priority on taskType.taskPrefix
+        TaskType effectiveType = saved.getTaskType();
+        if (effectiveType == null && column.getBoard() != null) {
+            effectiveType = column.getBoard().getTaskType();
+        }
+        String prefix = (effectiveType != null && effectiveType.getTaskPrefix() != null && !effectiveType.getTaskPrefix().isBlank())
+                ? effectiveType.getTaskPrefix()
+                : (effectiveType != null ? TaskTypeService.derivePrefix(effectiveType.getName(), null)
+                : (column.getBoard() != null && column.getBoard().getBoardKey() != null && !column.getBoard().getBoardKey().isBlank() && !"BOARD".equalsIgnoreCase(column.getBoard().getBoardKey())
+                        ? column.getBoard().getBoardKey()
+                        : "TASK"));
         saved.setTaskKey(prefix + "-" + saved.getId());
         saved = taskRepository.save(saved);
         taskRepository.flush();
@@ -262,11 +269,12 @@ public class TaskService {
         if (request.taskTypeId() != null) {
             taskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
             task.setTaskType(taskType);
-        } else {
-            task.setTaskType(null);
+        } else if (task.getTaskType() == null && task.getColumn() != null && task.getColumn().getBoard() != null && task.getColumn().getBoard().getTaskType() != null) {
+            taskType = task.getColumn().getBoard().getTaskType();
+            task.setTaskType(taskType);
         }
-        Long newTypeId = taskType != null ? taskType.getId() : null;
-        String newTypeName = taskType != null ? taskType.getName() : "Standart";
+        Long newTypeId = task.getTaskType() != null ? task.getTaskType().getId() : null;
+        String newTypeName = task.getTaskType() != null ? task.getTaskType().getName() : "Standart";
         if (!java.util.Objects.equals(oldTypeId, newTypeId)) {
             activityService.recordActivity(task, TaskActivityType.FIELD_UPDATED,
                     "Görev tipi '" + oldTypeName + "' yerine '" + newTypeName + "' olarak güncellendi",
@@ -274,8 +282,8 @@ public class TaskService {
         }
 
         // Validate TaskType required custom fields if customFields were submitted
-        if (taskType != null && request.customFields() != null) {
-            validateTaskTypeRequiredFields(taskType, request.customFields());
+        if (task.getTaskType() != null && request.customFields() != null) {
+            validateTaskTypeRequiredFields(task.getTaskType(), request.customFields());
         }
 
         // 7. Update assignees Diff
@@ -343,13 +351,18 @@ public class TaskService {
             }
         }
 
-        // Ensure taskKey is present
-        if (task.getTaskKey() == null || task.getTaskKey().isBlank()) {
-            String prefix = (task.getTaskType() != null && task.getTaskType().getTaskPrefix() != null && !task.getTaskType().getTaskPrefix().isBlank())
-                    ? task.getTaskType().getTaskPrefix()
-                    : (task.getTaskType() != null ? TaskTypeService.derivePrefix(task.getTaskType().getName(), null) : "TASK");
-            task.setTaskKey(prefix + "-" + task.getId());
+        // Always synchronize taskKey with strict priority on taskType.taskPrefix
+        TaskType effectiveType = task.getTaskType();
+        if (effectiveType == null && task.getColumn() != null && task.getColumn().getBoard() != null) {
+            effectiveType = task.getColumn().getBoard().getTaskType();
         }
+        String prefix = (effectiveType != null && effectiveType.getTaskPrefix() != null && !effectiveType.getTaskPrefix().isBlank())
+                ? effectiveType.getTaskPrefix()
+                : (effectiveType != null ? TaskTypeService.derivePrefix(effectiveType.getName(), null)
+                : (task.getColumn() != null && task.getColumn().getBoard() != null && task.getColumn().getBoard().getBoardKey() != null && !task.getColumn().getBoard().getBoardKey().isBlank() && !"BOARD".equalsIgnoreCase(task.getColumn().getBoard().getBoardKey())
+                        ? task.getColumn().getBoard().getBoardKey()
+                        : "TASK"));
+        task.setTaskKey(prefix + "-" + task.getId());
 
         Task saved = taskRepository.save(task);
         taskRepository.flush();
@@ -811,9 +824,14 @@ public class TaskService {
                         .toList()
                 : List.of();
 
-        Long taskTypeId = task.getTaskType() != null ? task.getTaskType().getId() : null;
-        String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
-        String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
+        TaskType effectiveType = task.getTaskType();
+        if (effectiveType == null && task.getColumn() != null && task.getColumn().getBoard() != null) {
+            effectiveType = task.getColumn().getBoard().getTaskType();
+        }
+
+        Long taskTypeId = effectiveType != null ? effectiveType.getId() : null;
+        String taskTypeName = effectiveType != null ? effectiveType.getName() : null;
+        String taskTypeColor = effectiveType != null ? effectiveType.getColorHex() : null;
 
         UserSummaryDto reporterDto = null;
         Long reporterId = null;
@@ -834,15 +852,21 @@ public class TaskService {
                     r.getCreatedAt());
         }
 
-        String taskPrefix = task.getTaskType() != null && task.getTaskType().getTaskPrefix() != null
-                ? task.getTaskType().getTaskPrefix()
-                : (task.getTaskType() != null ? TaskTypeService.derivePrefix(task.getTaskType().getName(), null) : "TASK");
-        String taskKey = task.getTaskKey() != null ? task.getTaskKey() : (taskPrefix + "-" + task.getId());
+        Board board = task.getColumn() != null ? task.getColumn().getBoard() : null;
+        String boardKey = board != null ? board.getEffectiveBoardKey() : null;
+        String taskPrefix = (effectiveType != null && effectiveType.getTaskPrefix() != null && !effectiveType.getTaskPrefix().isBlank())
+                ? effectiveType.getTaskPrefix()
+                : (boardKey != null ? boardKey : (effectiveType != null ? TaskTypeService.derivePrefix(effectiveType.getName(), null) : "TASK"));
+        if (boardKey == null) {
+            boardKey = taskPrefix;
+        }
+        String taskKey = task.getEffectiveTaskKey();
         Set<String> tags = task.getTags() != null ? new HashSet<>(task.getTags()) : Set.of();
 
         return new TaskResponse(
                 task.getId(),
                 taskKey,
+                boardKey,
                 task.getTitle(),
                 task.getDescription(),
                 task.getPriority() != null ? task.getPriority().name() : "MEDIUM",
@@ -865,5 +889,87 @@ public class TaskService {
                 assigneeDtos,
                 checklistDtos,
                 tags);
+    }
+
+    /**
+     * Searches tasks across all boards accessible to current user by taskKey, title, description, or tags.
+     */
+    @Transactional(readOnly = true)
+    public List<TaskSearchResultDto> searchTasks(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+
+        String rawQuery = query.trim();
+        String lowerQuery = rawQuery.toLowerCase(Locale.ROOT);
+
+        User currentUser = securityUtils.getCurrentUser();
+        boolean isSuperAdmin = currentUser.getRole() == Role.ROLE_SUPER_ADMIN;
+
+        List<Board> accessibleBoards;
+        if (isSuperAdmin) {
+            accessibleBoards = boardRepository.findAllByOrderByCreatedAtDesc();
+        } else {
+            Set<Long> orgIds = currentUser.getOrganizations() != null
+                    ? currentUser.getOrganizations().stream().map(Organization::getId).collect(Collectors.toSet())
+                    : Set.of();
+
+            if (orgIds.isEmpty()) {
+                accessibleBoards = boardRepository.findAccessibleBoardsForUser(List.of(-1L), currentUser.getId(), currentUser.getUsername());
+            } else {
+                accessibleBoards = boardRepository.findAccessibleBoardsForUser(orgIds, currentUser.getId(), currentUser.getUsername());
+            }
+        }
+
+        return accessibleBoards.stream()
+                .filter(b -> b.getColumns() != null)
+                .flatMap(b -> b.getColumns().stream())
+                .filter(c -> c.getTasks() != null)
+                .flatMap(c -> c.getTasks().stream())
+                .filter(t -> {
+                    String key = t.getEffectiveTaskKey();
+                    String lowerKey = key.toLowerCase(Locale.ROOT);
+
+                    String title = t.getTitle() != null ? t.getTitle().toLowerCase(Locale.ROOT) : "";
+                    String desc = t.getDescription() != null ? t.getDescription().toLowerCase(Locale.ROOT) : "";
+
+                    boolean tagMatch = t.getTags() != null && t.getTags().stream()
+                            .anyMatch(tag -> tag != null && tag.toLowerCase(Locale.ROOT).contains(lowerQuery));
+
+                    boolean keyMatch = lowerKey.contains(lowerQuery) || String.valueOf(t.getId()).equals(rawQuery);
+                    boolean titleMatch = title.contains(lowerQuery);
+                    boolean descMatch = desc.contains(lowerQuery);
+
+                    return keyMatch || titleMatch || descMatch || tagMatch;
+                })
+                .limit(20)
+                .map(t -> {
+                    TaskType effectiveType = t.getTaskType();
+                    if (effectiveType == null && t.getColumn() != null && t.getColumn().getBoard() != null) {
+                        effectiveType = t.getColumn().getBoard().getTaskType();
+                    }
+                    String key = t.getEffectiveTaskKey();
+                    Board b = t.getColumn() != null ? t.getColumn().getBoard() : null;
+                    Long boardId = b != null ? b.getId() : null;
+                    String boardKey = b != null ? b.getEffectiveBoardKey() : "TASK";
+                    String boardTitle = b != null ? b.getName() : "";
+                    String colTitle = t.getColumn() != null ? t.getColumn().getTitle() : "";
+                    String colorHex = effectiveType != null ? effectiveType.getColorHex() : null;
+                    Set<String> tags = t.getTags() != null ? new HashSet<>(t.getTags()) : Set.of();
+
+                    return new TaskSearchResultDto(
+                            t.getId(),
+                            key,
+                            boardKey,
+                            t.getTitle(),
+                            boardId,
+                            boardTitle,
+                            colTitle,
+                            t.getPriority() != null ? t.getPriority().name() : "MEDIUM",
+                            colorHex,
+                            tags
+                    );
+                })
+                .toList();
     }
 }

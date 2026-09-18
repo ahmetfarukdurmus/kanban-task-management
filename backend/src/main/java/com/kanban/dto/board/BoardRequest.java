@@ -24,17 +24,20 @@ public record BoardRequest(
 
         BoardType boardType,
 
-        Long taskTypeId
+        Long taskTypeId,
+
+        @Size(max = 10, message = "Board key must not exceed 10 characters")
+        String boardKey
 ) {
     public BoardRequest(String name, String description) {
-        this(name, description, null, BoardType.STANDARD, null);
+        this(name, description, null, BoardType.STANDARD, null, null);
     }
 
     public BoardRequest(String name, String description, Long organizationId, BoardType boardType) {
-        this(name, description, organizationId, boardType, null);
+        this(name, description, organizationId, boardType, null, null);
     }
 
     public BoardRequest(String name, String description, Long organizationId) {
-        this(name, description, organizationId, BoardType.STANDARD, null);
+        this(name, description, organizationId, BoardType.STANDARD, null, null);
     }
 }

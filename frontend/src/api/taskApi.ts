@@ -5,6 +5,7 @@ import type {
   TaskChecklistItemDto,
   TaskRequest,
   TaskResponse,
+  TaskSearchDto,
   UpdateChecklistItemRequest,
 } from '@/types';
 
@@ -53,6 +54,10 @@ export const taskApi = {
 
   deleteChecklist: (taskId: number, itemId: number): Promise<void> =>
     api.delete(`/tasks/${taskId}/checklists/${itemId}`).then(() => undefined),
+
+  // ── Global Search ──────────────────────────────────────────────────────────
+  searchTasks: (query: string): Promise<TaskSearchDto[]> =>
+    api.get<TaskSearchDto[]>('/tasks/search', { params: { q: query } }).then((r) => r.data),
 };
 
 export default taskApi;

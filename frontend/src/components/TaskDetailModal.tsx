@@ -766,17 +766,25 @@ export default function TaskDetailModal({
         {/* ── Modal Header (Jira / Linear style breadcrumb) ───────────── */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/80 bg-slate-50/60">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <span
-              className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border shadow-2xs"
-              style={{
-                backgroundColor: selectedType?.colorHex ? `${selectedType.colorHex}12` : '#FFFFFF',
-                color: selectedType?.colorHex || '#334155',
-                borderColor: selectedType?.colorHex ? `${selectedType.colorHex}40` : '#CBD5E1',
-              }}
-              title={`Görev Kodu: ${task.taskKey || `#${task.id}`}`}
-            >
-              {task.taskKey || `#${task.id}`}
-            </span>
+            {(() => {
+              const currentPrefix = selectedType?.taskPrefix || task.taskPrefix;
+              const displayKey = (currentPrefix && task.taskKey && !task.taskKey.startsWith(`${currentPrefix}-`))
+                ? `${currentPrefix}-${task.id}`
+                : (task.taskKey || `${currentPrefix || 'TASK'}-${task.id}`);
+              return (
+                <span
+                  className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border shadow-2xs"
+                  style={{
+                    backgroundColor: selectedType?.colorHex ? `${selectedType.colorHex}12` : '#FFFFFF',
+                    color: selectedType?.colorHex || '#334155',
+                    borderColor: selectedType?.colorHex ? `${selectedType.colorHex}40` : '#CBD5E1',
+                  }}
+                  title={`Görev Kodu: ${displayKey}`}
+                >
+                  {displayKey}
+                </span>
+              );
+            })()}
             {selectedType && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs"

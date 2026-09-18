@@ -29,6 +29,7 @@ public class TaskTypeService {
     private final TaskTypeTransitionRuleRepository transitionRuleRepository;
     private final OrganizationRepository           organizationRepository;
     private final BoardColumnRepository            columnRepository;
+    private final BoardRepository                  boardRepository;
     private final TaskRepository                   taskRepository;
     private final SecurityUtils                    securityUtils;
 
@@ -186,6 +187,38 @@ public class TaskTypeService {
         }
 
         TaskType saved = taskTypeRepository.save(taskType);
+        taskTypeRepository.flush();
+
+        // Synchronize taskKey for all tasks associated with this taskType (directly or through board)
+        String newPrefix = saved.getTaskPrefix() != null ? saved.getTaskPrefix() : derivePrefix(saved.getName(), null);
+        List<Task> associatedTasks = taskRepository.findAll().stream()
+                .filter(t -> {
+                    if (t.getTaskType() != null && t.getTaskType().getId().equals(id)) {
+                        return true;
+                    }
+                    if (t.getColumn() != null && t.getColumn().getBoard() != null && t.getColumn().getBoard().getTaskType() != null) {
+                        return t.getColumn().getBoard().getTaskType().getId().equals(id);
+                    }
+                    return false;
+                })
+                .toList();
+
+        for (Task t : associatedTasks) {
+            t.setTaskKey(newPrefix + "-" + t.getId());
+            taskRepository.save(t);
+        }
+        taskRepository.flush();
+
+        // Synchronize boardKey for all boards associated with this taskType
+        List<Board> associatedBoards = boardRepository.findAll().stream()
+                .filter(b -> b.getTaskType() != null && b.getTaskType().getId().equals(id))
+                .toList();
+        for (Board b : associatedBoards) {
+            b.setBoardKey(newPrefix);
+            boardRepository.save(b);
+        }
+        boardRepository.flush();
+
         return toDto(saved);
     }
 
@@ -523,21 +556,51 @@ public class TaskTypeService {
         if (name == null || name.isBlank()) {
             return "TASK";
         }
-        String asciiName = toAscii(name.trim());
+        String asciiName = toAscii(name.trim()).toLowerCase(java.util.Locale.ROOT);
+
+        // Predefined keyword dictionary & mappings
+        if (asciiName.contains("firewall") || asciiName.contains("ag kural") || asciiName.contains("network") || asciiName.contains("guvenlik duvar")) {
+            return "FW";
+        }
+        if (asciiName.contains("odeme") || asciiName.contains("payment") || asciiName.contains("provizyon") || asciiName.contains("pos") || asciiName.contains("checkout")) {
+            return "PAY";
+        }
+        if (asciiName.contains("development") || asciiName.contains("gelistirme") || asciiName.contains("yazilim") || asciiName.contains("devops") || asciiName.contains("backend") || asciiName.contains("frontend")) {
+            return "DEV";
+        }
+        if (asciiName.contains("sizma") || asciiName.contains("security") || asciiName.contains("guvenlik") || asciiName.contains("pentest") || asciiName.contains("zafiyet")) {
+            return "SEC";
+        }
+        if (asciiName.contains("internship") || asciiName.contains("staj") || asciiName.contains("intern")) {
+            return "INT";
+        }
+        if (asciiName.contains("bug") || asciiName.contains("hata") || asciiName.contains("defect") || asciiName.contains("ariza")) {
+            return "BUG";
+        }
+
+        // General derivation rule: First 2-3 characters of first word or clean uppercase
         String[] words = asciiName.split("[\\s&_\\-]+");
-        StringBuilder sb = new StringBuilder();
-        for (String w : words) {
-            String cleanWord = w.replaceAll("[^a-zA-Z0-9]", "");
-            if (!cleanWord.isEmpty()) {
-                sb.append(Character.toUpperCase(cleanWord.charAt(0)));
+        if (words.length == 1) {
+            String clean = words[0].replaceAll("[^a-z0-9]", "").toUpperCase(java.util.Locale.ROOT);
+            if (clean.length() <= 3) {
+                return clean.isEmpty() ? "TASK" : clean;
             }
+            return clean.substring(0, 3);
+        } else {
+            StringBuilder sb = new StringBuilder();
+            for (String w : words) {
+                String cleanWord = w.replaceAll("[^a-z0-9]", "");
+                if (!cleanWord.isEmpty()) {
+                    sb.append(Character.toUpperCase(cleanWord.charAt(0)));
+                }
+            }
+            String derived = sb.toString();
+            if (derived.length() < 2) {
+                String cleanFull = toAscii(name.trim()).replaceAll("[^a-zA-Z0-9]", "").toUpperCase(java.util.Locale.ROOT);
+                derived = cleanFull.length() >= 3 ? cleanFull.substring(0, 3) : (cleanFull.isEmpty() ? "TASK" : cleanFull);
+            }
+            return derived.length() > 10 ? derived.substring(0, 10) : derived;
         }
-        String derived = sb.toString();
-        if (derived.length() < 2) {
-            String cleanFull = asciiName.replaceAll("[^a-zA-Z0-9]", "").toUpperCase(java.util.Locale.ROOT);
-            derived = cleanFull.length() >= 3 ? cleanFull.substring(0, 3) : (cleanFull.isEmpty() ? "TASK" : cleanFull);
-        }
-        return derived.length() > 10 ? derived.substring(0, 10) : derived;
     }
 
     private static String toAscii(String input) {

@@ -165,8 +165,22 @@ public class BoardService {
             selectedTaskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
         }
 
+        String boardKey = request.boardKey();
+        if (boardKey == null || boardKey.isBlank()) {
+            if (selectedTaskType != null && selectedTaskType.getTaskPrefix() != null && !selectedTaskType.getTaskPrefix().isBlank()) {
+                boardKey = selectedTaskType.getTaskPrefix();
+            } else if (selectedTaskType != null) {
+                boardKey = TaskTypeService.derivePrefix(selectedTaskType.getName(), null);
+            } else {
+                boardKey = TaskTypeService.derivePrefix(request.name(), null);
+            }
+        } else {
+            boardKey = TaskTypeService.derivePrefix(request.name(), boardKey);
+        }
+
         Board board = Board.builder()
                 .name(request.name())
+                .boardKey(boardKey)
                 .description(request.description())
                 .boardType(type)
                 .taskType(selectedTaskType)
@@ -241,6 +255,9 @@ public class BoardService {
 
         board.setName(request.name());
         board.setDescription(request.description());
+        if (request.boardKey() != null && !request.boardKey().isBlank()) {
+            board.setBoardKey(TaskTypeService.derivePrefix(request.name(), request.boardKey()));
+        }
         if (request.taskTypeId() != null) {
             board.setTaskType(taskTypeRepository.findById(request.taskTypeId()).orElse(null));
         }
@@ -303,6 +320,7 @@ public class BoardService {
 
         return new BoardResponse(
                 board.getId(),
+                board.getEffectiveBoardKey(),
                 board.getName(),
                 board.getDescription(),
                 board.getCreatedAt(),
@@ -369,9 +387,14 @@ public class BoardService {
                         .toList()
                 : List.of();
 
-        Long taskTypeId = task.getTaskType() != null ? task.getTaskType().getId() : null;
-        String taskTypeName = task.getTaskType() != null ? task.getTaskType().getName() : null;
-        String taskTypeColor = task.getTaskType() != null ? task.getTaskType().getColorHex() : null;
+        com.kanban.entity.TaskType effectiveType = task.getTaskType();
+        if (effectiveType == null && task.getColumn() != null && task.getColumn().getBoard() != null) {
+            effectiveType = task.getColumn().getBoard().getTaskType();
+        }
+
+        Long taskTypeId = effectiveType != null ? effectiveType.getId() : null;
+        String taskTypeName = effectiveType != null ? effectiveType.getName() : null;
+        String taskTypeColor = effectiveType != null ? effectiveType.getColorHex() : null;
 
         com.kanban.dto.user.UserSummaryDto reporterDto = null;
         Long reporterId = null;
@@ -392,15 +415,18 @@ public class BoardService {
                     r.getCreatedAt());
         }
 
-        String taskPrefix = task.getTaskType() != null && task.getTaskType().getTaskPrefix() != null
-                ? task.getTaskType().getTaskPrefix()
-                : (task.getTaskType() != null ? com.kanban.service.TaskTypeService.derivePrefix(task.getTaskType().getName(), null) : "TASK");
-        String taskKey = task.getTaskKey() != null ? task.getTaskKey() : (taskPrefix + "-" + task.getId());
+        Board b = task.getColumn() != null ? task.getColumn().getBoard() : null;
+        String boardKey = b != null ? b.getEffectiveBoardKey() : (effectiveType != null && effectiveType.getTaskPrefix() != null ? effectiveType.getTaskPrefix() : "TASK");
+        String taskPrefix = (effectiveType != null && effectiveType.getTaskPrefix() != null && !effectiveType.getTaskPrefix().isBlank())
+                ? effectiveType.getTaskPrefix()
+                : boardKey;
+        String taskKey = task.getEffectiveTaskKey();
         Set<String> tags = task.getTags() != null ? new HashSet<>(task.getTags()) : Set.of();
 
         return new TaskResponse(
                 task.getId(),
                 taskKey,
+                boardKey,
                 task.getTitle(),
                 task.getDescription(),
                 task.getPriority() != null ? task.getPriority().name() : "MEDIUM",
