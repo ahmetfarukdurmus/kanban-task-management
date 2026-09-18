@@ -117,22 +117,27 @@ public class TaskTypeService {
                     .orElseThrow(() -> new AccessDeniedException("Bağlı olduğunuz bir organizasyon bulunmamaktadır."));
         }
 
+        String taskPrefix = derivePrefix(request.name(), request.taskPrefix());
+
         TaskType taskType = TaskType.builder()
                 .name(request.name().trim())
                 .colorHex(request.colorHex() != null ? request.colorHex().trim() : null)
+                .taskPrefix(taskPrefix)
                 .organization(organization)
                 .requireTestDate(Boolean.TRUE.equals(request.requireTestDate()))
                 .requireEnvironment(Boolean.TRUE.equals(request.requireEnvironment()))
                 .columns(new ArrayList<>())
                 .rules(new ArrayList<>())
+                .fields(new ArrayList<>())
                 .build();
 
         populateColumns(taskType, request.columns());
         populateRules(taskType, request.rules());
+        populateFields(taskType, request.fields());
 
         TaskType saved = taskTypeRepository.save(taskType);
-        log.info("Created TaskType '{}' (ID: {}) with {} columns and {} rules for organization '{}'",
-                saved.getName(), saved.getId(), saved.getColumns().size(), saved.getRules().size(),
+        log.info("Created TaskType '{}' [{}] (ID: {}) with {} columns, {} rules and {} fields for organization '{}'",
+                saved.getName(), saved.getTaskPrefix(), saved.getId(), saved.getColumns().size(), saved.getRules().size(), saved.getFields().size(),
                 organization != null ? organization.getName() : "Global");
         return toDto(saved);
     }
@@ -150,6 +155,11 @@ public class TaskTypeService {
         }
 
         taskType.setName(request.name().trim());
+        if (request.taskPrefix() != null && !request.taskPrefix().isBlank()) {
+            taskType.setTaskPrefix(derivePrefix(request.name(), request.taskPrefix()));
+        } else if (taskType.getTaskPrefix() == null || taskType.getTaskPrefix().isBlank()) {
+            taskType.setTaskPrefix(derivePrefix(request.name(), null));
+        }
         if (request.colorHex() != null) {
             taskType.setColorHex(request.colorHex().trim());
         }
@@ -168,6 +178,11 @@ public class TaskTypeService {
         if (request.rules() != null) {
             taskType.getRules().clear();
             populateRules(taskType, request.rules());
+        }
+
+        if (request.fields() != null) {
+            taskType.getFields().clear();
+            populateFields(taskType, request.fields());
         }
 
         TaskType saved = taskTypeRepository.save(taskType);
@@ -393,6 +408,35 @@ public class TaskTypeService {
         }
     }
 
+    private void populateFields(TaskType taskType, List<CreateTaskTypeFieldRequest> fieldRequests) {
+        if (fieldRequests == null || fieldRequests.isEmpty()) return;
+
+        int pos = 0;
+        for (CreateTaskTypeFieldRequest fReq : fieldRequests) {
+            if (fReq.fieldName() == null || fReq.fieldName().isBlank()) continue;
+
+            TaskTypeField.FieldType fType = TaskTypeField.FieldType.TEXT;
+            if (fReq.fieldType() != null && !fReq.fieldType().isBlank()) {
+                try {
+                    fType = TaskTypeField.FieldType.valueOf(fReq.fieldType().trim().toUpperCase());
+                } catch (IllegalArgumentException ignored) {}
+            }
+
+            TaskTypeField field = TaskTypeField.builder()
+                    .taskType(taskType)
+                    .fieldName(fReq.fieldName().trim())
+                    .fieldType(fType)
+                    .required(Boolean.TRUE.equals(fReq.required()))
+                    .options(fReq.options() != null && !fReq.options().isBlank() ? fReq.options().trim() : null)
+                    .placeholder(fReq.placeholder() != null && !fReq.placeholder().isBlank() ? fReq.placeholder().trim() : null)
+                    .position(fReq.position() != null ? fReq.position() : pos)
+                    .build();
+
+            taskType.getFields().add(field);
+            pos++;
+        }
+    }
+
     private void validateAdminAccess(User user, Long organizationId) {
         if (user.getRole() == Role.ROLE_SUPER_ADMIN) return;
         if (user.getRole() != Role.ROLE_ADMIN || !isMemberOf(user, organizationId)) {
@@ -440,16 +484,69 @@ public class TaskTypeService {
                         .toList()
                 : List.of();
 
+        List<TaskTypeFieldDto> fieldDtos = type.getFields() != null
+                ? type.getFields().stream()
+                        .map(f -> new TaskTypeFieldDto(
+                                f.getId(),
+                                type.getId(),
+                                f.getFieldName(),
+                                f.getFieldType() != null ? f.getFieldType().name() : "TEXT",
+                                f.isRequired(),
+                                f.getOptions(),
+                                f.getPlaceholder(),
+                                f.getPosition()))
+                        .toList()
+                : List.of();
+
         return new TaskTypeDto(
                 type.getId(),
                 type.getName(),
                 type.getColorHex(),
+                type.getTaskPrefix() != null ? type.getTaskPrefix() : derivePrefix(type.getName(), null),
                 type.getOrganization() != null ? type.getOrganization().getId() : null,
                 type.getOrganization() != null ? type.getOrganization().getName() : null,
                 Boolean.TRUE.equals(type.getRequireTestDate()),
                 Boolean.TRUE.equals(type.getRequireEnvironment()),
                 columnDtos,
                 ruleDtos,
+                fieldDtos,
                 type.getCreatedAt());
+    }
+
+    public static String derivePrefix(String name, String providedPrefix) {
+        if (providedPrefix != null && !providedPrefix.isBlank()) {
+            String clean = toAscii(providedPrefix.trim()).replaceAll("[^a-zA-Z0-9]", "").toUpperCase(java.util.Locale.ROOT);
+            if (!clean.isEmpty()) {
+                return clean.length() > 10 ? clean.substring(0, 10) : clean;
+            }
+        }
+        if (name == null || name.isBlank()) {
+            return "TASK";
+        }
+        String asciiName = toAscii(name.trim());
+        String[] words = asciiName.split("[\\s&_\\-]+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            String cleanWord = w.replaceAll("[^a-zA-Z0-9]", "");
+            if (!cleanWord.isEmpty()) {
+                sb.append(Character.toUpperCase(cleanWord.charAt(0)));
+            }
+        }
+        String derived = sb.toString();
+        if (derived.length() < 2) {
+            String cleanFull = asciiName.replaceAll("[^a-zA-Z0-9]", "").toUpperCase(java.util.Locale.ROOT);
+            derived = cleanFull.length() >= 3 ? cleanFull.substring(0, 3) : (cleanFull.isEmpty() ? "TASK" : cleanFull);
+        }
+        return derived.length() > 10 ? derived.substring(0, 10) : derived;
+    }
+
+    private static String toAscii(String input) {
+        if (input == null) return "";
+        return input.replace("ı", "i").replace("İ", "I")
+                .replace("ğ", "g").replace("Ğ", "G")
+                .replace("ü", "u").replace("Ü", "U")
+                .replace("ş", "s").replace("Ş", "S")
+                .replace("ö", "o").replace("Ö", "O")
+                .replace("ç", "c").replace("Ç", "C");
     }
 }

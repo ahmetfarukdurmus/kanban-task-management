@@ -117,13 +117,16 @@ export interface ColumnResponse {
 }
 
 /* ── Custom Field ──────────────────────────────────────────────────── */
-export type CustomFieldType = 'TEXT' | 'NUMBER' | 'DATE';
+export type CustomFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT';
 
 export interface CustomFieldDto {
   id?: number;
   fieldName: string;
   fieldType: CustomFieldType;
   fieldValue: string;
+  required?: boolean;
+  options?: string | null;
+  placeholder?: string | null;
 }
 
 /* ── Dynamic Task Types & Transition Rules ────────────────────────── */
@@ -141,6 +144,27 @@ export interface CreateTaskTypeColumnRequest {
   id?: number;
   title: string;
   colorHex?: string;
+  position?: number;
+}
+
+export interface TaskTypeFieldDto {
+  id: number;
+  taskTypeId?: number;
+  fieldName: string;
+  fieldType: CustomFieldType;
+  required?: boolean;
+  options?: string | null;
+  placeholder?: string | null;
+  position: number;
+}
+
+export interface CreateTaskTypeFieldRequest {
+  id?: number;
+  fieldName: string;
+  fieldType?: string;
+  required?: boolean;
+  options?: string;
+  placeholder?: string;
   position?: number;
 }
 
@@ -168,32 +192,38 @@ export interface TaskTypeDto {
   id: number;
   name: string;
   colorHex?: string | null;
+  taskPrefix?: string | null;
   requireTestDate?: boolean;
   requireEnvironment?: boolean;
   organizationId?: number | null;
   organizationName?: string | null;
   columns?: TaskTypeColumnDto[];
   rules: TaskTypeTransitionRuleDto[];
+  fields?: TaskTypeFieldDto[];
   createdAt?: string;
 }
 
 export interface CreateTaskTypeRequest {
   name: string;
   colorHex?: string;
+  taskPrefix?: string;
   requireTestDate?: boolean;
   requireEnvironment?: boolean;
   organizationId?: number | null;
   columns?: CreateTaskTypeColumnRequest[];
   rules?: CreateTransitionRuleRequest[];
+  fields?: CreateTaskTypeFieldRequest[];
 }
 
 export interface UpdateTaskTypeRequest {
   name: string;
   colorHex?: string;
+  taskPrefix?: string;
   requireTestDate?: boolean;
   requireEnvironment?: boolean;
   columns?: CreateTaskTypeColumnRequest[];
   rules?: CreateTransitionRuleRequest[];
+  fields?: CreateTaskTypeFieldRequest[];
 }
 
 /* ── Task Checklist Items ─────────────────────────────────────────── */
@@ -235,6 +265,7 @@ export interface TaskRequest {
   taskTypeId?: number | null;
   customFields?: CustomFieldDto[];
   checklistItems?: CreateChecklistItemRequest[];
+  tags?: string[];
 }
 
 export interface MoveTaskRequest {
@@ -244,6 +275,7 @@ export interface MoveTaskRequest {
 
 export interface TaskResponse {
   id: number;
+  taskKey?: string | null;
   title: string;
   description: string | null;
   priority: Priority;
@@ -261,9 +293,11 @@ export interface TaskResponse {
   taskTypeId?: number | null;
   taskTypeName?: string | null;
   taskTypeColor?: string | null;
+  taskPrefix?: string | null;
   assigneeIds?: number[];
   assignees?: UserSummary[];
   checklistItems?: TaskChecklistItemDto[];
+  tags?: string[];
 }
 
 /* ── User ──────────────────────────────────────────────────────────── */
@@ -306,4 +340,61 @@ export interface ApiError {
   title: string;
   detail: string;
   status: number;
+}
+
+/* ── Task Activities / Audit Log ──────────────────────────────────── */
+export type TaskActivityType =
+  | 'CREATED'
+  | 'STATUS_CHANGED'
+  | 'ASSIGNEE_CHANGED'
+  | 'PRIORITY_CHANGED'
+  | 'DUE_DATE_CHANGED'
+  | 'TITLE_UPDATED'
+  | 'DESCRIPTION_UPDATED'
+  | 'FIELD_UPDATED'
+  | 'CHECKLIST_UPDATED'
+  | 'ATTACHMENT_ADDED'
+  | 'ATTACHMENT_DELETED'
+  | 'COMMENT_ADDED';
+
+export interface TaskActivityDto {
+  id: number;
+  taskId: number;
+  userId?: number | null;
+  username: string;
+  userRole?: string | null;
+  activityType: TaskActivityType;
+  description: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  createdAt: string;
+}
+
+/* ── Global Search ────────────────────────────────────────────────── */
+export interface TaskSearchDto {
+  id: number;
+  taskKey: string;
+  title: string;
+  priority: Priority;
+  boardId: number;
+  boardTitle: string;
+  columnId: number;
+  columnName: string;
+  taskTypeColor?: string | null;
+  tags: string[];
+}
+
+export interface BoardSearchDto {
+  id: number;
+  title: string;
+  description?: string | null;
+  organizationId?: number | null;
+  organizationName?: string | null;
+  columnCount: number;
+  taskCount: number;
+}
+
+export interface GlobalSearchResponse {
+  tasks: TaskSearchDto[];
+  boards: BoardSearchDto[];
 }

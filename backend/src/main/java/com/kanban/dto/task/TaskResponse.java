@@ -27,6 +27,7 @@ import java.util.Set;
  */
 public record TaskResponse(
         Long                       id,
+        String                     taskKey,
         String                     title,
         String                     description,
         String                     priority,
@@ -44,19 +45,25 @@ public record TaskResponse(
         Long                       taskTypeId,
         String                     taskTypeName,
         String                     taskTypeColor,
+        String                     taskPrefix,
         Set<Long>                  assigneeIds,
         List<UserSummaryDto>       assignees,
-        List<TaskChecklistItemDto> checklistItems
+        List<TaskChecklistItemDto> checklistItems,
+        Set<String>                tags
 ) {
+    public TaskResponse(Long id, String taskKey, String title, String description, String priority, LocalDate dueDate, String assignee, int position, Long columnId, List<CustomFieldDto> customFields, Long taskTypeId, String taskTypeName, String taskTypeColor, Set<Long> assigneeIds, List<UserSummaryDto> assignees, List<TaskChecklistItemDto> checklistItems) {
+        this(id, taskKey, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, customFields, taskTypeId, taskTypeName, taskTypeColor, null, assigneeIds, assignees, checklistItems, Set.of());
+    }
+
     public TaskResponse(Long id, String title, String description, String priority, LocalDate dueDate, String assignee, int position, Long columnId, List<CustomFieldDto> customFields, Long taskTypeId, String taskTypeName, String taskTypeColor, Set<Long> assigneeIds, List<UserSummaryDto> assignees, List<TaskChecklistItemDto> checklistItems) {
-        this(id, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, customFields, taskTypeId, taskTypeName, taskTypeColor, assigneeIds, assignees, checklistItems);
+        this(id, null, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, customFields, taskTypeId, taskTypeName, taskTypeColor, null, assigneeIds, assignees, checklistItems, Set.of());
     }
 
     public TaskResponse(Long id, String title, String description, String priority, LocalDate dueDate, String assignee, int position, Long columnId, List<CustomFieldDto> customFields) {
-        this(id, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, customFields, null, null, null, Set.of(), List.of(), List.of());
+        this(id, null, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, customFields, null, null, null, null, Set.of(), List.of(), List.of(), Set.of());
     }
 
     public TaskResponse(Long id, String title, String description, String priority, LocalDate dueDate, String assignee, int position, Long columnId) {
-        this(id, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, List.of(), null, null, null, Set.of(), List.of(), List.of());
+        this(id, null, title, description, priority, dueDate, null, null, null, null, null, null, assignee, position, columnId, List.of(), null, null, null, null, Set.of(), List.of(), List.of(), Set.of());
     }
 }

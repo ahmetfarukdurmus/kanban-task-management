@@ -78,25 +78,39 @@ export default function TaskCard({ task, index, onEdit }: Props) {
           />
 
           <div className="pl-1.5">
-            {/* Task Type Badge (if assigned) */}
-            {task.taskTypeName && (
-              <div className="mb-1 flex items-center gap-1.5">
+            {/* Header: Task Key + Task Type Badge */}
+            <div className="mb-1.5 flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold tracking-wide uppercase border"
+                  className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold tracking-tight border shadow-2xs"
                   style={{
-                    backgroundColor: task.taskTypeColor ? `${task.taskTypeColor}15` : '#EFF6FF',
-                    color: task.taskTypeColor || '#2563EB',
-                    borderColor: task.taskTypeColor ? `${task.taskTypeColor}35` : '#BFDBFE',
+                    backgroundColor: task.taskTypeColor ? `${task.taskTypeColor}15` : '#F1F5F9',
+                    color: task.taskTypeColor || '#475569',
+                    borderColor: task.taskTypeColor ? `${task.taskTypeColor}40` : '#CBD5E1',
                   }}
+                  title={`Görev Kodu: ${task.taskKey || `#${task.id}`}`}
                 >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: task.taskTypeColor || '#2563EB' }}
-                  />
-                  {task.taskTypeName}
+                  {task.taskKey || `#${task.id}`}
                 </span>
+
+                {task.taskTypeName && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-semibold tracking-wide uppercase border"
+                    style={{
+                      backgroundColor: task.taskTypeColor ? `${task.taskTypeColor}10` : '#EFF6FF',
+                      color: task.taskTypeColor || '#2563EB',
+                      borderColor: task.taskTypeColor ? `${task.taskTypeColor}25` : '#BFDBFE',
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: task.taskTypeColor || '#2563EB' }}
+                    />
+                    {task.taskTypeName}
+                  </span>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Title */}
             <p className="text-xs sm:text-sm font-semibold text-slate-800 leading-snug tracking-tight group-hover:text-blue-600 transition-colors line-clamp-2">
@@ -110,6 +124,20 @@ export default function TaskCard({ task, index, onEdit }: Props) {
               </p>
             )}
 
+            {/* Tags preview */}
+            {task.tags && task.tags.length > 0 && (
+              <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+                {task.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-1.5 py-0.2 rounded-md text-[9px] font-medium bg-slate-100/90 text-slate-600 border border-slate-200/80"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Meta row */}
             <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-100">
               <div className="flex items-center gap-1 flex-wrap">
@@ -117,16 +145,6 @@ export default function TaskCard({ task, index, onEdit }: Props) {
                 <span className={priority.className}>
                   {priority.label}
                 </span>
-
-                {/* Target Environment Badge */}
-                {task.targetEnvironment && (
-                  <span
-                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-purple-50 text-purple-700 border border-purple-200/80"
-                    title={`Hedef Ortam: ${task.targetEnvironment}`}
-                  >
-                    {task.targetEnvironment}
-                  </span>
-                )}
 
                 {/* Due Date */}
                 {task.dueDate && (
@@ -140,17 +158,6 @@ export default function TaskCard({ task, index, onEdit }: Props) {
                   >
                     <CalendarIcon className="w-2.5 h-2.5" />
                     {format(parseISO(task.dueDate), 'd MMM')}
-                  </span>
-                )}
-
-                {/* Test Due Date */}
-                {task.testDueDate && (
-                  <span
-                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/70"
-                    title={`Test Tarihi: ${task.testDueDate}`}
-                  >
-                    <span className="text-[9px]">🧪</span>
-                    {format(parseISO(task.testDueDate), 'd MMM')}
                   </span>
                 )}
 

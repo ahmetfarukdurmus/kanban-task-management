@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import KanbanBoard from '@/components/KanbanBoard';
@@ -13,6 +13,8 @@ import type { BoardResponse, ColumnResponse, TaskResponse } from '@/types';
 
 export default function BoardDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const taskIdParam = searchParams.get('taskId');
   const boardId = Number(id);
   const navigate = useNavigate();
   const { user, isAdmin, isSuperAdmin } = useAuth();
@@ -52,6 +54,20 @@ export default function BoardDetailPage() {
   useEffect(() => {
     fetchBoardDetails();
   }, [fetchBoardDetails]);
+
+  // Auto-open task modal if taskId is present in URL search params (e.g. from Global Search)
+  useEffect(() => {
+    if (taskIdParam && columns.length > 0) {
+      const targetId = Number(taskIdParam);
+      for (const col of columns) {
+        const matched = col.tasks?.find((t) => t.id === targetId);
+        if (matched) {
+          setSelectedTask(matched);
+          break;
+        }
+      }
+    }
+  }, [taskIdParam, columns]);
 
   const canDelete = isSuperAdmin || (user?.role === 'ROLE_ADMIN' && boardData && (
     (boardData.organizationId && user.organizationId && boardData.organizationId === user.organizationId) ||

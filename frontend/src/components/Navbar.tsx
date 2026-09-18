@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/userService';
 import type { UserSummary } from '@/types';
 import TeamMembersModal from './TeamMembersModal';
+import GlobalSearchModal from './GlobalSearchModal';
+import { SearchIcon } from './icons';
 
 function getAvatarColor(name: string): { bg: string; text: string } {
   const colors = [
@@ -29,6 +31,7 @@ export default function Navbar() {
   const location = useLocation();
   const [users, setUsers]                 = useState<UserSummary[]>([]);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   const isDeptAdmin = isAdmin && !isSuperAdmin && (!!user?.organizationId || !!user?.organizationName);
 
@@ -44,6 +47,18 @@ export default function Navbar() {
   useEffect(() => {
     loadUsers();
   }, [user]);
+
+  // Global Cmd+K / Ctrl+K shortcut listener
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -127,9 +142,23 @@ export default function Navbar() {
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-4 sm:gap-6">
+        <div className="flex items-center gap-2 sm:gap-4">
           {user && (
             <>
+              {/* ── Global Search Trigger Button ── */}
+              <button
+                type="button"
+                onClick={() => setSearchModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 border border-slate-200 text-xs font-medium transition-all shadow-2xs group cursor-pointer"
+                title="Genel Arama (Cmd+K / Ctrl+K)"
+              >
+                <SearchIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                <span className="hidden sm:inline">Ara...</span>
+                <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-white text-[10px] font-mono font-bold text-slate-400 border border-slate-200 shadow-2xs">
+                  ⌘K
+                </kbd>
+              </button>
+
               {/* ── Active Team Stack & Dropdown Popover ── */}
               {users.length > 0 && (
                 <div className="relative">
@@ -210,6 +239,12 @@ export default function Navbar() {
           )}
         </div>
       </div>
+
+      {/* Global Search Command Palette Modal */}
+      <GlobalSearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+      />
     </header>
   );
 }

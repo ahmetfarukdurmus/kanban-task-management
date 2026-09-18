@@ -5,6 +5,7 @@ import com.kanban.dto.comment.CreateCommentRequest;
 import com.kanban.entity.Comment;
 import com.kanban.entity.Role;
 import com.kanban.entity.Task;
+import com.kanban.entity.TaskActivityType;
 import com.kanban.entity.User;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.CommentRepository;
@@ -31,6 +32,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final TaskRepository    taskRepository;
     private final SecurityUtils     securityUtils;
+    private final TaskActivityService activityService;
 
     /**
      * Returns all comments for the given task in chronological order.
@@ -67,7 +69,13 @@ public class CommentService {
                 .task(task)
                 .build();
 
-        return toDto(commentRepository.save(comment));
+        Comment saved = commentRepository.save(comment);
+
+        activityService.recordActivity(task, TaskActivityType.COMMENT_ADDED,
+                "Yeni bir yorum eklendi",
+                null, request.content());
+
+        return toDto(saved);
     }
 
     /**

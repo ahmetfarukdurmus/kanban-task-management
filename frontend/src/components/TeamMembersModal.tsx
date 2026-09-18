@@ -165,7 +165,7 @@ export default function TeamMembersModal({
 
       {/* ── Dropdown Popover Panel ────────────────────────────────────── */}
       <div
-        className="absolute right-0 top-full mt-2 z-50 w-[440px] sm:w-[540px] max-w-[92vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 flex flex-col max-h-[480px] sm:max-h-[520px] overflow-hidden animate-scale-in origin-top-right text-left"
+        className="absolute right-0 top-full mt-2 z-50 w-[560px] sm:w-[680px] lg:w-[740px] max-w-[95vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 flex flex-col max-h-[520px] sm:max-h-[580px] overflow-hidden animate-scale-in origin-top-right text-left"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Fixed Header ─────────────────────────────────────────── */}
@@ -298,61 +298,42 @@ export default function TeamMembersModal({
                         : 'bg-white border-transparent text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => handleToggleAssignUser(u.id)}
                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="truncate text-xs">{u.username}</span>
-                      <span className="text-[10px] text-slate-400 truncate">({u.email})</span>
+                      <span className="font-medium">{u.username}</span>
+                      <span className="text-[10px] text-slate-400">({u.email})</span>
                     </div>
-
-                    {/* Organization pill */}
-                    {u.organizationNames && u.organizationNames.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 items-center">
-                        {u.organizationNames.map((orgName, idx) => (
-                          <span key={idx} className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
-                            {orgName}
-                          </span>
-                        ))}
-                      </div>
-                    ) : u.organizationName ? (
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
-                        {u.organizationName}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-                        Organizasyonsuz
-                      </span>
-                    )}
                   </label>
                 );
               })}
             </div>
 
-            <div className="flex justify-end gap-2 pt-0.5">
+            <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setShowAssignPanel(false)}
-                className="btn-ghost py-1 px-2.5 text-xs font-semibold"
+                className="btn-ghost py-1 px-3 text-xs"
               >
                 İptal
               </button>
               <button
                 type="submit"
                 disabled={assigning || selectedAssignUserIds.length === 0}
-                className="btn-primary py-1 px-3 text-xs font-semibold gap-1 shadow-xs"
+                className="btn-primary py-1 px-3.5 text-xs font-semibold"
               >
-                {assigning ? 'Atanıyor…' : `Seçilen ${selectedAssignUserIds.length} Kişiyi Ata`}
+                {assigning ? 'Atanıyor…' : 'Seçilenleri Ata'}
               </button>
             </div>
           </form>
         )}
 
         {/* ── Fixed Search & Filter Bar ────────────────────────────── */}
-        <div className="px-5 py-2.5 border-b border-slate-100 space-y-2.5 bg-white shrink-0">
+        <div className="px-5 py-2.5 border-b border-slate-100 space-y-2 bg-white shrink-0">
           {/* Search input */}
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -375,11 +356,11 @@ export default function TeamMembersModal({
           </div>
 
           {/* Organization filter pills */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-xs">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
             <button
               type="button"
               onClick={() => setSelectedDept('ALL')}
-              className={`px-2 py-0.5 rounded-md font-semibold transition-all shrink-0 text-xs ${
+              className={`px-2.5 py-1 rounded-lg font-semibold transition-all shrink-0 text-xs ${
                 selectedDept === 'ALL'
                   ? 'bg-blue-600 text-white shadow-2xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -400,7 +381,7 @@ export default function TeamMembersModal({
                   key={dept}
                   type="button"
                   onClick={() => setSelectedDept(dept)}
-                  className={`px-2 py-0.5 rounded-md font-semibold transition-all shrink-0 text-xs ${
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all shrink-0 text-xs ${
                     selectedDept === dept
                       ? 'bg-blue-600 text-white shadow-2xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -414,7 +395,7 @@ export default function TeamMembersModal({
         </div>
 
         {/* ── Scrollable Members List ──────────────────────────────── */}
-        <div className="p-4 overflow-y-auto space-y-2 flex-1 min-h-0">
+        <div className="p-4 overflow-y-auto space-y-2.5 flex-1 min-h-0">
           {filteredUsers.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <UserIcon className="w-7 h-7 mx-auto mb-1.5 text-slate-300" />
@@ -424,71 +405,77 @@ export default function TeamMembersModal({
           ) : (
             filteredUsers.map((u) => {
               const avatar = getAvatarColor(u.username);
+              const orgList =
+                u.organizationNames && u.organizationNames.length > 0
+                  ? u.organizationNames
+                  : (u.organizationName ? [u.organizationName] : []);
 
               return (
                 <div
                   key={u.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-xs transition-all gap-2.5"
+                  className="p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-blue-300 hover:shadow-xs transition-all space-y-2.5 shadow-2xs"
                 >
-                  {/* Left: Avatar & Info */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-2 ring-white shadow-xs ${avatar.bg} ${avatar.text}`}
-                    >
-                      {u.username.charAt(0).toUpperCase()}
-                    </span>
-
-                    <div className="min-w-0">
-                      <span className="font-bold text-xs text-slate-900 truncate block">
-                        {u.username}
+                  {/* Top Row: User Avatar, Name, Email (Left) & Role, Date (Right) */}
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Left: Avatar + Info */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold ring-2 ring-white shadow-xs ${avatar.bg} ${avatar.text}`}
+                      >
+                        {u.username.charAt(0).toUpperCase()}
                       </span>
-                      <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
+
+                      <div className="min-w-0">
+                        <span className="font-bold text-sm text-slate-900 truncate block">
+                          {u.username}
+                        </span>
+                        <p className="text-xs text-slate-500 truncate">{u.email}</p>
+                      </div>
+                    </div>
+
+                    {/* Right: Role Badge & Date */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Role Badge */}
+                      {u.role === 'ROLE_SUPER_ADMIN' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-900 text-white shadow-2xs">
+                          Super Admin
+                        </span>
+                      ) : u.role === 'ROLE_ADMIN' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          Yönetici
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          Kullanıcı
+                        </span>
+                      )}
+
+                      {/* Registration date */}
+                      {u.createdAt && (
+                        <span className="hidden sm:inline-block text-[11px] text-slate-400 font-medium">
+                          {format(parseISO(u.createdAt), 'd MMM yyyy', { locale: tr })}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Right: Badges & Multi-organization Pills */}
-                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                    {/* Multi-organization Badges */}
-                    {u.organizationNames && u.organizationNames.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 items-center justify-end">
-                        {u.organizationNames.map((orgName, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/90"
-                          >
-                            {orgName}
-                          </span>
-                        ))}
-                      </div>
-                    ) : u.organizationName ? (
-                      <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/90">
-                        {u.organizationName}
-                      </span>
+                  {/* Bottom Row: Multi-organization / Department Badges */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200/60 text-xs">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-0.5 shrink-0">
+                      Departmanlar:
+                    </span>
+                    {orgList.length > 0 ? (
+                      orgList.map((orgName, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs"
+                        >
+                          {orgName}
+                        </span>
+                      ))
                     ) : (
-                      <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200">
-                        Organizasyonsuz
-                      </span>
-                    )}
-
-                    {/* Role Badge - based strictly on u.role */}
-                    {u.role === 'ROLE_SUPER_ADMIN' ? (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-900 text-white shadow-2xs">
-                        Super Admin
-                      </span>
-                    ) : u.role === 'ROLE_ADMIN' ? (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                        Yönetici
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                        Kullanıcı
-                      </span>
-                    )}
-
-                    {/* Date info if available */}
-                    {u.createdAt && (
-                      <span className="hidden sm:inline-block text-[10px] text-slate-400 font-medium">
-                        {format(parseISO(u.createdAt), 'd MMM yyyy', { locale: tr })}
+                      <span className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 border border-slate-200 italic">
+                        Tanımlı departman yok
                       </span>
                     )}
                   </div>

@@ -52,17 +52,19 @@ public record TaskRequest(
 
         List<CustomFieldDto> customFields,
 
-        List<CreateChecklistItemRequest> checklistItems
+        List<CreateChecklistItemRequest> checklistItems,
+
+        Set<String> tags
 ) {
     public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee, Set<Long> assigneeIds, Long taskTypeId, List<CustomFieldDto> customFields, List<CreateChecklistItemRequest> checklistItems) {
-        this(title, description, priority, dueDate, null, null, null, null, null, assignee, assigneeIds, taskTypeId, customFields, checklistItems);
+        this(title, description, priority, dueDate, null, null, null, null, null, assignee, assigneeIds, taskTypeId, customFields, checklistItems, Set.of());
     }
 
     public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee, List<CustomFieldDto> customFields) {
-        this(title, description, priority, dueDate, null, null, null, null, null, assignee, null, null, customFields, null);
+        this(title, description, priority, dueDate, null, null, null, null, null, assignee, null, null, customFields, null, Set.of());
     }
 
     public TaskRequest(String title, String description, Priority priority, LocalDate dueDate, String assignee) {
-        this(title, description, priority, dueDate, null, null, null, null, null, assignee, null, null, null, null);
+        this(title, description, priority, dueDate, null, null, null, null, null, assignee, null, null, null, null, Set.of());
     }
 }

@@ -16,6 +16,9 @@ public record CreateTaskTypeRequest(
         @Size(max = 20, message = "Color hex code must not exceed 20 characters")
         String colorHex,
 
+        @Size(max = 10, message = "Task prefix must not exceed 10 characters")
+        String taskPrefix,
+
         Long organizationId,
 
         Boolean requireTestDate,
@@ -24,5 +27,7 @@ public record CreateTaskTypeRequest(
 
         List<CreateTaskTypeColumnRequest> columns,
 
-        List<CreateTransitionRuleRequest> rules
+        List<CreateTransitionRuleRequest> rules,
+
+        List<CreateTaskTypeFieldRequest> fields
 ) {}

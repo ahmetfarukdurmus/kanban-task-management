@@ -5,8 +5,10 @@ import { organizationService } from '@/services/organizationService';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
   CreateTaskTypeColumnRequest,
+  CreateTaskTypeFieldRequest,
   CreateTaskTypeRequest,
   CreateTransitionRuleRequest,
+  CustomFieldType,
   OrganizationDto,
   TaskTypeDto,
   TransitionRuleType,
@@ -33,6 +35,16 @@ interface RuleFormState {
   targetColumnTitle: string;
   ruleType: TransitionRuleType;
   description: string;
+}
+
+interface FieldFormItem {
+  id?: number;
+  key: string;
+  fieldName: string;
+  fieldType: CustomFieldType;
+  required: boolean;
+  options: string;
+  placeholder: string;
 }
 
 const PRESET_COLORS = [
@@ -63,14 +75,15 @@ export default function TaskTypeModal({
 
   const [name, setName]                     = useState('');
   const [colorHex, setColorHex]             = useState('#3B82F6');
+  const [taskPrefix, setTaskPrefix]         = useState('');
   const [organizationId, setOrganizationId] = useState<number | null>(null);
-  const [requireTestDate, setRequireTestDate] = useState(false);
-  const [requireEnvironment, setRequireEnvironment] = useState(false);
   
   // Dynamic Workflow Columns
   const [columns, setColumns]               = useState<ColumnFormItem[]>([]);
   // Dynamic Transition Rules
   const [rules, setRules]                   = useState<RuleFormState[]>([]);
+  // Dynamic Custom Input Fields
+  const [fields, setFields]                 = useState<FieldFormItem[]>([]);
 
   const [organizations, setOrganizations]   = useState<OrganizationDto[]>([]);
   const [isSubmitting, setIsSubmitting]     = useState(false);
@@ -93,9 +106,8 @@ export default function TaskTypeModal({
     if (taskTypeToEdit) {
       setName(taskTypeToEdit.name);
       setColorHex(taskTypeToEdit.colorHex || '#3B82F6');
+      setTaskPrefix(taskTypeToEdit.taskPrefix || '');
       setOrganizationId(taskTypeToEdit.organizationId || null);
-      setRequireTestDate(!!taskTypeToEdit.requireTestDate);
-      setRequireEnvironment(!!taskTypeToEdit.requireEnvironment);
 
       // Populate workflow columns
       if (taskTypeToEdit.columns && taskTypeToEdit.columns.length > 0) {
@@ -130,12 +142,27 @@ export default function TaskTypeModal({
       } else {
         setRules([]);
       }
+
+      // Populate dynamic custom fields
+      if (taskTypeToEdit.fields && taskTypeToEdit.fields.length > 0) {
+        setFields(
+          taskTypeToEdit.fields.map((f) => ({
+            id: f.id,
+            key: `field-${f.id}`,
+            fieldName: f.fieldName,
+            fieldType: f.fieldType || 'TEXT',
+            required: !!f.required,
+            options: f.options || '',
+            placeholder: f.placeholder || '',
+          }))
+        );
+      } else {
+        setFields([]);
+      }
     } else {
       setName('');
       setColorHex('#3B82F6');
       setOrganizationId(user?.organizationId || null);
-      setRequireTestDate(false);
-      setRequireEnvironment(false);
       setColumns(
         DEFAULT_WORKFLOW_COLUMNS.map((c, i) => ({
           key: `col-default-${i}`,
@@ -144,6 +171,7 @@ export default function TaskTypeModal({
         }))
       );
       setRules([]);
+      setFields([]);
     }
   }, [taskTypeToEdit, isOpen, user]);
 
@@ -258,6 +286,49 @@ export default function TaskTypeModal({
     });
   };
 
+  /* ── Custom Field Handlers ── */
+  const handleAddField = () => {
+    const newField: FieldFormItem = {
+      key: `field-new-${Date.now()}`,
+      fieldName: '',
+      fieldType: 'TEXT',
+      required: false,
+      options: '',
+      placeholder: '',
+    };
+    setFields((prev) => [...prev, newField]);
+  };
+
+  const handleRemoveField = (index: number) => {
+    setFields((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFieldChange = <K extends keyof FieldFormItem>(
+    index: number,
+    fieldKey: K,
+    value: FieldFormItem[K]
+  ) => {
+    setFields((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [fieldKey]: value };
+      return next;
+    });
+  };
+
+  const handleMoveField = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === fields.length - 1) return;
+
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    setFields((prev) => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[targetIdx];
+      next[targetIdx] = temp;
+      return next;
+    });
+  };
+
   /* ── Form Submission ── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,6 +358,14 @@ export default function TaskTypeModal({
       }
     }
 
+    // Validate fields
+    for (let i = 0; i < fields.length; i++) {
+      if (!fields[i].fieldName.trim()) {
+        toast.error(`${i + 1}. özel alan için bir alan adı girmelisiniz.`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const formattedColumns: CreateTaskTypeColumnRequest[] = columns.map((c, idx) => ({
@@ -303,14 +382,26 @@ export default function TaskTypeModal({
         description: r.description.trim() || undefined,
       }));
 
+      const formattedFields: CreateTaskTypeFieldRequest[] = fields.map((f, idx) => ({
+        id: f.id,
+        fieldName: f.fieldName.trim(),
+        fieldType: f.fieldType,
+        required: f.required,
+        options: f.options?.trim() || undefined,
+        placeholder: f.placeholder?.trim() || undefined,
+        position: idx,
+      }));
+
       if (isEditing && taskTypeToEdit) {
         const updatePayload: UpdateTaskTypeRequest = {
           name: name.trim(),
           colorHex: colorHex.trim(),
-          requireTestDate,
-          requireEnvironment,
+          taskPrefix: taskPrefix.trim() || undefined,
+          requireTestDate: false,
+          requireEnvironment: false,
           columns: formattedColumns,
           rules: formattedRules,
+          fields: formattedFields,
         };
         await taskTypeService.update(taskTypeToEdit.id, updatePayload);
         toast.success(`"${name}" görev tipi ve iş akışı başarıyla güncellendi.`);
@@ -318,11 +409,13 @@ export default function TaskTypeModal({
         const createPayload: CreateTaskTypeRequest = {
           name: name.trim(),
           colorHex: colorHex.trim(),
-          requireTestDate,
-          requireEnvironment,
+          taskPrefix: taskPrefix.trim() || undefined,
+          requireTestDate: false,
+          requireEnvironment: false,
           organizationId: organizationId || undefined,
           columns: formattedColumns,
           rules: formattedRules,
+          fields: formattedFields,
         };
         await taskTypeService.create(createPayload);
         toast.success(`"${name}" görev tipi ve iş akışı başarıyla oluşturuldu.`);
@@ -350,21 +443,21 @@ export default function TaskTypeModal({
               style={{ backgroundColor: colorHex }}
             />
             <div>
-              <h2 className="text-base font-bold text-slate-800">
-                {isEditing ? 'Görev Tipi & İş Akışını Düzenle' : 'Yeni Görev Tipi & İş Akışı Tanımla'}
-              </h2>
+              <h3 className="text-base font-bold text-slate-900">
+                {isEditing ? `"${taskTypeToEdit.name}" Düzenle` : 'Yeni Görev Tipi & İş Akışı Tanımla'}
+              </h3>
               <p className="text-xs text-slate-500">
-                Özel iş akışı kolonlarını (adımlarını) ve kolonlar arası geçiş kurallarını yapılandırın.
+                Görev şablonu, aşamalar, geçiş kuralları ve özel alanları yönetin.
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
             type="button"
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-              <path d="M18 6 6 18M6 6l12 12" />
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
@@ -374,18 +467,35 @@ export default function TaskTypeModal({
 
           {/* ── Section 1: Name, Color & Organization ── */}
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Görev Tipi Adı <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Örn: Hata Bildirimi / Bug, Tasarım İş Akışı, Story / Özellik..."
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-xs"
-                required
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Görev Tipi Adı <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Örn: Firewall & Ağ, Kritik Ödeme Entegrasyonu..."
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-xs"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Ön Ek (Prefix)
+                </label>
+                <input
+                  type="text"
+                  value={taskPrefix}
+                  onChange={(e) => setTaskPrefix(e.target.value.toUpperCase())}
+                  placeholder="Örn: FW, PAY"
+                  maxLength={10}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 placeholder:text-slate-400 uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-xs"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">Boşsa addan türetilir</span>
+              </div>
             </div>
 
             {/* Color Selector */}
@@ -453,43 +563,6 @@ export default function TaskTypeModal({
               </div>
             </div>
 
-            {/* Workflow Feature Flags */}
-            <div className="p-3.5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Gelişmiş Doğrulama Ayarları
-              </label>
-              <div className="space-y-2">
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={requireTestDate}
-                    onChange={(e) => setRequireTestDate(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                  />
-                  <div className="text-xs">
-                    <span className="font-semibold text-slate-800">Test Tarihi Zorunlu (QA/Test Kolonuna Geçişte)</span>
-                    <p className="text-slate-500 text-[11px] mt-0.5">
-                      Kart Test veya QA aşamasına taşınırken 'Test Tarihi' girilmemişse geçiş engellenir.
-                    </p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={requireEnvironment}
-                    onChange={(e) => setRequireEnvironment(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                  />
-                  <div className="text-xs">
-                    <span className="font-semibold text-slate-800">Test Ortamı Zorunlu (DEV/TEST/STAGING/PROD)</span>
-                    <p className="text-slate-500 text-[11px] mt-0.5">
-                      Kart Test veya QA aşamasına taşınırken hedef ortam seçilmemişse geçiş engellenir.
-                    </p>
-                  </div>
-                </label>
-              </div>
-            </div>
 
             {/* Organization Selector for SuperAdmin */}
             {isSuperAdmin && organizations.length > 0 && !isEditing && (
@@ -739,6 +812,182 @@ export default function TaskTypeModal({
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400"
                         />
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Section 4: Dynamic Custom Input Fields ── */}
+          <div className="pt-5 border-t border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <span>Dinamik Form Alanları (Custom Input Fields)</span>
+                  <span className="bg-purple-50 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold border border-purple-200">
+                    {fields.length} Alan
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Bu görev tipinde kart oluşturulurken girilmesi gereken özel alanları (Örn: Kaynak IP, Hedef URL, Sunucu vb.) ve zorunluluk durumlarını belirleyin.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddField}
+                className="btn-secondary text-xs py-1.5 px-3 gap-1.5 font-semibold text-purple-700 border-purple-200 hover:bg-purple-50"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                <span>+ Yeni Alan Ekle</span>
+              </button>
+            </div>
+
+            {/* Fields List */}
+            {fields.length === 0 ? (
+              <div className="text-center py-6 px-4 bg-slate-50/70 border border-dashed border-slate-200 rounded-xl">
+                <p className="text-xs text-slate-500">
+                  Bu görev tipine özel form alanı tanımlanmadı. Görev oluştururken kaynak, hedef URL, sunucu/makine bilgisi gibi ek alanlar istemek için <strong className="text-purple-700 font-semibold">+ Yeni Alan Ekle</strong> butonunu kullanabilirsiniz.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {fields.map((fieldItem, idx) => (
+                  <div
+                    key={fieldItem.key}
+                    className="p-3.5 bg-purple-50/20 border border-purple-200/80 rounded-xl space-y-3 transition-all hover:border-purple-300 shadow-2xs"
+                  >
+                    {/* Field Header: Index & Controls */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-md bg-purple-100 text-purple-800 text-[10px] font-bold">
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-slate-700">
+                          {fieldItem.fieldName.trim() || `Özel Alan #${idx + 1}`}
+                        </span>
+                        {fieldItem.required && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            * Zorunlu
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveField(idx, 'up')}
+                          disabled={idx === 0}
+                          className="text-slate-400 hover:text-slate-700 disabled:opacity-30 p-1"
+                          title="Yukarı Taşı"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5">
+                            <polyline points="18 15 12 9 6 15" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveField(idx, 'down')}
+                          disabled={idx === fields.length - 1}
+                          className="text-slate-400 hover:text-slate-700 disabled:opacity-30 p-1"
+                          title="Aşağı Taşı"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveField(idx)}
+                          className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors ml-1"
+                          title="Alanı Sil"
+                        >
+                          <TrashIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inputs Row 1: Name, Type, Required */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-start">
+                      {/* Field Name */}
+                      <div className="sm:col-span-6">
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Alan Adı / Etiket <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={fieldItem.fieldName}
+                          onChange={(e) => handleFieldChange(idx, 'fieldName', e.target.value)}
+                          placeholder="Örn: Kaynak IP / Host, Hedef URL, Sunucu Bilgisi..."
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder:text-slate-400 shadow-2xs"
+                          required
+                        />
+                      </div>
+
+                      {/* Field Type */}
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Alan Türü
+                        </label>
+                        <select
+                          value={fieldItem.fieldType}
+                          onChange={(e) => handleFieldChange(idx, 'fieldType', e.target.value as CustomFieldType)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 shadow-2xs"
+                        >
+                          <option value="TEXT">Metin (Yazı)</option>
+                          <option value="NUMBER">Sayı</option>
+                          <option value="DATE">Tarih</option>
+                          <option value="SELECT">Seçim Listesi (Dropdown)</option>
+                        </select>
+                      </div>
+
+                      {/* Required Checkbox */}
+                      <div className="sm:col-span-3 flex items-center pt-6">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={fieldItem.required}
+                            onChange={(e) => handleFieldChange(idx, 'required', e.target.checked)}
+                            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-slate-700">Zorunlu Alan</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Inputs Row 2: Placeholder & Options if SELECT */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {/* Placeholder hint */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          İpucu / Placeholder Metni
+                        </label>
+                        <input
+                          type="text"
+                          value={fieldItem.placeholder}
+                          onChange={(e) => handleFieldChange(idx, 'placeholder', e.target.value)}
+                          placeholder="Örn: 192.168.1.1 veya https://api.banka.com"
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder:text-slate-400"
+                        />
+                      </div>
+
+                      {/* Options (if SELECT) */}
+                      {fieldItem.fieldType === 'SELECT' && (
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                            Seçenekler <span className="text-slate-400 font-normal">(Virgülle ayırın)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={fieldItem.options}
+                            onChange={(e) => handleFieldChange(idx, 'options', e.target.value)}
+                            placeholder="Örn: Giriş (Inbound), Çıkış (Outbound), Çift Yönlü"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder:text-slate-400"
+                            required
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

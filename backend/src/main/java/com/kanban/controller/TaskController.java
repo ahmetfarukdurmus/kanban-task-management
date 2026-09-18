@@ -1,6 +1,7 @@
 package com.kanban.controller;
 
 import com.kanban.dto.task.*;
+import com.kanban.service.TaskActivityService;
 import com.kanban.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import java.util.List;
 public class TaskController {
 
     private final TaskService taskService;
+    private final TaskActivityService activityService;
 
     // ── Nested CRUD ──────────────────────────────────────────────────────────
 
@@ -107,5 +109,12 @@ public class TaskController {
             @PathVariable Long itemId) {
         taskService.deleteChecklistItem(taskId, itemId);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── Task Activities / Audit Log ──────────────────────────────────────────
+
+    @GetMapping("/tasks/{taskId}/activities")
+    public ResponseEntity<List<TaskActivityResponse>> getTaskActivities(@PathVariable Long taskId) {
+        return ResponseEntity.ok(activityService.getActivities(taskId));
     }
 }

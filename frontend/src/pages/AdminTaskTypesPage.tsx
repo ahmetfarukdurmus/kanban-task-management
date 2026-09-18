@@ -341,9 +341,24 @@ export default function AdminTaskTypesPage() {
                             style={{ backgroundColor: color }}
                           />
                           <div className="min-w-0">
-                            <h2 className="text-sm font-bold text-slate-900 truncate" title={type.name}>
-                              {type.name}
-                            </h2>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h2 className="text-sm font-bold text-slate-900 truncate" title={type.name}>
+                                {type.name}
+                              </h2>
+                              {type.taskPrefix && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold border shadow-2xs"
+                                  style={{
+                                    backgroundColor: `${color}15`,
+                                    color: color,
+                                    borderColor: `${color}40`,
+                                  }}
+                                  title={`Ön Ek: ${type.taskPrefix}`}
+                                >
+                                  {type.taskPrefix}
+                                </span>
+                              )}
+                            </div>
                             {type.organizationName ? (
                               <span className="text-[10px] text-slate-500 font-medium truncate block">
                                 {type.organizationName}
@@ -393,16 +408,6 @@ export default function AdminTaskTypesPage() {
                           >
                             {ruleCount} Kural
                           </span>
-                          {type.requireTestDate && (
-                            <span className="inline-flex items-center font-bold text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200" title="QA Kolonuna Geçişte Test Tarihi Zorunlu">
-                              Test Tarihi Zorunlu
-                            </span>
-                          )}
-                          {type.requireEnvironment && (
-                            <span className="inline-flex items-center font-bold text-[9px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200" title="QA Kolonuna Geçişte Ortam Zorunlu">
-                              Ortam Zorunlu
-                            </span>
-                          )}
                         </div>
 
                         {/* Accordion Toggle */}
@@ -566,6 +571,19 @@ export default function AdminTaskTypesPage() {
                               <span className="font-bold text-slate-800 text-xs sm:text-sm">
                                 {type.name}
                               </span>
+                              {type.taskPrefix && (
+                                <span
+                                  className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border shadow-2xs"
+                                  style={{
+                                    backgroundColor: `${color}15`,
+                                    color: color,
+                                    borderColor: `${color}40`,
+                                  }}
+                                  title={`Ön Ek: ${type.taskPrefix}`}
+                                >
+                                  {type.taskPrefix}
+                                </span>
+                              )}
                               <span
                                 className="text-[10px] font-mono px-1.5 py-0.2 rounded border"
                                 style={{
@@ -630,16 +648,6 @@ export default function AdminTaskTypesPage() {
                               >
                                 {ruleCount} Kural
                               </span>
-                              {type.requireTestDate && (
-                                <span className="inline-flex items-center font-bold text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">
-                                  Test Tarihi
-                                </span>
-                              )}
-                              {type.requireEnvironment && (
-                                <span className="inline-flex items-center font-bold text-[9px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
-                                  Ortam
-                                </span>
-                              )}
                             </div>
                           </td>
 

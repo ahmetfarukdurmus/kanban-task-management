@@ -33,6 +33,7 @@ public class DataInitializer implements CommandLineRunner {
     private final BoardColumnRepository            boardColumnRepository;
     private final TaskRepository                   taskRepository;
     private final TaskChecklistItemRepository      taskChecklistItemRepository;
+    private final TaskTypeFieldRepository          taskTypeFieldRepository;
     private final PasswordEncoder                  passwordEncoder;
 
     @Override
@@ -109,6 +110,7 @@ public class DataInitializer implements CommandLineRunner {
                 .orElseGet(() -> {
                     TaskType tt = TaskType.builder()
                             .name("Kritik Ödeme Entegrasyonu")
+                            .taskPrefix("PAY")
                             .colorHex("#2563EB")
                             .requireTestDate(true)
                             .requireEnvironment(true)
@@ -347,16 +349,108 @@ public class DataInitializer implements CommandLineRunner {
                 .orElseGet(() -> {
                     TaskType tt = TaskType.builder()
                             .name("internship task")
+                            .taskPrefix("INT")
                             .colorHex("#EF4444")
                             .organization(fintechOrg)
                             .columns(new ArrayList<>())
                             .rules(new ArrayList<>())
+                            .fields(new ArrayList<>())
                             .build();
                     TaskType saved = taskTypeRepository.save(tt);
-                    log.info("Created Internship TaskType with color #EF4444");
+                    log.info("Created Internship TaskType with color #EF4444 and prefix INT");
                     return saved;
                 });
 
+        // 9. Seed TaskType: "Firewall & Ağ Kural Tanımı" with dynamic custom input fields
+        taskTypeRepository.findAllByOrganizationIdOrderByNameAsc(fintechOrg.getId()).stream()
+                .filter(t -> t.getName().equalsIgnoreCase("Firewall & Ağ Kural Tanımı"))
+                .findFirst()
+                .orElseGet(() -> {
+                    TaskType fwType = TaskType.builder()
+                            .name("Firewall & Ağ Kural Tanımı")
+                            .taskPrefix("FW")
+                            .colorHex("#8B5CF6")
+                            .requireTestDate(false)
+                            .requireEnvironment(true)
+                            .organization(fintechOrg)
+                            .columns(new ArrayList<>())
+                            .rules(new ArrayList<>())
+                            .fields(new ArrayList<>())
+                            .build();
+                    TaskType savedFw = taskTypeRepository.save(fwType);
+
+                    // Workflow Columns
+                    TaskTypeColumn fc1 = TaskTypeColumn.builder().title("Talep Açıldı").colorHex("#64748B").position(0).taskType(savedFw).build();
+                    TaskTypeColumn fc2 = TaskTypeColumn.builder().title("Güvenlik Onayı").colorHex("#F59E0B").position(1).taskType(savedFw).build();
+                    TaskTypeColumn fc3 = TaskTypeColumn.builder().title("Kural Uygulandı").colorHex("#3B82F6").position(2).taskType(savedFw).build();
+                    TaskTypeColumn fc4 = TaskTypeColumn.builder().title("Doğrulandı & Aktif").colorHex("#10B981").position(3).taskType(savedFw).build();
+                    taskTypeColumnRepository.saveAll(List.of(fc1, fc2, fc3, fc4));
+                    savedFw.getColumns().addAll(List.of(fc1, fc2, fc3, fc4));
+
+                    // Dynamic Custom Fields
+                    TaskTypeField f1 = TaskTypeField.builder()
+                            .taskType(savedFw)
+                            .fieldName("Kaynak IP / Host (Source)")
+                            .fieldType(TaskTypeField.FieldType.TEXT)
+                            .required(true)
+                            .placeholder("Örn: 10.200.1.50 veya sub-network")
+                            .position(0)
+                            .build();
+
+                    TaskTypeField f2 = TaskTypeField.builder()
+                            .taskType(savedFw)
+                            .fieldName("Hedef URL / IP (Target)")
+                            .fieldType(TaskTypeField.FieldType.TEXT)
+                            .required(true)
+                            .placeholder("Örn: 192.168.1.100 veya https://api.banka.com")
+                            .position(1)
+                            .build();
+
+                    TaskTypeField f3 = TaskTypeField.builder()
+                            .taskType(savedFw)
+                            .fieldName("Sunucu / Makine Bilgisi")
+                            .fieldType(TaskTypeField.FieldType.TEXT)
+                            .required(true)
+                            .placeholder("Örn: srv-prod-gateway-01 / Core-DB")
+                            .position(2)
+                            .build();
+
+                    TaskTypeField f4 = TaskTypeField.builder()
+                            .taskType(savedFw)
+                            .fieldName("Port & Protokol")
+                            .fieldType(TaskTypeField.FieldType.TEXT)
+                            .required(false)
+                            .placeholder("Örn: 443 (HTTPS), 8080 (TCP), 5432 (Postgres)")
+                            .position(3)
+                            .build();
+
+                    TaskTypeField f5 = TaskTypeField.builder()
+                            .taskType(savedFw)
+                            .fieldName("Trafik Yönü")
+                            .fieldType(TaskTypeField.FieldType.SELECT)
+                            .required(true)
+                            .options("Giriş (Inbound), Çıkış (Outbound), Çift Yönlü (Bidirectional)")
+                            .placeholder("Trafik yönünü seçiniz")
+                            .position(4)
+                            .build();
+
+                    taskTypeFieldRepository.saveAll(List.of(f1, f2, f3, f4, f5));
+                    savedFw.getFields().addAll(List.of(f1, f2, f3, f4, f5));
+
+                    log.info("Created Firewall & Ağ Kural Tanımı TaskType with 5 dynamic custom fields and prefix FW");
+                    return taskTypeRepository.save(savedFw);
+                });
+
+        // 10. Backfill taskPrefix for any task type missing it
+        taskTypeRepository.findAll().forEach(tt -> {
+            if (tt.getTaskPrefix() == null || tt.getTaskPrefix().isBlank()) {
+                String p = com.kanban.service.TaskTypeService.derivePrefix(tt.getName(), null);
+                tt.setTaskPrefix(p);
+                taskTypeRepository.save(tt);
+            }
+        });
+
+        // 11. Auto-link boards and backfill taskKey for tasks
         boardRepository.findAll().forEach(b -> {
             if (b.getTaskType() == null) {
                 if (b.getName() != null && (b.getName().toLowerCase().contains("kanban") || b.getName().toLowerCase().contains("intern") || b.getName().toLowerCase().contains("staj"))) {
@@ -368,6 +462,16 @@ public class DataInitializer implements CommandLineRunner {
                     boardRepository.save(b);
                     log.info("Auto-linked board '{}' to default TaskType '{}' ({})", b.getName(), paymentTaskType.getName(), paymentTaskType.getColorHex());
                 }
+            }
+        });
+
+        taskRepository.findAll().forEach(t -> {
+            if (t.getTaskKey() == null || t.getTaskKey().isBlank()) {
+                String prefix = (t.getTaskType() != null && t.getTaskType().getTaskPrefix() != null && !t.getTaskType().getTaskPrefix().isBlank())
+                        ? t.getTaskType().getTaskPrefix()
+                        : (t.getTaskType() != null ? com.kanban.service.TaskTypeService.derivePrefix(t.getTaskType().getName(), null) : "TASK");
+                t.setTaskKey(prefix + "-" + t.getId());
+                taskRepository.save(t);
             }
         });
 

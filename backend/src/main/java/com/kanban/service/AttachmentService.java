@@ -4,6 +4,7 @@ import com.kanban.dto.attachment.AttachmentDto;
 import com.kanban.entity.Attachment;
 import com.kanban.entity.Task;
 import com.kanban.entity.User;
+import com.kanban.entity.TaskActivityType;
 import com.kanban.exception.ResourceNotFoundException;
 import com.kanban.repository.AttachmentRepository;
 import com.kanban.repository.TaskRepository;
@@ -38,6 +39,7 @@ public class AttachmentService {
     private final AttachmentRepository attachmentRepository;
     private final TaskRepository       taskRepository;
     private final SecurityUtils        securityUtils;
+    private final TaskActivityService  activityService;
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
@@ -125,6 +127,11 @@ public class AttachmentService {
         if (task.getAttachments() != null && !task.getAttachments().contains(saved)) {
             task.getAttachments().add(saved);
         }
+
+        activityService.recordActivity(task, TaskActivityType.ATTACHMENT_ADDED,
+                "Yeni dosya eki yüklendi: '" + originalName + "'",
+                null, originalName);
+
         return toDto(saved);
     }
 
@@ -133,13 +140,16 @@ public class AttachmentService {
      */
     public void deleteAttachment(Long taskId, Long attachmentId) {
         Attachment attachment = getAttachmentEntity(taskId, attachmentId);
+        String fileName = attachment.getFileName();
+        Task task = attachment.getTask();
+
         try {
             Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            String fileName = attachment.getFileUrl()
+            String storedFileName = attachment.getFileUrl()
                     .replace("/api/uploads/", "")
                     .replace("/uploads/", "")
                     .replace("uploads/", "");
-            Path filePath = uploadPath.resolve(fileName).normalize();
+            Path filePath = uploadPath.resolve(storedFileName).normalize();
             Files.deleteIfExists(filePath);
         } catch (IOException ex) {
             log.warn("Could not delete file from disk: {}", ex.getMessage());
@@ -149,6 +159,12 @@ public class AttachmentService {
         }
         attachmentRepository.delete(attachment);
         attachmentRepository.flush();
+
+        if (task != null) {
+            activityService.recordActivity(task, TaskActivityType.ATTACHMENT_DELETED,
+                    "Dosya eki silindi: '" + fileName + "'",
+                    fileName, null);
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

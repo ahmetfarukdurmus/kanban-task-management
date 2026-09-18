@@ -19,7 +19,9 @@ import java.util.Set;
  * are updated (shift-left / shift-right by 1), keeping DB writes minimal.</p>
  */
 @Entity
-@Table(name = "tasks")
+@Table(name = "tasks", indexes = {
+    @Index(name = "idx_tasks_task_key", columnList = "task_key")
+})
 @Getter @Setter @Builder
 @NoArgsConstructor @AllArgsConstructor
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
@@ -28,6 +30,10 @@ public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Unique task key formatted as [PREFIX]-[ID] (e.g. FW-14). */
+    @Column(name = "task_key", length = 30)
+    private String taskKey;
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -39,6 +45,13 @@ public class Task {
     @Column(nullable = false, length = 10)
     @Builder.Default
     private Priority priority = Priority.MEDIUM;
+
+    /** Free-form tags/labels attached to this task. */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "task_tags", joinColumns = @JoinColumn(name = "task_id", foreignKey = @ForeignKey(name = "fk_task_tags_task")))
+    @Column(name = "tag", length = 50)
+    @Builder.Default
+    private Set<String> tags = new HashSet<>();
 
     /** Dynamic task type / template (e.g. Bug, Story, Task, Design). */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -125,6 +138,14 @@ public class Task {
     @OrderBy("id ASC")
     @Builder.Default
     private List<TaskCustomField> customFields = new ArrayList<>();
+
+    /** Audit activities / history on this task – cascaded on delete */
+    @OneToMany(mappedBy = "task",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    @OrderBy("createdAt DESC")
+    @Builder.Default
+    private List<TaskActivity> activities = new ArrayList<>();
 
     // ─── Assignee helper methods for single/multi compatibility ──────────
 

@@ -7,7 +7,7 @@ import { taskApi } from '@/api/taskApi';
 import { columnApi } from '@/api/columnApi';
 import { taskTypeService } from '@/services/taskTypeService';
 import { useAuth } from '@/contexts/AuthContext';
-import { isColumnMatching } from '@/utils/workflowUtils';
+import { isColumnMatching, normalizeColumnTitle } from '@/utils/workflowUtils';
 
 interface Props {
   boardId:    number;
@@ -43,10 +43,31 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
 
       // ── Transition Rules Guard (Client-side pre-validation) ────────
       if (srcColId !== dstColId) {
-        const srcCol = columns.find((c) => c.id === srcColId);
-        const dstCol = columns.find((c) => c.id === dstColId);
+        const srcColIndex = columns.findIndex((c) => c.id === srcColId);
+        const dstColIndex = columns.findIndex((c) => c.id === dstColId);
+        const srcCol = columns[srcColIndex];
+        const dstCol = columns[dstColIndex];
         const task = srcCol?.tasks.find((t) => t.id === taskId);
 
+        // 1. Enforce sequential column transition (cannot skip forward across columns)
+        if (srcColIndex !== -1 && dstColIndex !== -1 && dstColIndex > srcColIndex + 1) {
+          const nextCol = columns[srcColIndex + 1];
+          toast.error(
+            `Görevler aşamaları atlayarak taşınamaz. Lütfen iş akışı sırasını takip edin (Sıradaki aşama: ${nextCol?.title || 'Sonraki Aşama'}).`,
+            {
+              duration: 5000,
+              style: {
+                border: '1px solid #EF4444',
+                padding: '12px',
+                color: '#991B1B',
+                backgroundColor: '#FEF2F2',
+              },
+            }
+          );
+          return;
+        }
+
+        // 2. Task type transition rules check
         if (task && task.taskTypeId && dstCol) {
           const currentType = taskTypes.find((t) => t.id === task.taskTypeId);
           if (currentType?.rules && currentType.rules.length > 0) {
@@ -67,10 +88,43 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
 
               if (rule.ruleType === 'CHECKLIST_REQUIRED') {
                 const items = task.checklistItems || [];
-                const uncompleted = items.filter(
-                  (item) => !item.isCompleted && (!item.requiredForColumnId || item.requiredForColumnId === dstColId)
+                if (items.length === 0) {
+                  const ruleDetail = rule.description ? ` (${rule.description})` : '';
+                  toast.error(`Bu aşamaya (${dstCol.title}) geçebilmek için kontrol listesi maddeleri tamamlanmalıdır.${ruleDetail}`, {
+                    duration: 5000,
+                    style: {
+                      border: '1px solid #EF4444',
+                      padding: '12px',
+                      color: '#991B1B',
+                      backgroundColor: '#FEF2F2',
+                    },
+                  });
+                  return; // Stop drag transition immediately, task stays in source column!
+                }
+
+                const normRuleDesc = normalizeColumnTitle(rule.description);
+                const descMatchedItems = normRuleDesc
+                  ? items.filter((item) => {
+                      const itemTitle = normalizeColumnTitle(item.title);
+                      return itemTitle.includes(normRuleDesc) || normRuleDesc.includes(itemTitle);
+                    })
+                  : [];
+
+                const colMatchedItems = items.filter(
+                  (item) => item.requiredForColumnId && item.requiredForColumnId === dstColId
                 );
-                if (items.length === 0 || uncompleted.length > 0) {
+
+                let targetItemsToCheck = items.filter(
+                  (item) => !item.requiredForColumnId || item.requiredForColumnId === dstColId
+                );
+                if (descMatchedItems.length > 0) {
+                  targetItemsToCheck = descMatchedItems;
+                } else if (colMatchedItems.length > 0) {
+                  targetItemsToCheck = colMatchedItems;
+                }
+
+                const uncompleted = targetItemsToCheck.filter((item) => !item.isCompleted);
+                if (targetItemsToCheck.length === 0 || uncompleted.length > 0) {
                   const ruleDetail = rule.description ? ` (${rule.description})` : '';
                   toast.error(`Bu aşamaya (${dstCol.title}) geçebilmek için kontrol listesi maddeleri tamamlanmalıdır.${ruleDetail}`, {
                     duration: 5000,

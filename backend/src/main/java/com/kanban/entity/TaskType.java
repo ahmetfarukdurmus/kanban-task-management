@@ -30,6 +30,10 @@ public class TaskType {
     @Column(length = 20)
     private String colorHex;
 
+    /** Task code prefix (e.g. "FW", "PAY", "DEV", "INT"). */
+    @Column(name = "task_prefix", length = 10, nullable = false)
+    private String taskPrefix;
+
     /** Whether test due date is required before transitioning to QA/Test columns. */
     @Column(name = "require_test_date", nullable = false, columnDefinition = "boolean default false")
     @Builder.Default
@@ -68,6 +72,14 @@ public class TaskType {
                orphanRemoval = true)
     @Builder.Default
     private List<TaskTypeTransitionRule> rules = new ArrayList<>();
+
+    /** Dynamic input / custom field definitions required or available for tasks of this type. */
+    @OneToMany(mappedBy = "taskType",
+               cascade = CascadeType.ALL,
+               orphanRemoval = true)
+    @OrderBy("position ASC")
+    @Builder.Default
+    private List<TaskTypeField> fields = new ArrayList<>();
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

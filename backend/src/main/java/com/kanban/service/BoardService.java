@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -391,8 +392,15 @@ public class BoardService {
                     r.getCreatedAt());
         }
 
+        String taskPrefix = task.getTaskType() != null && task.getTaskType().getTaskPrefix() != null
+                ? task.getTaskType().getTaskPrefix()
+                : (task.getTaskType() != null ? com.kanban.service.TaskTypeService.derivePrefix(task.getTaskType().getName(), null) : "TASK");
+        String taskKey = task.getTaskKey() != null ? task.getTaskKey() : (taskPrefix + "-" + task.getId());
+        Set<String> tags = task.getTags() != null ? new HashSet<>(task.getTags()) : Set.of();
+
         return new TaskResponse(
                 task.getId(),
+                taskKey,
                 task.getTitle(),
                 task.getDescription(),
                 task.getPriority() != null ? task.getPriority().name() : "MEDIUM",
@@ -410,8 +418,10 @@ public class BoardService {
                 taskTypeId,
                 taskTypeName,
                 taskTypeColor,
+                taskPrefix,
                 assigneeIds,
                 assigneeDtos,
-                checklistDtos);
+                checklistDtos,
+                tags);
     }
 }

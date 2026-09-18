@@ -38,6 +38,7 @@ public class TaskService {
     private final TaskTypeRepository               taskTypeRepository;
     private final TaskTypeTransitionRuleRepository transitionRuleRepository;
     private final TaskChecklistItemRepository      checklistItemRepository;
+    private final TaskActivityService              activityService;
     private final SecurityUtils                    securityUtils;
 
     // ── Queries ──────────────────────────────────────────────────────────────
@@ -104,6 +105,18 @@ public class TaskService {
             }
         }
 
+        // 3.5 Validate TaskType required custom fields
+        validateTaskTypeRequiredFields(taskType, request.customFields());
+
+        Set<String> tags = new HashSet<>();
+        if (request.tags() != null) {
+            for (String tag : request.tags()) {
+                if (tag != null && !tag.isBlank()) {
+                    tags.add(tag.trim());
+                }
+            }
+        }
+
         Task task = Task.builder()
                 .title(request.title())
                 .description(request.description())
@@ -117,6 +130,7 @@ public class TaskService {
                 .assignees(assignees)
                 .position(nextPosition)
                 .column(column)
+                .tags(tags)
                 .comments(new ArrayList<>())
                 .attachments(new ArrayList<>())
                 .checklistItems(new ArrayList<>())
@@ -152,7 +166,20 @@ public class TaskService {
         }
 
         Task saved = taskRepository.save(task);
+
+        // Assign taskKey (e.g. FW-14)
+        String prefix = (saved.getTaskType() != null && saved.getTaskType().getTaskPrefix() != null && !saved.getTaskType().getTaskPrefix().isBlank())
+                ? saved.getTaskType().getTaskPrefix()
+                : (saved.getTaskType() != null ? TaskTypeService.derivePrefix(saved.getTaskType().getName(), null) : "TASK");
+        saved.setTaskKey(prefix + "-" + saved.getId());
+        saved = taskRepository.save(saved);
         taskRepository.flush();
+
+        // Record creation activity
+        String reporterName = saved.getReporter() != null ? saved.getReporter().getUsername() : "Bilinmeyen";
+        activityService.recordActivity(saved, TaskActivityType.CREATED,
+                "Görev oluşturuldu / raporlandı (Raporlayan: " + reporterName + ")", null, saved.getTitle());
+
         return toResponse(saved);
     }
 
@@ -175,15 +202,51 @@ public class TaskService {
     }
 
     private TaskResponse applyUpdate(Task task, TaskRequest request) {
-        task.setTitle(request.title());
-        task.setDescription(request.description());
-        if (request.priority() != null) {
+        // 1. Title Diff
+        if (request.title() != null && !request.title().isBlank() && !request.title().trim().equals(task.getTitle())) {
+            activityService.recordActivity(task, TaskActivityType.TITLE_UPDATED,
+                    "Görev başlığı güncellendi", task.getTitle(), request.title().trim());
+            task.setTitle(request.title().trim());
+        }
+
+        // 2. Description Diff
+        String newDesc = request.description() != null ? request.description().trim() : "";
+        String oldDesc = task.getDescription() != null ? task.getDescription().trim() : "";
+        if (!newDesc.equals(oldDesc)) {
+            activityService.recordActivity(task, TaskActivityType.DESCRIPTION_UPDATED,
+                    "Görev açıklaması güncellendi", oldDesc, newDesc);
+            task.setDescription(request.description());
+        }
+
+        // 3. Priority Diff
+        if (request.priority() != null && task.getPriority() != request.priority()) {
+            activityService.recordActivity(task, TaskActivityType.PRIORITY_CHANGED,
+                    "Öncelik '" + task.getPriority().name() + "' yerine '" + request.priority().name() + "' olarak değiştirildi",
+                    task.getPriority().name(), request.priority().name());
             task.setPriority(request.priority());
         }
-        task.setDueDate(request.dueDate());
+
+        // 4. Due Date Diff
+        if (!java.util.Objects.equals(task.getDueDate(), request.dueDate())) {
+            String oldDue = task.getDueDate() != null ? task.getDueDate().toString() : "Belirtilmemiş";
+            String newDue = request.dueDate() != null ? request.dueDate().toString() : "Belirtilmemiş";
+            activityService.recordActivity(task, TaskActivityType.DUE_DATE_CHANGED,
+                    "Bitiş tarihi '" + oldDue + "' yerine '" + newDue + "' olarak güncellendi",
+                    oldDue, newDue);
+            task.setDueDate(request.dueDate());
+        }
         task.setTestDueDate(request.testDueDate());
         task.setTargetEnvironment(request.targetEnvironment() != null && !request.targetEnvironment().isBlank() ? request.targetEnvironment().trim() : null);
-        task.setEstimatedHours(request.estimatedHours());
+
+        // 5. Estimated Hours Diff
+        if (!java.util.Objects.equals(task.getEstimatedHours(), request.estimatedHours())) {
+            String oldHours = task.getEstimatedHours() != null ? task.getEstimatedHours() + " Saat / SP" : "Belirtilmemiş";
+            String newHours = request.estimatedHours() != null ? request.estimatedHours() + " Saat / SP" : "Belirtilmemiş";
+            activityService.recordActivity(task, TaskActivityType.FIELD_UPDATED,
+                    "Tahmini efor süresi '" + oldHours + "' yerine '" + newHours + "' olarak güncellendi",
+                    oldHours, newHours);
+            task.setEstimatedHours(request.estimatedHours());
+        }
 
         // Update reporter if provided
         if (request.reporterId() != null) {
@@ -192,22 +255,76 @@ public class TaskService {
             userRepository.findByUsername(request.reporter().trim()).ifPresent(task::setReporter);
         }
 
-        // Update task type
+        // 6. Update task type Diff
+        Long oldTypeId = task.getTaskType() != null ? task.getTaskType().getId() : null;
+        String oldTypeName = task.getTaskType() != null ? task.getTaskType().getName() : "Standart";
+        TaskType taskType = null;
         if (request.taskTypeId() != null) {
-            TaskType taskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
+            taskType = taskTypeRepository.findById(request.taskTypeId()).orElse(null);
             task.setTaskType(taskType);
         } else {
             task.setTaskType(null);
         }
+        Long newTypeId = taskType != null ? taskType.getId() : null;
+        String newTypeName = taskType != null ? taskType.getName() : "Standart";
+        if (!java.util.Objects.equals(oldTypeId, newTypeId)) {
+            activityService.recordActivity(task, TaskActivityType.FIELD_UPDATED,
+                    "Görev tipi '" + oldTypeName + "' yerine '" + newTypeName + "' olarak güncellendi",
+                    oldTypeName, newTypeName);
+        }
 
-        // Update assignees
+        // Validate TaskType required custom fields if customFields were submitted
+        if (taskType != null && request.customFields() != null) {
+            validateTaskTypeRequiredFields(taskType, request.customFields());
+        }
+
+        // 7. Update assignees Diff
+        Set<Long> oldAssigneeIds = task.getAssignees() != null
+                ? task.getAssignees().stream().map(User::getId).collect(Collectors.toSet())
+                : Set.of();
+        Set<String> oldAssigneeNames = task.getAssignees() != null
+                ? task.getAssignees().stream().map(User::getUsername).collect(Collectors.toSet())
+                : Set.of();
+
+        Set<User> newAssignees = new HashSet<>();
         if (request.assigneeIds() != null) {
-            task.getAssignees().clear();
-            task.getAssignees().addAll(userRepository.findAllById(request.assigneeIds()));
+            newAssignees.addAll(userRepository.findAllById(request.assigneeIds()));
         } else if (request.assignee() != null) {
-            task.getAssignees().clear();
             if (!request.assignee().isBlank()) {
-                userRepository.findByUsername(request.assignee().trim()).ifPresent(task.getAssignees()::add);
+                userRepository.findByUsername(request.assignee().trim()).ifPresent(newAssignees::add);
+            }
+        }
+        Set<Long> newAssigneeIds = newAssignees.stream().map(User::getId).collect(Collectors.toSet());
+        Set<String> newAssigneeNames = newAssignees.stream().map(User::getUsername).collect(Collectors.toSet());
+
+        if (!oldAssigneeIds.equals(newAssigneeIds)) {
+            String oldVal = oldAssigneeNames.isEmpty() ? "Atanan Yok" : String.join(", ", oldAssigneeNames);
+            String newVal = newAssigneeNames.isEmpty() ? "Atanan Yok" : String.join(", ", newAssigneeNames);
+            activityService.recordActivity(task, TaskActivityType.ASSIGNEE_CHANGED,
+                    "Atanan kişi(ler) güncellendi: " + newVal,
+                    oldVal, newVal);
+            task.getAssignees().clear();
+            task.getAssignees().addAll(newAssignees);
+        }
+
+        // 8. Update tags Diff
+        if (request.tags() != null) {
+            Set<String> cleanTags = request.tags().stream()
+                    .filter(t -> t != null && !t.isBlank())
+                    .map(String::trim)
+                    .collect(Collectors.toSet());
+            Set<String> existingTags = task.getTags() != null ? task.getTags() : Set.of();
+            if (!existingTags.equals(cleanTags)) {
+                String oldTagsStr = existingTags.isEmpty() ? "Yok" : String.join(", ", existingTags);
+                String newTagsStr = cleanTags.isEmpty() ? "Yok" : String.join(", ", cleanTags);
+                activityService.recordActivity(task, TaskActivityType.FIELD_UPDATED,
+                        "Etiketler güncellendi: " + newTagsStr,
+                        oldTagsStr, newTagsStr);
+                if (task.getTags() == null) {
+                    task.setTags(new HashSet<>());
+                }
+                task.getTags().clear();
+                task.getTags().addAll(cleanTags);
             }
         }
 
@@ -226,9 +343,46 @@ public class TaskService {
             }
         }
 
+        // Ensure taskKey is present
+        if (task.getTaskKey() == null || task.getTaskKey().isBlank()) {
+            String prefix = (task.getTaskType() != null && task.getTaskType().getTaskPrefix() != null && !task.getTaskType().getTaskPrefix().isBlank())
+                    ? task.getTaskType().getTaskPrefix()
+                    : (task.getTaskType() != null ? TaskTypeService.derivePrefix(task.getTaskType().getName(), null) : "TASK");
+            task.setTaskKey(prefix + "-" + task.getId());
+        }
+
         Task saved = taskRepository.save(task);
         taskRepository.flush();
         return toResponse(saved);
+    }
+
+    private void validateTaskTypeRequiredFields(TaskType taskType, List<CustomFieldDto> customFields) {
+        if (taskType == null || taskType.getFields() == null || taskType.getFields().isEmpty()) {
+            return;
+        }
+
+        for (TaskTypeField field : taskType.getFields()) {
+            if (field.isRequired()) {
+                String reqName = field.getFieldName() != null ? field.getFieldName().trim() : "";
+                if (reqName.isEmpty()) continue;
+
+                boolean foundAndFilled = false;
+                if (customFields != null) {
+                    for (CustomFieldDto dto : customFields) {
+                        if (dto.fieldName() != null && dto.fieldName().trim().equalsIgnoreCase(reqName)) {
+                            if (dto.fieldValue() != null && !dto.fieldValue().trim().isEmpty()) {
+                                foundAndFilled = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!foundAndFilled) {
+                    throw new BusinessException("'" + reqName + "' alanı bu görev tipi (" + taskType.getName() + ") için zorunludur.");
+                }
+            }
+        }
     }
 
     /**
@@ -295,6 +449,13 @@ public class TaskService {
             // 3. Move task
             task.setColumn(targetColumn);
             task.setPosition(dstPos);
+
+            // Record STATUS_CHANGED activity
+            String srcColTitle = sourceColumn != null ? sourceColumn.getTitle() : "Bilinmeyen";
+            String dstColTitle = targetColumn.getTitle() != null ? targetColumn.getTitle() : "Bilinmeyen";
+            activityService.recordActivity(task, TaskActivityType.STATUS_CHANGED,
+                    "Görev durumu '" + srcColTitle + "' aşamasından '" + dstColTitle + "' aşamasına taşındı",
+                    srcColTitle, dstColTitle);
         }
 
         taskRepository.flush();
@@ -307,21 +468,29 @@ public class TaskService {
      * Throws {@link BusinessException} (mapped to 400 Bad Request) if any rule is violated.
      */
     private void validateTransitionRules(Task task, BoardColumn sourceColumn, BoardColumn targetColumn) {
-        if (task.getTaskType() == null) {
-            return;
-        }
-
-        if (task.getTaskType() != null) {
-            TaskType type = task.getTaskType();
-            String targetCat = getColumnCanonicalCategory(normalizeColumnName(targetColumn.getTitle()));
-            if ("IN_REVIEW".equals(targetCat)) {
-                if (Boolean.TRUE.equals(type.getRequireTestDate()) && task.getTestDueDate() == null) {
-                    throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için 'Test Tarihi' girilmesi zorunludur.");
+        if (sourceColumn != null && targetColumn != null && !sourceColumn.getId().equals(targetColumn.getId())) {
+            // 0. Enforce sequential column transition (cannot skip forward across columns)
+            if (sourceColumn.getBoard() != null) {
+                List<BoardColumn> boardColumns = columnRepository.findAllByBoardIdOrderByPositionAsc(sourceColumn.getBoard().getId());
+                int srcIdx = -1;
+                int dstIdx = -1;
+                for (int i = 0; i < boardColumns.size(); i++) {
+                    if (boardColumns.get(i).getId().equals(sourceColumn.getId())) {
+                        srcIdx = i;
+                    }
+                    if (boardColumns.get(i).getId().equals(targetColumn.getId())) {
+                        dstIdx = i;
+                    }
                 }
-                if (Boolean.TRUE.equals(type.getRequireEnvironment()) && (task.getTargetEnvironment() == null || task.getTargetEnvironment().isBlank())) {
-                    throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için 'Test Ortamı' (DEV/TEST/STAGING/PROD) seçilmesi zorunludur.");
+                if (srcIdx != -1 && dstIdx != -1 && dstIdx > srcIdx + 1) {
+                    BoardColumn nextCol = boardColumns.get(srcIdx + 1);
+                    throw new BusinessException("Görevler aşamaları atlayarak taşınamaz. Lütfen iş akışı sırasını takip edin (Sıradaki aşama: " + nextCol.getTitle() + ").");
                 }
             }
+        }
+
+        if (task.getTaskType() == null) {
+            return;
         }
 
         List<TaskTypeTransitionRule> rules = transitionRuleRepository
@@ -392,8 +561,37 @@ public class TaskService {
                 if (items == null || items.isEmpty()) {
                     throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur." + ruleDesc);
                 }
-                boolean anyUncompleted = items.stream().anyMatch(item -> !item.isCompleted());
-                if (anyUncompleted) {
+
+                // 3a. Find items specifically matching this rule's description
+                String normRuleDesc = rule.getDescription() != null ? normalizeColumnName(rule.getDescription()) : "";
+                List<TaskChecklistItem> descMatchedItems = new ArrayList<>();
+                if (!normRuleDesc.isEmpty()) {
+                    for (TaskChecklistItem item : items) {
+                        String normContent = normalizeColumnName(item.getTitle());
+                        if (normContent.contains(normRuleDesc) || normRuleDesc.contains(normContent)) {
+                            descMatchedItems.add(item);
+                        }
+                    }
+                }
+
+                // 3b. Find items explicitly bound to this target column ID
+                List<TaskChecklistItem> colMatchedItems = items.stream()
+                        .filter(item -> item.getRequiredForColumnId() != null && item.getRequiredForColumnId().equals(targetColumn.getId()))
+                        .toList();
+
+                List<TaskChecklistItem> targetItemsToCheck;
+                if (!descMatchedItems.isEmpty()) {
+                    targetItemsToCheck = descMatchedItems;
+                } else if (!colMatchedItems.isEmpty()) {
+                    targetItemsToCheck = colMatchedItems;
+                } else {
+                    // Filter out items that belong explicitly to other columns
+                    targetItemsToCheck = items.stream()
+                            .filter(item -> item.getRequiredForColumnId() == null || item.getRequiredForColumnId().equals(targetColumn.getId()))
+                            .toList();
+                }
+
+                if (targetItemsToCheck.isEmpty() || targetItemsToCheck.stream().anyMatch(item -> !item.isCompleted())) {
                     throw new BusinessException("Bu aşamaya (" + targetColumn.getTitle() + ") geçebilmek için kontrol listesi maddelerinin tamamlanması zorunludur." + ruleDesc);
                 }
             }
@@ -481,6 +679,9 @@ public class TaskService {
                 .build();
 
         TaskChecklistItem saved = checklistItemRepository.save(item);
+        activityService.recordActivity(task, TaskActivityType.CHECKLIST_UPDATED,
+                "Kontrol listesine yeni madde eklendi: '" + saved.getTitle() + "'",
+                null, saved.getTitle());
         return toChecklistDto(saved);
     }
 
@@ -494,6 +695,11 @@ public class TaskService {
 
         item.setCompleted(!item.isCompleted());
         TaskChecklistItem saved = checklistItemRepository.save(item);
+        String statusText = saved.isCompleted() ? "tamamlandı olarak işaretlendi" : "tamamlanmadı olarak işaretlendi";
+        activityService.recordActivity(item.getTask(), TaskActivityType.CHECKLIST_UPDATED,
+                "Kontrol listesi maddesi (" + saved.getTitle() + ") " + statusText,
+                saved.isCompleted() ? "Beklemede" : "Tamamlandı",
+                saved.isCompleted() ? "Tamamlandı" : "Beklemede");
         return toChecklistDto(saved);
     }
 
@@ -516,6 +722,9 @@ public class TaskService {
         }
 
         TaskChecklistItem saved = checklistItemRepository.save(item);
+        activityService.recordActivity(item.getTask(), TaskActivityType.CHECKLIST_UPDATED,
+                "Kontrol listesi maddesi güncellendi: '" + saved.getTitle() + "'",
+                null, saved.getTitle());
         return toChecklistDto(saved);
     }
 
@@ -527,7 +736,12 @@ public class TaskService {
             throw new IllegalArgumentException("Kontrol maddesi bu göreve ait değil.");
         }
 
+        Task task = item.getTask();
+        String title = item.getTitle();
         checklistItemRepository.delete(item);
+        activityService.recordActivity(task, TaskActivityType.CHECKLIST_UPDATED,
+                "Kontrol listesi maddesi silindi: '" + title + "'",
+                title, null);
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
@@ -620,8 +834,15 @@ public class TaskService {
                     r.getCreatedAt());
         }
 
+        String taskPrefix = task.getTaskType() != null && task.getTaskType().getTaskPrefix() != null
+                ? task.getTaskType().getTaskPrefix()
+                : (task.getTaskType() != null ? TaskTypeService.derivePrefix(task.getTaskType().getName(), null) : "TASK");
+        String taskKey = task.getTaskKey() != null ? task.getTaskKey() : (taskPrefix + "-" + task.getId());
+        Set<String> tags = task.getTags() != null ? new HashSet<>(task.getTags()) : Set.of();
+
         return new TaskResponse(
                 task.getId(),
+                taskKey,
                 task.getTitle(),
                 task.getDescription(),
                 task.getPriority() != null ? task.getPriority().name() : "MEDIUM",
@@ -639,8 +860,10 @@ public class TaskService {
                 taskTypeId,
                 taskTypeName,
                 taskTypeColor,
+                taskPrefix,
                 assigneeIds,
                 assigneeDtos,
-                checklistDtos);
+                checklistDtos,
+                tags);
     }
 }
