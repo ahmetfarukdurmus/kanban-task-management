@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import KanbanBoard from '@/components/KanbanBoard';
 import AddTaskModal from '@/components/AddTaskModal';
-import AddColumnModal from '@/components/AddColumnModal';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import { boardApi } from '@/api/boardApi';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,7 +16,7 @@ export default function BoardDetailPage() {
   const taskIdParam = searchParams.get('taskId');
   const boardId = Number(id);
   const navigate = useNavigate();
-  const { user, isAdmin, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
 
   const [boardData,           setBoardData]           = useState<BoardResponse | null>(null);
   const [columns,             setColumns]             = useState<ColumnResponse[]>([]);
@@ -27,7 +26,6 @@ export default function BoardDetailPage() {
   // Modals state
   const [addTaskModalOpen,    setAddTaskModalOpen]    = useState(false);
   const [selectedColumnId,    setSelectedColumnId]    = useState<number | null>(null);
-  const [addColumnModalOpen,  setAddColumnModalOpen]  = useState(false);
   const [selectedTask,        setSelectedTask]        = useState<TaskResponse | null>(null);
 
   /* ── Fetch Board & Full Tree ────────────────────────────────────── */
@@ -195,22 +193,6 @@ export default function BoardDetailPage() {
 
           {/* ── Action Buttons in Header ────────────────────────────── */}
           <div className="ml-auto flex items-center gap-2">
-            {/* + Kolon Ekle Butonu (Admin Only) */}
-            {isAdmin && (
-              <button
-                onClick={() => setAddColumnModalOpen(true)}
-                className="btn-secondary text-xs sm:text-sm py-2 px-3 gap-1.5 font-semibold"
-                title="Yeni Kolon Ekle"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
-                     className="w-4 h-4 text-slate-600">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5"  y1="12" x2="19" y2="12" />
-                </svg>
-                + Kolon Ekle
-              </button>
-            )}
-
             {/* + Yeni Görev Oluştur Butonu (All Users) */}
             <button
               onClick={() => {
@@ -219,7 +201,7 @@ export default function BoardDetailPage() {
               }}
               disabled={columns.length === 0}
               className="btn-primary text-xs sm:text-sm py-2 px-3 gap-1.5 font-semibold disabled:opacity-40"
-              title={columns.length === 0 ? 'Önce bir kolon ekleyin' : 'Yeni Görev Oluştur'}
+              title={columns.length === 0 ? 'Önce bir kolon tanımlanmalı' : 'Yeni Görev Oluştur'}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
                    className="w-4 h-4">
@@ -266,13 +248,6 @@ export default function BoardDetailPage() {
           onTaskAdded={() => fetchBoardDetails(true)}
         />
       )}
-
-      <AddColumnModal
-        isOpen={addColumnModalOpen}
-        boardId={boardId}
-        onClose={() => setAddColumnModalOpen(false)}
-        onColumnAdded={() => fetchBoardDetails(true)}
-      />
 
       {selectedTask && (
         <TaskDetailModal

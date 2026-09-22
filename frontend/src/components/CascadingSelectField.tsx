@@ -71,29 +71,22 @@ export default function CascadingSelectField({
   }
 
   return (
-    <div className="space-y-2 w-full p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/80 shadow-2xs">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+    <div className="w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* 1. Parent Select (Ana Port Grubu) */}
         <div>
-          <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 inline-block" />
-              <span>{config.parentLabel || 'Ana Port Grubu'}</span>
-            </span>
-            {parentVal && (
-              <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.2 rounded">
-                Seçildi: {parentVal}
-              </span>
-            )}
+          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 inline-block" />
+            <span>{config.parentLabel || 'Ana Port Grubu'}</span>
           </label>
           <select
             value={parentVal}
             onChange={handleParentChange}
             disabled={disabled}
-            className={`field w-full text-xs font-semibold bg-white py-1.5 border transition-all ${
+            className={`field w-full text-xs sm:text-sm font-semibold bg-white py-2 px-3 rounded-xl border shadow-2xs transition-all ${
               required && !parentVal
                 ? 'border-amber-400 focus:border-amber-500'
-                : 'border-slate-200 focus:border-blue-500'
+                : 'border-slate-200/90 focus:border-blue-500'
             }`}
             required={required}
           >
@@ -108,31 +101,24 @@ export default function CascadingSelectField({
 
         {/* 2. Child Select (Port Numarası) */}
         <div>
-          <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <span
-                className={`w-1.5 h-1.5 rounded-full inline-block ${
-                  parentVal ? 'bg-purple-600' : 'bg-slate-300'
-                }`}
-              />
-              <span>{config.childLabel || 'Port Numarası'}</span>
-            </span>
-            {childVal && (
-              <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-1.5 py-0.2 rounded">
-                {childVal}
-              </span>
-            )}
+          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+            <span
+              className={`w-1.5 h-1.5 rounded-full inline-block ${
+                parentVal ? 'bg-purple-600' : 'bg-slate-300'
+              }`}
+            />
+            <span>{config.childLabel || 'Port Numarası'}</span>
           </label>
           <select
             value={childVal}
             onChange={handleChildChange}
             disabled={disabled || !parentVal || availableChildren.length === 0}
-            className={`field w-full text-xs font-semibold py-1.5 border transition-all ${
+            className={`field w-full text-xs sm:text-sm font-semibold py-2 px-3 rounded-xl border shadow-2xs transition-all ${
               !parentVal
-                ? 'bg-slate-100/90 text-slate-400 cursor-not-allowed border-dashed border-slate-300'
+                ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-dashed border-slate-200'
                 : required && !childVal && availableChildren.length > 0
                 ? 'bg-white border-amber-400 focus:border-amber-500 text-slate-800'
-                : 'bg-white border-slate-200 focus:border-purple-500 text-slate-800'
+                : 'bg-white border-slate-200/90 focus:border-purple-500 text-slate-800'
             }`}
             required={required && availableChildren.length > 0}
           >
@@ -151,33 +137,6 @@ export default function CascadingSelectField({
           </select>
         </div>
       </div>
-
-      {/* Selected Summary Pill */}
-      {parentVal && (
-        <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
-          <div className="flex items-center gap-1.5 text-slate-600">
-            <span className="font-semibold text-slate-700">Seçili Değer:</span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-mono font-bold border border-blue-200/70">
-              <span>{parentVal}</span>
-              {childVal && (
-                <>
-                  <span className="text-blue-400">›</span>
-                  <span className="text-purple-700">{childVal}</span>
-                </>
-              )}
-            </span>
-          </div>
-          {childVal && (
-            <button
-              type="button"
-              onClick={() => onChange(parentVal)}
-              className="text-[10px] text-slate-400 hover:text-slate-600 underline"
-            >
-              Alt Seçimi Temizle
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

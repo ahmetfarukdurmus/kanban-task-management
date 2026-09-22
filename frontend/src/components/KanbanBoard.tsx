@@ -18,8 +18,6 @@ interface Props {
 
 export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }: Props) {
   const { isAdmin } = useAuth();
-  const [addingCol,   setAddingCol]   = useState(false);
-  const [newColTitle, setNewColTitle] = useState('');
   const [taskTypes,   setTaskTypes]   = useState<TaskTypeDto[]>([]);
 
   useEffect(() => {
@@ -193,22 +191,6 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
     [columns, onColumns, taskTypes],
   );
 
-  /* ── Add column (admin only) ───────────────────────────────────── */
-  const handleAddColumn = async () => {
-    const title = newColTitle.trim();
-    if (!title) return;
-
-    try {
-      const col = await columnApi.create(boardId, { title });
-      onColumns([...columns, { ...col, tasks: [] }]);
-      setNewColTitle('');
-      setAddingCol(false);
-      toast.success('Yeni kolon eklendi.');
-    } catch {
-      toast.error('Kolon oluşturulamadı.');
-    }
-  };
-
   /* ── Delete column ─────────────────────────────────────────────── */
   const handleDeleteColumn = async (columnId: number) => {
     if (!confirm('Bu kolonu ve altındaki tüm görevleri silmek istediğinizden emin misiniz?')) return;
@@ -246,48 +228,6 @@ export default function KanbanBoard({ boardId, columns, onColumns, onEditTask }:
             isAdmin={isAdmin}
           />
         ))}
-
-        {/* ── Add column panel – ADMIN only ─────────────────────── */}
-        {isAdmin && (
-          addingCol ? (
-            <div className="flex-1 min-w-[280px] max-w-[340px] shrink-0 bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-sm animate-scale-in">
-              <input
-                autoFocus
-                placeholder="Kolon başlığı…"
-                value={newColTitle}
-                onChange={(e) => setNewColTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter')  handleAddColumn();
-                  if (e.key === 'Escape') { setAddingCol(false); setNewColTitle(''); }
-                }}
-                className="field text-xs sm:text-sm py-1.5 mb-2.5"
-              />
-              <div className="flex gap-2">
-                <button onClick={handleAddColumn} className="btn-primary flex-1 py-1.5 text-xs font-semibold">
-                  Ekle
-                </button>
-                <button onClick={() => { setAddingCol(false); setNewColTitle(''); }} className="btn-ghost py-1.5 text-xs">
-                  İptal
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setAddingCol(true)}
-              className="flex-1 min-w-[280px] max-w-[340px] shrink-0 min-h-[160px] flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/20 text-slate-400 hover:text-blue-600 transition-all duration-200 group bg-slate-50/40 cursor-pointer shadow-2xs"
-            >
-              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 group-hover:border-blue-300 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-all text-slate-400 group-hover:text-blue-600">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                     className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5"  y1="12" x2="19" y2="12" />
-                </svg>
-              </div>
-              <span className="text-xs font-bold tracking-tight">Yeni Kolon Ekle</span>
-              <span className="text-[10px] text-slate-400 font-normal">İş akışına yeni bir aşama tanımlayın</span>
-            </button>
-          )
-        )}
       </div>
     </DragDropContext>
   );

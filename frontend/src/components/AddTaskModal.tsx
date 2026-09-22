@@ -50,7 +50,6 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
   // Checklist items in modal
   const [checklistItems, setChecklistItems] = useState<CreateChecklistItemRequest[]>([]);
-  const [newChecklistTitle, setNewChecklistTitle] = useState('');
 
   // Tags in modal
   const [tags, setTags] = useState<string[]>([]);
@@ -129,7 +128,6 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
       setEstimatedHours('');
       setCustomFieldValues({});
       setChecklistItems([]);
-      setNewChecklistTitle('');
       setTags([]);
       setTagInput('');
       setSelectedFile(null);
@@ -156,52 +154,38 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
 
   const handleTaskTypeChange = (typeId: number | null) => {
     setSelectedTaskTypeId(typeId);
-    if (!typeId) return;
+    if (!typeId) {
+      setChecklistItems([]);
+      return;
+    }
 
     const selected = taskTypes.find((t) => t.id === typeId);
-    if (!selected || !selected.rules) return;
+    if (!selected || !selected.rules) {
+      setChecklistItems([]);
+      return;
+    }
 
     const checklistRules = selected.rules.filter((r) => r.ruleType === 'CHECKLIST_REQUIRED');
-    if (checklistRules.length > 0) {
-      setChecklistItems((prev) => {
-        const newItems = [...prev];
-        checklistRules.forEach((rule) => {
-          const ruleTitle = rule.description?.trim() || `${rule.targetColumnTitle} Kontrolü`;
-          const alreadyExists = newItems.some(
-            (item) => item.title.trim().toLowerCase() === ruleTitle.toLowerCase()
-          );
-          if (!alreadyExists) {
-            const targetCol = columns.find(
-              (c) =>
-                (rule.targetColumnId && c.id === rule.targetColumnId) ||
-                (rule.targetColumnTitle && isColumnMatching(rule.targetColumnTitle, c.title))
-            );
-            newItems.push({
-              title: ruleTitle,
-              requiredForColumnId: targetCol?.id,
-            });
-          }
-        });
-        return newItems;
+    const newItems: CreateChecklistItemRequest[] = [];
+    checklistRules.forEach((rule) => {
+      const ruleTitle = rule.description?.trim() || `${rule.targetColumnTitle} Kontrolü`;
+      const targetCol = columns.find(
+        (c) =>
+          (rule.targetColumnId && c.id === rule.targetColumnId) ||
+          (rule.targetColumnTitle && isColumnMatching(rule.targetColumnTitle, c.title))
+      );
+      newItems.push({
+        title: ruleTitle,
+        requiredForColumnId: targetCol?.id,
       });
-    }
+    });
+    setChecklistItems(newItems);
   };
 
   const handleToggleAssignee = (userId: number) => {
     setSelectedAssigneeIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
-  };
-
-  const handleAddChecklistItem = () => {
-    const trimmed = newChecklistTitle.trim();
-    if (!trimmed) return;
-    setChecklistItems((prev) => [...prev, { title: trimmed }]);
-    setNewChecklistTitle('');
-  };
-
-  const handleRemoveChecklistItem = (index: number) => {
-    setChecklistItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -451,42 +435,25 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                   </div>
                 </div>
 
-                {/* Extended Fields: Reporter & Estimated Hours */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="task-reporter" className="field-label font-semibold text-slate-700 flex items-center justify-between">
-                      <span>Raporlayan</span>
-                      <span className="text-[10px] text-slate-400 font-normal">Varsayılan: Siz</span>
-                    </label>
-                    <select
-                      id="task-reporter"
-                      value={reporterId ?? ''}
-                      onChange={(e) => setReporterId(e.target.value ? Number(e.target.value) : null)}
-                      className="field text-xs font-medium"
-                    >
-                      <option value="">-- Raporlayan Seçiniz --</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.username} {u.id === user?.id ? '(Siz)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="task-estimated-hours" className="field-label font-semibold text-slate-700">
-                      Tahmini Efor / Süre
-                    </label>
-                    <input
-                      id="task-estimated-hours"
-                      type="number"
-                      min={0}
-                      placeholder="Örn: 8 (saat)"
-                      value={estimatedHours}
-                      onChange={(e) => setEstimatedHours(e.target.value ? Number(e.target.value) : '')}
-                      className="field text-xs font-medium"
-                    />
-                  </div>
+                {/* Extended Field: Reporter */}
+                <div>
+                  <label htmlFor="task-reporter" className="field-label font-semibold text-slate-700 flex items-center justify-between">
+                    <span>Raporlayan</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Varsayılan: Siz</span>
+                  </label>
+                  <select
+                    id="task-reporter"
+                    value={reporterId ?? ''}
+                    onChange={(e) => setReporterId(e.target.value ? Number(e.target.value) : null)}
+                    className="field text-xs font-medium"
+                  >
+                    <option value="">-- Raporlayan Seçiniz --</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.username} {u.id === user?.id ? '(Siz)' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* 6. Multi-Select Sorumlu / Atanan Kişiler */}
@@ -712,7 +679,7 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                   )}
 
                   {/* Checklist Items List */}
-                  {checklistItems.length > 0 && (
+                  {checklistItems.length > 0 ? (
                     <div className="space-y-1.5 mb-2">
                       {checklistItems.map((item, index) => {
                         let targetColTitle: string | null = null;
@@ -745,43 +712,15 @@ export default function AddTaskModal({ isOpen, onClose, boardId, columnId, colum
                                 </span>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveChecklistItem(index)}
-                              className="text-slate-400 hover:text-rose-600 p-0.5 rounded shrink-0 ml-2"
-                              title="Maddeyi Sil"
-                            >
-                              ×
-                            </button>
                           </div>
                         );
                       })}
                     </div>
+                  ) : (
+                    <div className="p-3 rounded-lg border border-dashed border-slate-200 text-center bg-slate-50/50">
+                      <p className="text-xs text-slate-400">Bu görev tipi için zorunlu kontrol listesi kuralı bulunmuyor.</p>
+                    </div>
                   )}
-
-                  {/* Add Checklist Item Input */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Yeni kontrol maddesi ekle…"
-                      value={newChecklistTitle}
-                      onChange={(e) => setNewChecklistTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddChecklistItem();
-                        }
-                      }}
-                      className="field text-xs py-1.5 flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddChecklistItem}
-                      className="btn-secondary px-3 py-1.5 text-xs font-semibold"
-                    >
-                      + Ekle
-                    </button>
-                  </div>
                 </div>
 
                 {/* 8. Tags (Optional) */}

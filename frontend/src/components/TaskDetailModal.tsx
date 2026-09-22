@@ -26,7 +26,6 @@ import { isColumnMatching, normalizeColumnTitle } from '@/utils/workflowUtils';
 import CascadingSelectField from './CascadingSelectField';
 import {
   CalendarIcon,
-  ClockIcon,
   DownloadIcon,
   HistoryIcon,
   MessageSquareIcon,
@@ -163,14 +162,6 @@ export default function TaskDetailModal({
 }: Props) {
   const { user, isAdmin, isSuperAdmin } = useAuth();
   const canEditAdminFields = isAdmin || isSuperAdmin;
-  const isReporter = !!(
-    user && (
-      (task?.reporterId && task.reporterId === user.id) ||
-      (task?.reporter?.id && task.reporter.id === user.id) ||
-      (task?.reporterName && user.username && task.reporterName.toLowerCase() === user.username.toLowerCase())
-    )
-  );
-  const canEditEstimatedHours = canEditAdminFields || isReporter;
 
   /* ── Form State ─────────────────────────────────────────────────── */
   const [title, setTitle]                 = useState('');
@@ -188,8 +179,6 @@ export default function TaskDetailModal({
 
   /* ── Checklist Items ────────────────────────────────────────────── */
   const [checklistItems, setChecklistItems] = useState<TaskChecklistItemDto[]>([]);
-  const [newChecklistTitle, setNewChecklistTitle] = useState('');
-  const [addingChecklist, setAddingChecklist] = useState(false);
 
   /* ── Data & Async State ─────────────────────────────────────────── */
   const [users, setUsers]                         = useState<UserSummary[]>([]);
@@ -412,34 +401,6 @@ export default function TaskDetailModal({
       loadActivities(task.id);
     } catch {
       toast.error('Kontrol maddesi güncellenemedi.');
-    }
-  };
-
-  const handleAddChecklistItem = async () => {
-    const trimmed = newChecklistTitle.trim();
-    if (!trimmed) return;
-    setAddingChecklist(true);
-    try {
-      const created = await taskApi.addChecklist(task.id, { title: trimmed });
-      setChecklistItems((prev) => [...prev, created]);
-      setNewChecklistTitle('');
-      toast.success('Kontrol maddesi eklendi.');
-      loadActivities(task.id);
-    } catch {
-      toast.error('Kontrol maddesi eklenemedi.');
-    } finally {
-      setAddingChecklist(false);
-    }
-  };
-
-  const handleDeleteChecklistItem = async (itemId: number) => {
-    try {
-      await taskApi.deleteChecklist(task.id, itemId);
-      setChecklistItems((prev) => prev.filter((item) => item.id !== itemId));
-      toast.success('Kontrol maddesi silindi.');
-      loadActivities(task.id);
-    } catch {
-      toast.error('Kontrol maddesi silinemedi.');
     }
   };
 
@@ -919,243 +880,212 @@ export default function TaskDetailModal({
                ══════════════════════════════════════════════════════════ */}
             <div className="lg:col-span-7 xl:col-span-7 space-y-6">
 
-              {/* Başlık Input */}
-              <div>
-                <label htmlFor="detail-task-title" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Görev Başlığı <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="detail-task-title"
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  maxLength={200}
-                  className="w-full text-lg sm:text-xl font-bold text-slate-900 placeholder-slate-400 bg-white border border-slate-200/90 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs transition-all"
-                  placeholder="Görev başlığı girin..."
-                />
-              </div>
+              {/* 1. Ana Görev Bilgileri ve Özel Form Alanları Kartı */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 space-y-6 shadow-2xs">
 
-              {/* Açıklama */}
-              <div>
-                <label htmlFor="detail-task-description" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Açıklama
-                </label>
-                <textarea
-                  id="detail-task-description"
-                  rows={4}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-white border border-slate-200/90 rounded-xl p-3.5 text-sm text-slate-800 leading-relaxed placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs transition-all resize-y min-h-[100px]"
-                  placeholder="Görevin detaylı açıklaması, hedefleri ve yapılacaklar..."
-                />
-              </div>
-
-              {/* ── Kontrol Listesi (Checklist) ──────────────────────── */}
-              <div className="pt-5 border-t border-slate-200/70 space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kontrol Listesi (Checklist)</h3>
-                    <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold border border-slate-200">
-                      {checklistItems.filter((i) => i.isCompleted).length}/{checklistItems.length}
-                    </span>
-                  </div>
+                {/* Başlık Input */}
+                <div>
+                  <label htmlFor="detail-task-title" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Görev Başlığı <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="detail-task-title"
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    maxLength={200}
+                    className="w-full text-base sm:text-lg font-bold text-slate-900 placeholder-slate-400 bg-white border border-slate-200/90 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs transition-all"
+                    placeholder="Görev başlığı girin..."
+                  />
                 </div>
 
-                {/* Checklist Transition Rules Pills */}
-                {selectedType && selectedType.rules?.some((r) => r.ruleType === 'CHECKLIST_REQUIRED') && (
-                  <div className="flex flex-wrap items-center gap-1.5 p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs">
-                    <span className="text-amber-900 font-semibold flex items-center gap-1.5 text-xs">
-                      <span className="w-2 h-2 rounded-full bg-amber-500" />
-                      Zorunlu Geçiş Kuralları:
-                    </span>
-                    {selectedType.rules
-                      .filter((r) => r.ruleType === 'CHECKLIST_REQUIRED')
-                      .map((r) => (
-                        <span
-                          key={r.id}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-white text-amber-900 border border-amber-200 shadow-2xs"
-                        >
-                          [{r.targetColumnTitle} için Zorunlu]
-                          {r.description ? ` (${r.description})` : ''}
+                {/* Açıklama */}
+                <div>
+                  <label htmlFor="detail-task-description" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Açıklama
+                  </label>
+                  <textarea
+                    id="detail-task-description"
+                    rows={4}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-white border border-slate-200/90 rounded-xl p-3.5 text-xs sm:text-sm text-slate-800 leading-relaxed placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs transition-all resize-y min-h-[100px]"
+                    placeholder="Görevin detaylı açıklaması, hedefleri ve yapılacaklar..."
+                  />
+                </div>
+
+                {/* ── Özel Alanlar (Custom Fields) - Tek Bir Form Alanı Bloğu ── */}
+                {customFields.length > 0 && (
+                  <div className="pt-5 border-t border-slate-200/70 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          Özel Form Alanları
+                        </h3>
+                        <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold border border-slate-200">
+                          {customFields.length}
                         </span>
-                      ))}
+                      </div>
+                    </div>
+
+                    {/* Custom Fields Clean Grid (Not individual mini cards) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {customFields.map((cf, index) => {
+                        const isCascading = cf.fieldType === 'CASCADING_SELECT' || (cf.fieldName != null && cf.fieldName.toLowerCase().includes('port'));
+                        const selectOptions = cf.options ? cf.options.split(',').map((o) => o.trim()).filter(Boolean) : [];
+
+                        return (
+                          <div
+                            key={index}
+                            className={`space-y-1.5 ${isCascading ? 'sm:col-span-2' : ''}`}
+                          >
+                            <label className="block text-xs font-bold text-slate-700 truncate" title={cf.fieldName}>
+                              <span>{cf.fieldName}</span>
+                              {cf.required && (
+                                <span className="text-rose-500 font-bold ml-1">*</span>
+                              )}
+                            </label>
+
+                            {isCascading ? (
+                              <CascadingSelectField
+                                fieldName={cf.fieldName}
+                                fieldValue={cf.fieldValue || ''}
+                                options={cf.options}
+                                placeholder={cf.placeholder}
+                                required={cf.required}
+                                onChange={(newVal) => handleCustomFieldValueChange(index, newVal)}
+                              />
+                            ) : cf.fieldType === 'SELECT' ? (
+                              <select
+                                value={cf.fieldValue || ''}
+                                onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
+                                className={`field w-full text-xs sm:text-sm bg-white py-2 px-3 rounded-xl border border-slate-200/90 shadow-2xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
+                              >
+                                <option value="">-- {cf.placeholder || 'Seçiniz'} --</option>
+                                {selectOptions.map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : cf.fieldType === 'DATE' ? (
+                              <input
+                                type="date"
+                                value={cf.fieldValue || ''}
+                                onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
+                                className={`field w-full text-xs sm:text-sm bg-white py-2 px-3 rounded-xl border border-slate-200/90 shadow-2xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
+                              />
+                            ) : cf.fieldType === 'NUMBER' ? (
+                              <input
+                                type="number"
+                                value={cf.fieldValue || ''}
+                                placeholder={cf.placeholder || 'Sayısal değer...'}
+                                onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
+                                className={`field w-full text-xs sm:text-sm bg-white py-2 px-3 rounded-xl border border-slate-200/90 shadow-2xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                value={cf.fieldValue || ''}
+                                placeholder={cf.placeholder || 'Metin girin...'}
+                                onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
+                                className={`field w-full text-xs sm:text-sm bg-white py-2 px-3 rounded-xl border border-slate-200/90 shadow-2xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {/* Checklist Items List */}
-                <div className="space-y-2">
-                  {checklistItems.map((item) => {
-                    let targetColTitle: string | null = null;
-                    if (item.requiredForColumnId) {
-                      const col = columns.find((c) => c.id === item.requiredForColumnId);
-                      if (col) targetColTitle = col.title;
-                    }
-                    if (!targetColTitle && selectedType?.rules) {
-                      const matchedRule = selectedType.rules.find(
-                        (r) =>
-                          r.ruleType === 'CHECKLIST_REQUIRED' &&
-                          (r.description?.trim().toLowerCase() === item.title.trim().toLowerCase() ||
-                            item.title.toLowerCase().includes(r.targetColumnTitle.toLowerCase()))
-                      );
-                      if (matchedRule) targetColTitle = matchedRule.targetColumnTitle;
-                    }
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/90 hover:border-slate-300 shadow-2xs transition-all group"
-                      >
-                        <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={item.isCompleted}
-                            onChange={() => handleToggleChecklistItem(item.id)}
-                            className="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer shrink-0"
-                          />
-                          <span className={`text-xs sm:text-[13px] truncate ${item.isCompleted ? 'line-through text-slate-400' : 'text-slate-800 font-medium'}`}>
-                            {item.title}
-                          </span>
-                          {targetColTitle && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0 ml-1.5 shadow-2xs">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                              [{targetColTitle} için Zorunlu]
-                            </span>
-                          )}
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteChecklistItem(item.id)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-all shrink-0 ml-2"
-                          title="Maddeyi Sil"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Add checklist input */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Yeni kontrol maddesi ekle…"
-                    value={newChecklistTitle}
-                    onChange={(e) => setNewChecklistTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddChecklistItem();
-                      }
-                    }}
-                    className="field text-xs py-2 flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddChecklistItem}
-                    disabled={addingChecklist || !newChecklistTitle.trim()}
-                    className="btn-secondary px-3.5 py-2 text-xs font-semibold"
-                  >
-                    + Ekle
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Özel Alanlar (Custom Fields) ──────────────────────── */}
-              {customFields.length > 0 && (
+                {/* ── Kontrol Listesi (Checklist) ──────────────────────── */}
                 <div className="pt-5 border-t border-slate-200/70 space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Özel Alanlar</h3>
-                    <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold border border-slate-200">
-                      {customFields.length}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kontrol Listesi (Checklist)</h3>
+                      <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold border border-slate-200">
+                        {checklistItems.filter((i) => i.isCompleted).length}/{checklistItems.length}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Custom Fields List */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {customFields.map((cf, index) => {
-                      const isCascading = cf.fieldType === 'CASCADING_SELECT' || (cf.fieldName != null && cf.fieldName.toLowerCase().includes('port'));
-                      const typeLabel = isCascading ? 'Bağlantılı Seçim' : cf.fieldType === 'DATE' ? 'Tarih' : cf.fieldType === 'NUMBER' ? 'Sayı' : cf.fieldType === 'SELECT' ? 'Seçim' : 'Metin';
-                      const typeBadgeColor = isCascading ? 'bg-blue-50 text-blue-700 border-blue-200' : cf.fieldType === 'DATE' ? 'bg-amber-50 text-amber-700 border-amber-200' : cf.fieldType === 'NUMBER' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : cf.fieldType === 'SELECT' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200';
-                      const selectOptions = cf.options ? cf.options.split(',').map((o) => o.trim()).filter(Boolean) : [];
+                  {/* Checklist Transition Rules Pills */}
+                  {selectedType && selectedType.rules?.some((r) => r.ruleType === 'CHECKLIST_REQUIRED') && (
+                    <div className="flex flex-wrap items-center gap-1.5 p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs">
+                      <span className="text-amber-900 font-semibold flex items-center gap-1.5 text-xs">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        Zorunlu Geçiş Kuralları:
+                      </span>
+                      {selectedType.rules
+                        .filter((r) => r.ruleType === 'CHECKLIST_REQUIRED')
+                        .map((r) => (
+                          <span
+                            key={r.id}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-white text-amber-900 border border-amber-200 shadow-2xs"
+                          >
+                            [{r.targetColumnTitle} için Zorunlu]
+                            {r.description ? ` (${r.description})` : ''}
+                          </span>
+                        ))}
+                    </div>
+                  )}
 
-                      return (
-                        <div
-                          key={index}
-                          className={`p-3 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 shadow-2xs transition-all space-y-1.5 ${
-                            isCascading ? 'sm:col-span-2' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-xs font-bold text-slate-700 truncate" title={cf.fieldName}>
-                                {cf.fieldName}
-                              </span>
-                              {cf.required && (
-                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
-                                  * Zorunlu
-                                </span>
-                              )}
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded border ${typeBadgeColor}`}>
-                                {typeLabel}
+                  {/* Checklist Items List */}
+                  {checklistItems.length === 0 ? (
+                    <div className="p-3.5 rounded-xl border border-dashed border-slate-200 text-center bg-slate-50/50">
+                      <p className="text-xs text-slate-500 font-medium">Bu görev tipi için tanımlanmış bir kontrol listesi kuralı bulunmamaktadır.</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-slate-200/90 bg-slate-50/30 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                      {checklistItems.map((item) => {
+                        let targetColTitle: string | null = null;
+                        if (item.requiredForColumnId) {
+                          const col = columns.find((c) => c.id === item.requiredForColumnId);
+                          if (col) targetColTitle = col.title;
+                        }
+                        if (!targetColTitle && selectedType?.rules) {
+                          const matchedRule = selectedType.rules.find(
+                            (r) =>
+                              r.ruleType === 'CHECKLIST_REQUIRED' &&
+                              (r.description?.trim().toLowerCase() === item.title.trim().toLowerCase() ||
+                                item.title.toLowerCase().includes(r.targetColumnTitle.toLowerCase()))
+                          );
+                          if (matchedRule) targetColTitle = matchedRule.targetColumnTitle;
+                        }
+
+                        return (
+                          <label
+                            key={item.id}
+                            className="flex items-center justify-between p-2.5 sm:p-3 hover:bg-slate-50/80 transition-colors cursor-pointer bg-white"
+                          >
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={item.isCompleted}
+                                onChange={() => handleToggleChecklistItem(item.id)}
+                                className="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer shrink-0"
+                              />
+                              <span className={`text-xs sm:text-[13px] truncate ${item.isCompleted ? 'line-through text-slate-400' : 'text-slate-800 font-medium'}`}>
+                                {item.title}
                               </span>
                             </div>
-                          </div>
-
-                          {isCascading ? (
-                            <CascadingSelectField
-                              fieldName={cf.fieldName}
-                              fieldValue={cf.fieldValue || ''}
-                              options={cf.options}
-                              placeholder={cf.placeholder}
-                              required={cf.required}
-                              onChange={(newVal) => handleCustomFieldValueChange(index, newVal)}
-                            />
-                          ) : cf.fieldType === 'SELECT' ? (
-                            <select
-                              value={cf.fieldValue || ''}
-                              onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
-                              className={`field w-full text-xs bg-white py-1.5 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
-                            >
-                              <option value="">-- {cf.placeholder || 'Seçiniz'} --</option>
-                              {selectOptions.map((opt) => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
-                          ) : cf.fieldType === 'DATE' ? (
-                            <input
-                              type="date"
-                              value={cf.fieldValue || ''}
-                              onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
-                              className={`field w-full text-xs bg-white py-1.5 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
-                            />
-                          ) : cf.fieldType === 'NUMBER' ? (
-                            <input
-                              type="number"
-                              value={cf.fieldValue || ''}
-                              placeholder={cf.placeholder || 'Sayısal değer...'}
-                              onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
-                              className={`field w-full text-xs bg-white py-1.5 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
-                            />
-                          ) : (
-                            <input
-                              type="text"
-                              value={cf.fieldValue || ''}
-                              placeholder={cf.placeholder || 'Metin girin...'}
-                              onChange={(e) => handleCustomFieldValueChange(index, e.target.value)}
-                              className={`field w-full text-xs bg-white py-1.5 ${cf.required && !cf.fieldValue ? 'border-amber-400 bg-amber-50/20' : ''}`}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                            {targetColTitle && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0 ml-1.5 shadow-2xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                [{targetColTitle} için Zorunlu]
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* ── Medya & Ekler Bölümü ────────────────────────────── */}
-              <div className="pt-5 border-t border-slate-200/70">
-                <div className="flex items-center justify-between mb-3.5">
+              </div>
+
+              {/* 2. Medya & Ekler Kartı */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-wrap">
                     <PaperclipIcon className="w-4 h-4 text-slate-500" />
                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Medya ve Ekler</h3>
@@ -1206,9 +1136,9 @@ export default function TaskDetailModal({
                 ) : attachments.length === 0 ? (
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="group p-5 rounded-xl border border-dashed border-slate-200 bg-white hover:bg-blue-50/20 hover:border-blue-300 transition-all text-center cursor-pointer shadow-2xs"
+                    className="group p-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 hover:bg-blue-50/20 hover:border-blue-300 transition-all text-center cursor-pointer shadow-2xs"
                   >
-                    <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 mx-auto flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:border-blue-200 transition-colors mb-1.5 shadow-2xs">
+                    <div className="w-8 h-8 rounded-full bg-white border border-slate-200 mx-auto flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:border-blue-200 transition-colors mb-1.5 shadow-2xs">
                       <UploadCloudIcon className="w-4 h-4" />
                     </div>
                     <p className="text-xs font-semibold text-slate-600 group-hover:text-blue-600 transition-colors">
@@ -1275,8 +1205,8 @@ export default function TaskDetailModal({
                 )}
               </div>
 
-              {/* ── Yorumlar Bölümü ─────────────────────────────────── */}
-              <div className="pt-5 border-t border-slate-200/70 space-y-4">
+              {/* 3. Yorumlar Kartı */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 space-y-4 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <MessageSquareIcon className="w-4 h-4 text-slate-500" />
@@ -1318,7 +1248,7 @@ export default function TaskDetailModal({
                   ) : (
                     <div className="space-y-2.5">
                       {comments.map((c) => (
-                        <div key={c.id} className="p-3 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+                        <div key={c.id} className="p-3 rounded-xl bg-slate-50/70 border border-slate-200/80 shadow-2xs space-y-1">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${getAvatarColor(c.authorName)}`}>
@@ -1588,39 +1518,7 @@ export default function TaskDetailModal({
                     </div>
                   </div>
 
-                  {/* 7. Tahmini Efor (Estimated Hours / SP) */}
-                  <div className="flex items-center justify-between gap-4 text-xs sm:text-sm">
-                    <span className="w-32 sm:w-36 shrink-0 font-semibold text-slate-600">
-                      Tahmini Efor
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      {canEditEstimatedHours ? (
-                        <div className="relative">
-                          <input
-                            id="detail-task-estimated-hours"
-                            type="number"
-                            min={0}
-                            placeholder="Örn: 8"
-                            value={estimatedHours}
-                            onChange={(e) => setEstimatedHours(e.target.value ? Number(e.target.value) : '')}
-                            className="w-full bg-white border border-slate-200/90 rounded-xl px-3 py-2 pr-16 text-xs sm:text-sm font-medium text-slate-800 shadow-2xs hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all min-h-[40px]"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold pointer-events-none">
-                            Saat / SP
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100/80 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-600 min-h-[40px]">
-                          <ClockIcon className="w-4 h-4 text-slate-400" />
-                          <span>
-                            {estimatedHours !== '' && estimatedHours !== undefined ? `${estimatedHours} Saat / SP` : 'Efor girilmemiş'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 8. Etiketler (Tags) */}
+                  {/* 7. Etiketler (Tags) */}
                   <div className="flex flex-col gap-2 text-xs sm:text-sm pt-1">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-slate-600">
