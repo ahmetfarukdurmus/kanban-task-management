@@ -29,7 +29,7 @@ Bu platform, birbirinden yalıtılmış birden fazla kiracı organizasyonunda Ka
 - Boşluk açmadan pozisyon kaydıran verimli bir algoritmayla sürükle-bırak görev sıralama
 - Kapsamlı görev detay alanları: atanan kullanıcılar, raporlayan, öncelik, bitiş tarihleri, hedef ortam, hikaye puanı, tahmini saat
 - Görev başına iş parçacıklı yorumlar ve dosya ekleri
-- Üç kademeli RBAC ile vatansız JWT kimlik doğrulaması
+- Üç kademeli RBAC ile stateless JWT kimlik doğrulaması
 
 ---
 
@@ -37,16 +37,16 @@ Bu platform, birbirinden yalıtılmış birden fazla kiracı organizasyonunda Ka
 
 ### Backend
 
-| Konu | Teknoloji |
-|---|---|
-| Dil | Java 21 (LTS) |
-| Framework | Spring Boot 3.x |
-| Güvenlik | Spring Security 6 + JJWT (vatansız JWT) |
-| Kalıcılık | Spring Data JPA / Hibernate 6 |
-| Veritabanı | PostgreSQL 16 |
-| Derleme | Apache Maven |
-| Tekrar eden kod azaltma | Lombok (`@Data`, `@RequiredArgsConstructor`, `@Builder`) |
-| Dosya yönetimi | Spring Multipart (dosya/istek başına 25 MB) |
+| Konu | Teknoloji                                                           |
+|---|---------------------------------------------------------------------|
+| Dil | Java 21 (LTS)                                                       |
+| Framework | Spring Boot 3.x                                                     |
+| Güvenlik | Spring Security 6 + JJWT (stateless JWT)                            |
+| Kalıcılık | Spring Data JPA / Hibernate 6                                       |
+| Veritabanı | PostgreSQL 16                                                       |
+| Derleme | Apache Maven                                                        |
+| Tekrar eden kod azaltma | Lombok (`@Data`, `@RequiredArgsConstructor`, `@Builder`)            |
+| Dosya yönetimi | Spring Multipart (dosya/istek başına 25 MB)                         |
 | Şema yönetimi | Hibernate DDL otomatik (`update` geliştirmede, `validate` üretimde) |
 
 ### Frontend
@@ -258,7 +258,7 @@ Aşağıdaki kurallara sahip bir Görev Tipi, aşamalı bir doğrulama iş akı�
 
 ### Kimlik Doğrulama
 
-Uygulama vatansız JWT kimlik doğrulaması kullanır:
+Uygulama stateless JWT kimlik doğrulaması kullanır:
 
 1. İstemci, kimlik bilgilerini `POST /api/auth/login` adresine gönderir
 2. Sunucu kimlik bilgilerini doğrular ve imzalı bir JWT (HMAC-SHA256) yayınlar
